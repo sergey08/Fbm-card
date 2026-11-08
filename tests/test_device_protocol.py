@@ -24,6 +24,17 @@ class DeviceProtocolTests(unittest.TestCase):
              "id_dispositivo": "d", "plataforma": "p",
              "tipo_dispositivo": "t", "version": "v"})
 
+    def test_extract_identity_from_response(self):
+        self.assertEqual(module.extract_identity_fields(
+            {"key": "k", "idDispositivo": "d", "error": None}), ("k", "d"))
+
+    def test_reject_incomplete_or_error_response(self):
+        for response in (None, {}, {"key": "k"},
+                         {"key": "k", "idDispositivo": "d", "error": "fallo"}):
+            with self.subTest(response=response):
+                with self.assertRaises(ValueError):
+                    module.extract_identity_fields(response)
+
     def test_missing_uid_rejected(self):
         with self.assertRaises(ValueError):
             module.registration_fields(uid="", plataforma="p",
