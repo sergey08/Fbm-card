@@ -30,3 +30,22 @@ def access_fields(*, uid: str, token_push: str, id_dispositivo: str,
     return {"accion": "acceso", "uid": uid, "token_push": token_push,
             "id_dispositivo": id_dispositivo, "plataforma": plataforma,
             "tipo_dispositivo": tipo_dispositivo, "version": version}
+
+
+def extract_identity_fields(response: object) -> tuple[str, str]:
+    """Extrae la identidad del DTO observado en el APK sin asumir éxito HTTP.
+
+    Los nombres JSON aún requieren validación en una respuesta real. Por eso
+    se rechazan respuestas ambiguas o incompletas, sin generar valores.
+    """
+    if not isinstance(response, dict):
+        raise ValueError("La respuesta del dispositivo no es un objeto")
+    if response.get("error") not in (None, "", False, 0):
+        raise ValueError("El servidor comunicó un error de dispositivo")
+    key = response.get("key")
+    device_id = response.get("idDispositivo")
+    if not isinstance(key, str) or not key:
+        raise ValueError("No se ha recibido una clave de dispositivo válida")
+    if not isinstance(device_id, str) or not device_id:
+        raise ValueError("No se ha recibido un identificador de dispositivo válido")
+    return key, device_id
