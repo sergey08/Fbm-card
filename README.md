@@ -65,3 +65,9 @@ Los valores anteriores describen únicamente el **formato**, no resultados verif
 ## Validación automatizada
 
 El flujo `.github/workflows/validacion.yml` comprueba sintaxis, pruebas Node y manifiesto HACS al actualizar `dev` o abrir un PR. La existencia del flujo no implica que haya pasado: verificar su resultado en la pestaña Actions de GitHub.
+
+## Enlace a la ficha oficial
+
+Puede añadirse opcionalmente `url_oficial: https://www.fbm.es/...` para mostrar un enlace a la ficha pública del equipo o competición. Solo se aceptan enlaces HTTPS bajo `fbm.es`; no se asigna ninguna URL por defecto hasta confirmar la ficha exacta.
+
+La web del club Pintobasket publica partidos y resultados, pero no se considera sustituto de la fuente oficial FBM para alimentar automáticamente la tarjeta.
