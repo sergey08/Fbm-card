@@ -186,6 +186,31 @@ class RegistrationDiagnosticTests(unittest.TestCase):
                 self.assertEqual(module.main(args), 1)
                 post.assert_not_called()
 
+    def test_phases_uses_selected_opaque_id_after_access(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity, candidate, team = (Path(tmp) / name for name in ('identity.json', 'candidate.json', 'team.json'))
+            module.create_identity(identity)
+            module.save_candidate(candidate, module.load_identity(identity), {'id_dispositivo': 'device'})
+            team.write_text(json.dumps({'Id': 'opaque-team-id'}), encoding='utf-8')
+            args = ['--android-release', '16', '--identidad', str(identity), '--candidato', str(candidate), '--equipo', str(team), '--fases']
+            with patch.object(module, 'post_device_form', return_value={'error': '', 'key': 'private-key'}), patch.object(module, 'phases_once', return_value={'error': '', 'fases': []}) as phases, contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(module.main(args), 1)
+                phases.assert_called_once_with('device', 'private-key', 'opaque-team-id')
+                self.assertNotIn('opaque-team-id', out.getvalue())
+                self.assertNotIn('private-key', out.getvalue())
+
+    def test_phases_form_matches_observed_fields(self):
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read(self, limit): return b'{"fases": []}'
+        with patch('urllib.request.urlopen', return_value=Response()) as urlopen:
+            module.phases_once('device', 'key', 'team')
+            request = urlopen.call_args.args[0]
+            self.assertEqual(request.full_url, 'https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx')
+            self.assertEqual(module.urllib.parse.parse_qs(request.data.decode()), {'accion': ['fasesGrupos'], 'id_dispositivo': ['device'], 'key': ['key'], 'id_equipo': ['team']})
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'

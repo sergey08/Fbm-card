@@ -423,3 +423,16 @@ El adaptador incorpora una normalización genérica de resultados: conserva `Id`
 Se ha añadido `scripts/seleccionar_equipo.py` para listar cualquier archivo de resultados `equipos` y guardar un único resultado elegido, conservando su `Id` opaco, nombre, club, categoría y temporada. No realiza peticiones, no guarda credenciales y no sobrescribe archivos. La identificación del equipo elegido no confirma cómo deben transmitirse sus identificadores en futuras consultas.
 
 La documentación disponible menciona `v2/equipo.ashx` y `id_equipo`, pero no demuestra la operación, el método ni los parámetros para recuperar partidos. Tampoco se dispone aquí de los artefactos DEX originales referenciados en análisis previos. Una búsqueda pública de esas cadenas no ha aportado documentación. No se ha inventado ni enviado una solicitud de partidos; para avanzar hace falta recuperar la evidencia original o documentación verificable del contrato.
+
+### Recuperación y verificación de operaciones de equipo
+
+El usuario volvió a proporcionar el ZIP de Afición FBM 5.0.42. De `base.apk/classes2.dex` se calculó SHA-256 `705267ff6111bbf98a4e87fb83db96ba90178164ae7d7fa347c205191b8c6ff1`. El verificador `scripts/verificar_protocolo_equipos.py` comprueba sin red esa huella y los offsets siguientes; no incluye ni distribuye el APK.
+
+En `Lx5/k;` el constructor carga la URL `https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx` (5684274) y la asigna al campo 0x67c0. Los métodos `d`, `e`, `f` y `g` leen ese campo y llaman a `HttpRequestKt.url`. Los literales del formulario observados son:
+
+- `d`: `accion=fasesGrupos`, `id_dispositivo`, `key`, `id_equipo`.
+- `e`: `accion=horariosFecha`, `id_dispositivo`, `key`, `id_equipo`, `id_fase`, `id_grupo`, `id_ronda`, `fecha_inicial`, `fecha_final`.
+- `f`: `accion=horariosJornadas` y los mismos nombres de campos de `e`.
+- `g`: `accion=detalleEquipo`, `id_dispositivo`, `key`, `id_equipo`.
+
+Los métodos construyen formularios URL-encoded. Estos hallazgos no verifican la respuesta real ni el origen exacto de cada argumento en la interfaz. El diagnóstico incorpora una prueba explícita `--fases --equipo RUTA`, que usa el `Id` opaco del equipo seleccionado como candidato para `id_equipo`; requiere acceso explícito, no hace registro y muestra solo tipos de campos conocidos. La equivalencia entre el `Id` de búsqueda y el argumento de fases es una hipótesis pendiente de prueba. No se ha hecho ninguna petición real en este cambio.

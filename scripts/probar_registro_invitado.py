@@ -145,6 +145,32 @@ def search_once(device_id, key, text):
     return result
 
 
+def phases_once(device_id, key, team_id):
+    """Una consulta experimental fasesGrupos, basada en APK 5.0.42."""
+    fields = {"accion": "fasesGrupos", "id_dispositivo": device_id,
+              "key": key, "id_equipo": team_id}
+    request = urllib.request.Request(
+        "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx",
+        data=urllib.parse.urlencode(fields).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            if response.status != 200:
+                raise RuntimeError("http")
+            raw = response.read(131073)
+    except (urllib.error.URLError, OSError, TimeoutError):
+        raise RuntimeError("transporte") from None
+    if len(raw) > 131072:
+        raise RuntimeError("respuesta_grande")
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise RuntimeError("json_invalido") from None
+    if not isinstance(result, dict):
+        raise RuntimeError("json_no_objeto")
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--android-release", required=True,
@@ -157,6 +183,7 @@ def main(argv=None):
                         help="Archivo privado nuevo al registrar, existente al probar acceso")
     parser.add_argument("--guardar-equipos", type=Path,
                         help="Guarda solo la lista de equipos para revision local")
+    parser.add_argument("--equipo", type=Path, help="Archivo de equipo seleccionado localmente")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--crear-identidad", action="store_true",
                         help="Crea una identidad local, sin red y sin sobrescribir")
@@ -166,20 +193,26 @@ def main(argv=None):
                         help="Autoriza un POST de acceso experimental con el candidato guardado")
     action.add_argument("--buscar-equipo", metavar="TEXTO",
                         help="Autoriza acceso y una busqueda experimental de equipo")
+    action.add_argument("--fases", action="store_true",
+                        help="Autoriza acceso y una consulta experimental de fases del equipo")
     args = parser.parse_args(argv)
     if args.guardar_equipos and args.buscar_equipo is None:
         parser.error("--guardar-equipos requiere --buscar-equipo")
     if args.guardar_error and not (args.enviar or args.acceder):
         parser.error("--guardar-error requiere --enviar o --acceder")
-    if args.candidato and not (args.enviar or args.acceder or args.buscar_equipo is not None):
+    if args.candidato and not (args.enviar or args.acceder or args.buscar_equipo is not None or args.fases):
         parser.error("--candidato requiere --enviar o --acceder")
-    if (args.acceder or args.buscar_equipo is not None) and not args.candidato:
+    if (args.acceder or args.buscar_equipo is not None or args.fases) and not args.candidato:
         parser.error("El acceso o busqueda requiere --candidato")
     if args.buscar_equipo is not None and not args.buscar_equipo.strip():
         parser.error("El texto de busqueda no puede estar vacio")
     if not args.android_release.strip():
         parser.error("La version de Android no puede estar vacia")
-    if not args.crear_identidad and not args.enviar and not args.acceder and args.buscar_equipo is None:
+    if args.fases and not args.equipo:
+        parser.error("--fases requiere --equipo")
+    if args.equipo and not args.fases:
+        parser.error("--equipo requiere --fases")
+    if not args.crear_identidad and not args.enviar and not args.acceder and args.buscar_equipo is None and not args.fases:
         print("SIN RED: formulario previsto: accion=registrar, uid=<privado>, "
               "plataforma=Android <version>, tipo_dispositivo=mobile, version=5.0.42")
         print("Crea una identidad propia con --identidad RUTA --crear-identidad; "
@@ -209,8 +242,18 @@ def main(argv=None):
     except (OSError, ValueError):
         print("Identidad local inaccesible o invalida; no se envio ninguna peticion.", file=sys.stderr)
         return 1
+    if args.fases:
+        try:
+            with open(args.equipo, encoding="utf-8") as source:
+                team = json.load(source)
+            team_id = team.get("Id") if isinstance(team, dict) else None
+            if not isinstance(team_id, str) or not team_id.strip():
+                raise ValueError("Id ausente")
+        except (OSError, ValueError):
+            print("Equipo seleccionado inaccesible o invalido; no se envio ninguna peticion.", file=sys.stderr)
+            return 1
     try:
-        if args.acceder or args.buscar_equipo is not None:
+        if args.acceder or args.buscar_equipo is not None or args.fases:
             try:
                 device_id = load_candidate(args.candidato, uid)
             except (OSError, ValueError):
@@ -245,7 +288,7 @@ def main(argv=None):
             print("No se pudo guardar el candidato; no se sobrescribio ningun archivo.", file=sys.stderr)
         else:
             print("Identificador candidato guardado localmente; aun no esta validado.")
-    if args.buscar_equipo is not None:
+    if args.buscar_equipo is not None or args.fases:
         key = response.get("key")
         if response.get("error") != "" or not isinstance(key, str) or not key.strip():
             print("Busqueda cancelada: respuesta de acceso ambigua; valores ocultos.", file=sys.stderr)
@@ -255,9 +298,14 @@ def main(argv=None):
             print("Busqueda cancelada: identificador de acceso distinto o invalido.", file=sys.stderr)
             return 1
         try:
-            result = search_once(device_id, key, args.buscar_equipo.strip())
+            result = phases_once(device_id, key, team_id) if args.fases else search_once(device_id, key, args.buscar_equipo.strip())
         except RuntimeError as exc:
             print("Busqueda no validada: " + str(exc) + "; detalles ocultos.", file=sys.stderr)
+            return 1
+        if args.fases:
+            print("Respuesta de fases recibida; " +
+                  ", ".join(f"{name}={field_shape(result, name)}" for name in ("error", "resultado", "fases", "grupos")) +
+                  "; marcador_error=" + error_marker(result) + ". Valores ocultos; resultado no validado.")
             return 1
         names = ("error", "resultado", "equipos", "datos")
         shapes = ", ".join(f"{name}={field_shape(result, name)}" for name in names)
