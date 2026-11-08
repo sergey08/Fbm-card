@@ -43,6 +43,7 @@ test("acepta partidos y clasificación desde una entidad de HA", () => {
   const card = new (elements.get("fbm-card"))();
   card._config = { entidad_datos: "sensor.fbm" };
   card._hass = { states: { "sensor.fbm": { state: "ok", attributes: { fbm: {
+    fuente: "FBM",
     partidos: [{ local: "A", visitante: "B", resultado: "50-48" }],
     clasificacion: [{ posicion: 1, equipo: "A", jugados: 3, puntos: 6 }]
   } } } } };
@@ -54,7 +55,7 @@ test("rechaza entidades con formato incompleto", () => {
   const card = new (elements.get("fbm-card"))();
   card._config = { entidad_datos: "sensor.fbm" };
   card._hass = { states: { "sensor.fbm": { state: "ok", attributes: {} } } };
-  assert.match(card._data().error, /formato esperado/);
+  assert.match(card._data().error, /fuente oficial/);
 });
 
 test("la configuración inicial no impone Pintobasket", () => {
@@ -94,4 +95,23 @@ test("los favoritos se separan por identificador de usuario y tarjeta", () => {
   assert.match(card._favoriteKey(), /usuario-1:mis_equipos$/);
   card._hass = { user: { id: "usuario-2" } };
   assert.match(card._favoriteKey(), /usuario-2:mis_equipos$/);
+});
+
+test("rechaza resultados de entidades sin procedencia FBM declarada", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { entidad_datos: "sensor.terceros" };
+  card._hass = { states: { "sensor.terceros": { state: "ok", attributes: {
+    partidos: [], clasificacion: [], fuente: "TERCEROS"
+  } } } };
+  assert.match(card._data().error, /Datos rechazados/);
+});
+test("rechaza estructuras incompletas aunque declaren FBM", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { entidad_datos: "sensor.fbm" };
+  card._hass = { states: { "sensor.fbm": { state: "ok", attributes: {
+    fuente: "FBM", partidos: []
+  } } } };
+  assert.match(card._data().error, /formato esperado/);
 });
