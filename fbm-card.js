@@ -11,7 +11,8 @@ class FBMCard extends HTMLElement {
 
   _teams() {
     if (Array.isArray(this._config?.equipos)) return this._config.equipos.filter(x => x && typeof x.nombre === "string" && typeof x.entidad_datos === "string");
-    return this._config?.entidad_datos ? [{ nombre: String(this._config.equipo || "Equipo"), entidad_datos: this._config.entidad_datos }] : [];
+    if (this._config?.entidad_datos) return [{ nombre: String(this._config.equipo || "Equipo"), entidad_datos: this._config.entidad_datos }];
+    return this._config?.descubrir_entidades === true ? this._availableOfficialEntities() : [];
   }
 
   _storageKey() {
@@ -126,7 +127,7 @@ class FBMCard extends HTMLElement {
       card.append(favorite);
     }
     const teams = this._teams();
-    if (!teams.length) {
+    if (!teams.length && this._config?.descubrir_entidades !== true) {
       const official = this._availableOfficialEntities();
       if (official.length) {
         const notice = this._element("p", "Hay entidades FBM disponibles en Home Assistant. Añádelas a la configuración de la tarjeta para seguir tus equipos.", "muted");
@@ -134,7 +135,7 @@ class FBMCard extends HTMLElement {
         for (const entry of official.slice(0, 10)) card.append(this._element("div", entry.nombre + " (" + entry.entidad_datos + ")", "muted"));
       }
     }
-    if (teams.length > 1) {
+    if (teams.length > 1 || (this._config?.descubrir_entidades === true && teams.length === 1)) {
       const label = this._element("label", "Seleccionar equipo: ", "muted");
       const select = document.createElement("select");
       select.setAttribute("aria-label", "Seleccionar equipo");
