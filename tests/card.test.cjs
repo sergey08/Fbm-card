@@ -142,3 +142,22 @@ test("el descubrimiento automático es opcional y utiliza solo sensores declarad
   card._config = { descubrir_entidades: false };
   assert.equal(card._teams().length, 0);
 });
+
+test("descubre sensores incluso si la configuración inicial contiene equipos vacíos", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { equipos: [], descubrir_entidades: true };
+  card._hass = { states: {
+    "sensor.fbm": { state: "ok", attributes: { fuente: "FBM", partidos: [], clasificacion: [] } }
+  } };
+  assert.equal(card._teams().length, 1);
+});
+test("no ofrece sensores FBM no disponibles", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { descubrir_entidades: true };
+  card._hass = { states: {
+    "sensor.fbm_caido": { state: "unavailable", attributes: { fuente: "FBM", partidos: [], clasificacion: [] } }
+  } };
+  assert.equal(card._teams().length, 0);
+});
