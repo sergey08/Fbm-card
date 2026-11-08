@@ -80,6 +80,30 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(search.call_args.args[0]["key"], "k")
         self.assertEqual(search.call_args.args[0]["id_dispositivo"], "d")
 
+    async def test_explicit_access_connects_to_search(self):
+        from fbm_adapter_test_pkg.guest_session import DeviceProfile
+        profile = DeviceProfile(uid="u", plataforma="p",
+                                tipo_dispositivo="t", version="5.0.42")
+        with patch("fbm_adapter_test_pkg.guest_session.post_device_form",
+                   return_value={"key": "new-key", "idDispositivo": "known"}):
+            adapter = await AficionFBMAdapter.access_with_profile(profile, "known")
+        with patch("fbm_adapter_test_pkg.aficion_adapter._post_search",
+                   return_value={"resultado": "ok"}) as search:
+            await adapter.search("buscarClub", "Pinto")
+        self.assertEqual(search.call_args.args[0]["accion"], "buscarClub")
+        self.assertEqual(search.call_args.args[0]["key"], "new-key")
+
+    async def test_access_mismatch_prevents_search(self):
+        from fbm_adapter_test_pkg.guest_session import DeviceProfile
+        profile = DeviceProfile(uid="u", plataforma="p",
+                                tipo_dispositivo="t", version="5.0.42")
+        with patch("fbm_adapter_test_pkg.guest_session.post_device_form",
+                   return_value={"key": "k", "idDispositivo": "other"}):
+            with patch("fbm_adapter_test_pkg.aficion_adapter._post_search") as search:
+                with self.assertRaises(ValueError):
+                    await AficionFBMAdapter.access_with_profile(profile, "known")
+                search.assert_not_called()
+
     async def test_non_json_rejected(self):
         with patch("urllib.request.urlopen", return_value=FakeResponse(b"not-json")):
             with self.assertRaises(FBMRequestError):
