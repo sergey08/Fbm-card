@@ -3,6 +3,9 @@
 No se consultan resultados hasta validar el acceso oficial a FBM.
 """
 from pathlib import Path
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
@@ -27,8 +30,7 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
         await resources.async_create_item({"res_type": "module", "url": CARD_URL})
         return True
     except (AttributeError, KeyError, TypeError, ValueError) as err:
-        import logging
-        logging.getLogger(__name__).warning("No se pudo registrar el recurso FBM automáticamente: %s", err)
+        _LOGGER.warning("No se pudo registrar el recurso FBM automáticamente: %s", err)
         return False
 
 
