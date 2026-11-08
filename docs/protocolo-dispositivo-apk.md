@@ -39,3 +39,11 @@ Se ha reabierto directamente `/mnt/data/fbm_analysis/base.apk` y leído `classes
 - `12270` y `12852`: cadenas `toString` de esos DTO, ambas comienzan por `duracionIntersticia=`.
 
 **Importante:** la presencia de `dispositivo.ashx` junto a las operaciones `registrar` y `acceso` no basta para demostrar que ambas se envíen a esa URL. Es necesario seguir el argumento de `HttpRequestKt.url` y su origen. No se han enviado peticiones, ni leído tokens, ni reconstruido claves.
+
+## Cadena de inicialización corroborada por trazas de ejecución estática
+
+La inspección del flujo `LZ3/B;->invokeSuspend` muestra, en este orden de código, la versión literal `5.0.42`, la llamada `Ld4/c;->b`, una comparación con `correcto` y, más adelante, referencias a `key`, `dispositivoId` y al texto de error `UID no válido`. En `LZ3/D;->invokeSuspend` aparece la lectura de `idDispositivoDbFBM`, la versión `5.0.42`, la llamada `Ld4/c;->a`, la comparación con `correcto` y las referencias `key` y `dispositivoId`.
+
+**Deducción, aún no contrato probado:** el flujo parece distinguir entre alta de dispositivo y acceso de un dispositivo previamente almacenado; en ambos casos se procesaría una respuesta que puede alimentar `key` y `dispositivoId`. La mera proximidad de instrucciones no demuestra asignación de campos, obligatoriedad de parámetros ni su procedencia.
+
+**Bloqueo concreto:** falta desensamblar con seguimiento de registros el valor pasado a `HttpRequestKt.url` en `Lc4/c;->a/b` y los accesos al DTO. No sustituir esa comprobación por solicitudes inventadas.
