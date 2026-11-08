@@ -65,8 +65,21 @@ def post_device_form(fields: dict[str, str], *, timeout: int = 12) -> dict:
     import urllib.parse
     import urllib.request
 
-    if fields.get("accion") not in {"registrar", "acceso"}:
+    allowed = {
+        "registrar": {"accion", "uid", "plataforma", "tipo_dispositivo", "version"},
+        "acceso": {"accion", "uid", "token_push", "id_dispositivo",
+                   "plataforma", "tipo_dispositivo", "version"},
+    }
+    action = fields.get("accion")
+    if action not in allowed:
         raise ValueError("Operación de dispositivo no permitida")
+    if set(fields) != allowed[action]:
+        raise ValueError("Campos de dispositivo inesperados o incompletos")
+    if not all(isinstance(value, str) for value in fields.values()):
+        raise ValueError("Los campos de dispositivo deben ser cadenas")
+    required = allowed[action] - {"accion", "token_push"}
+    if any(not fields[name] for name in required):
+        raise ValueError("Faltan campos obligatorios de dispositivo")
     body = urllib.parse.urlencode(fields).encode("utf-8")
     request = urllib.request.Request(
         DEVICE_URL, data=body, method="POST",
