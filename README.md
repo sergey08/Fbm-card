@@ -122,3 +122,7 @@ descubrir_entidades: true
 ```
 
 En este modo la tarjeta muestra los sensores con `fuente: FBM` y estructura válida, permite cambiar entre ellos y marcar favoritos. **No descarga equipos de la FBM** ni verifica criptográficamente el origen de un sensor. No sustituye el conector oficial pendiente.
+
+## Diagnóstico de API oficial (DEV)
+
+`python3 scripts/diagnostico_fbm.py` realiza una petición de búsqueda sin credenciales a `https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx` e informa si la API devuelve un error o una respuesta interpretable. No requiere paquetes adicionales. Un error por parámetros **no equivale a acceso funcional a resultados**. No se usan fuentes externas ni claves ficticias. El diagnóstico no es un conector de datos ni está integrado en la tarjeta.
