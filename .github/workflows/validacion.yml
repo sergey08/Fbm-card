@@ -15,6 +15,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Comprobar conectividad FBM (sin credenciales ni registro)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket, ssl, http.client
+          host = "appaficionfbm.gesdeportiva.es"
+          try:
+              addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+              print("DNS_OK:", bool(addresses))
+              conn = http.client.HTTPSConnection(host, timeout=8, context=ssl.create_default_context())
+              conn.request("HEAD", "/dispositivo.ashx", headers={"User-Agent": "FBMCard-DEV-connectivity/0.1"})
+              resp = conn.getresponse()
+              print("HTTPS_HEAD_STATUS:", resp.status)
+              print("CONTENT_TYPE:", resp.getheader("Content-Type", "unknown"))
+              resp.read()
+              conn.close()
+          except Exception as exc:
+              print("CONNECTIVITY_ERROR_TYPE:", type(exc).__name__)
+              print("CONNECTIVITY_ERROR:", str(exc)[:200])
+          PY
       - name: Comprobar sintaxis JavaScript
         run: |
           node --check fbm-card.js
