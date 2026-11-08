@@ -24,3 +24,5 @@ jobs:
         run: python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/diagnostico_fbm.py").read_text(encoding="utf-8"))'
       - name: Validar sintaxis de integración Python
         run: python3 -c 'import ast, pathlib; files=list(pathlib.Path("custom_components/fbm").rglob("*.py")); assert files; [ast.parse(p.read_text(encoding="utf-8"), filename=str(p)) for p in files]'
+      - name: Probar registro Lovelace con simulaciones aisladas
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
