@@ -440,3 +440,9 @@ Los métodos construyen formularios URL-encoded. Estos hallazgos no verifican la
 ### Primera respuesta de fases
 
 La prueba real `fasesGrupos` del usuario devolvió JSON con `error` vacío y `resultado` como texto no vacío; las claves `fases` y `grupos` estaban ausentes. El diagnóstico anterior no conservó la respuesta, por lo que no se conocen sus restantes campos ni se puede confirmar que el Id o la operación hayan producido fases válidas. La opción explícita `--guardar-fases` permite guardar la respuesta completa en un archivo local nuevo para examinar su estructura; puede contener datos privados y debe revisarse antes de compartir. La prueba requiere repetir acceso y consulta. No se ha hecho en este cambio.
+
+### Fase y grupo actuales: observación real
+
+La respuesta guardada contiene `listaFasesGrupo` con una fase; `faseActual` coincide con `IdFase`, y `grupoActual` coincide con un único `IdGrupo` de esa fase. En el equipo de prueba los nombres son «PRIMERA FASE» y «GRUPO 16»; hay 15 grupos y ninguna ronda. Esto es evidencia de una respuesta concreta, no una garantía para todos los equipos.
+
+`team_phases.current_phase_group` selecciona de forma genérica usando coincidencias exactas y únicas, y rechaza valores ausentes o ambiguos. Conserva identificadores sin modificarlos y no deduce una ronda. Para horarios, el APK muestra los campos `id_ronda`, `fecha_inicial` y `fecha_final`, pero aún no se han verificado sus valores cuando no hay rondas ni el formato/rango de las fechas. No se ha enviado ninguna solicitud de horarios.
