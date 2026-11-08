@@ -147,3 +147,18 @@ Nueva comprobación del inventario `guest_field_writes.json` y los contextos de 
 En el contexto de ambas rutas aparecen lecturas de propiedades `key` y `dispositivoId` mediante `Lkotlin/jvm/internal/k;->f` y una invocación `Lv8/o;->C0` inmediatamente antes de la primera escritura. En el inventario anterior, `LH5/j;->a` lee los dos campos estáticos.
 
 **Conclusión limitada:** el APK escribe los dos campos compartidos tras los flujos de registro y acceso, y los consulta posteriormente. Para afirmar que `a=key` y `b=idDispositivo` (o viceversa) hace falta seguir el registro de retorno de cada acceso al DTO hasta cada `sput-object`, incluyendo `move-result-object` y conversiones. No inferir el orden por proximidad de literales. Ninguna petición HTTP realizada.
+
+## Correspondencia verificada de registros a campos compartidos (08/11/2026)
+
+Se decodificaron los operandos reales `22c` (`iget-object`) y `21c` (`sput-object`) en `classes2.dex` extraído del APK aportado. Se usó la tabla `field_ids` para resolver los índices, no coincidencias de texto.
+
+| Flujo | Lectura DTO | Campo leído | Escritura estática | Campo escrito |
+|---|---|---|---|---|
+| Registro `LZ3/B` | 2639204 `iget-object v2,v1` | `Lf4/a;->w:Ljava/lang/String;` | 2639244 `sput-object v2` | `Ll7/I;->a` |
+| Registro `LZ3/B` | 2639218 `iget-object v1,v1` | `Lf4/a;->v:Ljava/lang/String;` | 2639312 `sput-object v1` | `Ll7/I;->b` |
+| Acceso `LZ3/D` | 2640470 `iget-object v3,v2` | `Lf4/a;->w:Ljava/lang/String;` | 2640510 `sput-object v3` | `Ll7/I;->a` |
+| Acceso `LZ3/D` | 2640484 `iget-object v2,v2` | `Lf4/a;->v:Ljava/lang/String;` | 2640578 `sput-object v2` | `Ll7/I;->b` |
+
+Entre lectura y escritura hay comprobaciones de nulidad `Lkotlin/jvm/internal/k;->f` y validaciones `Lv8/o;->C0`; no se aprecia sobrescritura de los registros correspondientes en los tramos analizados. Los literales `key` y `dispositivoId` se utilizan en ese mismo orden en dichas comprobaciones, de modo que la interpretación más fundada es **`Ll7/I;->a = key`** y **`Ll7/I;->b = dispositivoId`**. La correspondencia `w/v` → `key/dispositivoId` aún debe contrastarse con los metadatos de serialización del DTO, para no confundir nombres internos ofuscados con nombres JSON.
+
+**Confirmado sin red:** los flujos de registro y acceso almacenan los mismos dos campos de respuesta en los mismos dos campos estáticos. **Pendiente:** confirmar nombres JSON, cómo se transmiten en `LH5/j;->a` y validar acceso autorizado.
