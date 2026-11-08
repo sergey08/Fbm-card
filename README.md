@@ -1,4 +1,4 @@
-> **Arquitectura DEV en transición (08/11/2026).** Este repositorio está pasando de tarjeta independiente a **integración + tarjeta en una sola instalación**. La integración se encuentra en `custom_components/fbm/`, con la tarjeta empaquetada en `custom_components/fbm/www/fbm-card.js`. El manifiesto y el flujo de configuración están creados, pero **no hay todavía conexión validada a la API oficial de FBM, ni registro automático del recurso Lovelace, ni instalación probada en Home Assistant**. Las instrucciones anteriores de instalación manual de la tarjeta son históricas y no describen aún la instalación final desde Marketplace. **No instalar como versión estable.**
+> **Arquitectura DEV en transición (08/11/2026).** Este repositorio está pasando de tarjeta independiente a **integración + tarjeta en una sola instalación**. La integración se encuentra en `custom_components/fbm/`, con la tarjeta empaquetada en `custom_components/fbm/www/fbm-card.js`. El manifiesto y el flujo de configuración están creados, pero **no hay todavía conexión validada a la API oficial de FBM, ni registro automático del recurso Lovelace verificado en Home Assistant, ni instalación probada en Home Assistant**. Las instrucciones anteriores de instalación manual de la tarjeta son históricas y no describen aún la instalación final desde Marketplace. **No instalar como versión estable.**
 
 # FBM Card
 
@@ -128,3 +128,7 @@ En este modo la tarjeta muestra los sensores con `fuente: FBM` y estructura vál
 ## Diagnóstico de API oficial (DEV)
 
 `python3 scripts/diagnostico_fbm.py` realiza una petición de búsqueda sin credenciales a `https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx` e informa si la API devuelve un error o una respuesta interpretable. No requiere paquetes adicionales. Un error por parámetros **no equivale a acceso funcional a resultados**. No se usan fuentes externas ni claves ficticias. El diagnóstico no es un conector de datos ni está integrado en la tarjeta.
+
+## Registro automático de tarjeta (DEV)
+
+La integración intenta registrar `/fbm_static/fbm-card.js` como recurso de tipo `module` en los recursos Lovelace gestionados por almacenamiento. Evita duplicados y no modifica dashboards YAML. **La implementación está pendiente de validación en una instalación real de Home Assistant**; si el modo de recursos no permite el registro, puede requerirse añadir manualmente la URL del recurso. No equivale todavía a una instalación Marketplace verificada.
