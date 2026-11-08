@@ -216,3 +216,16 @@ La inspección de los opcodes y registros del método `Lb5/e;->a` aclara la secu
 **Conclusión:** en esta operación la clave no se cifra ni se deriva del reloj. Se **usa la clave almacenada solo mientras el umbral temporal no ha vencido**, y se envía un valor vacío si falta o ha caducado. El significado preciso y origen de `Ll7/I;->c` (expiración de sesión u otro plazo) todavía debe seguirse hasta sus escrituras; no etiquetarlo como caducidad de autenticación confirmada. Este análisis es estático y no contiene claves reales.
 
 **Siguiente paso:** localizar todas las escrituras de `Ll7/I;->c` y vincularlas con el procesamiento de respuestas; comprobar que `buscarEquipo` y `buscarCategoria` siguen la misma condición antes de implementar una política de renovación. No se han realizado peticiones HTTP.
+
+## Origen del umbral temporal: escrituras en registro y acceso (08/11/2026)
+
+Una nueva exploración de todos los `code_item` de `classes2.dex`, buscando las instrucciones DEX `sput-wide` (`0x68`) dirigidas a `Ll7/I;->c:J` (field ID 23340), ha localizado las escrituras en los mismos flujos que reciben y guardan la identidad invitada:
+
+| Flujo | Escritura `sput-wide` | Instrucciones anteriores |
+|---|---:|---|
+| Registro de dispositivo, `LZ3/B;->invokeSuspend` | 2639296 | `Ly8/o;->a` (2639280), `move-result-wide` (2639286), `const-wide/32` (2639288), operación de dos registros (2639294) |
+| Acceso de dispositivo, `LZ3/D;->invokeSuspend` | 2640562 | `Ly8/o;->a` (2640546), `move-result-wide` (2640552), `const-wide/32` (2640554), operación de dos registros (2640560) |
+
+Se confirma que el campo temporal compartido se actualiza tanto tras registro como tras acceso, en los mismos métodos que almacenan `key` e `idDispositivo`. **No se confirma todavía el cálculo ni la duración exacta**: hace falta seguir los registros de la operación y descartar errores de alineación en el desensamblado parcial antes de implementar el vencimiento.
+
+**Estado de pruebas externas:** el flujo de GitHub Actions incluye DNS, HTTPS y diagnóstico `buscarEquipo` con los cinco campos observados, pero una consulta de ejecuciones asociadas al commit previo no devolvió resultados; no hay prueba de conectividad satisfactoria confirmada. Ningún cambio se ha aplicado a Home Assistant.
