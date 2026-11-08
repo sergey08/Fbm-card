@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .const import CARD_URL, DOMAIN
 from .query_cache import QueryCache
+from .query_cache import QueryCache
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "estado": "pendiente_validacion_api_oficial",
         "recurso_lovelace_registrado": recurso_registrado,
+        "cache": QueryCache(),
         "cache_consultas": QueryCache(ttl_seconds=300, max_entries=128),
     }
     return True
