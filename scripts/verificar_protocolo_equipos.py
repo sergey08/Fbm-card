@@ -41,6 +41,11 @@ def verify(data):
                          (5679078, "id_equipo"), (5679716, "horariosFecha"),
                          (5680552, "horariosJornadas"), (5681388, "detalleEquipo")):
         literal(offset, text)
+    literal(1376762, "")  # id_ronda vacio en una ruta de LA5/g0;->g
+    literal(2407364, "00:00")
+    literal(2407370, "23:59")
+    literal(2407390, "-")
+    literal(2407418, " ")
     return True
 
 

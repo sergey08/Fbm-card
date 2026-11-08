@@ -446,3 +446,9 @@ La prueba real `fasesGrupos` del usuario devolvió JSON con `error` vacío y `re
 La respuesta guardada contiene `listaFasesGrupo` con una fase; `faseActual` coincide con `IdFase`, y `grupoActual` coincide con un único `IdGrupo` de esa fase. En el equipo de prueba los nombres son «PRIMERA FASE» y «GRUPO 16»; hay 15 grupos y ninguna ronda. Esto es evidencia de una respuesta concreta, no una garantía para todos los equipos.
 
 `team_phases.current_phase_group` selecciona de forma genérica usando coincidencias exactas y únicas, y rechaza valores ausentes o ambiguos. Conserva identificadores sin modificarlos y no deduce una ronda. Para horarios, el APK muestra los campos `id_ronda`, `fecha_inicial` y `fecha_final`, pero aún no se han verificado sus valores cuando no hay rondas ni el formato/rango de las fechas. No se ha enviado ninguna solicitud de horarios.
+
+### Ronda vacía y fechas para horarios
+
+En el APK 5.0.42, `LA5/g0;->g` prepara una llamada a `LA5/g0;->j`: el argumento situado en la posición posteriormente asociada a `id_ronda` se carga con cadena vacía en el offset 1376762. En ese camino, el inicio y fin se formatean mediante `LV4/a;->f`: año-mes-día y respectivamente `00:00` y `23:59`. La aplicación tiene otros caminos; este hallazgo no demuestra que una ronda vacía sea válida para cualquier competición.
+
+El diagnóstico permite `--horarios --desde AAAA-MM-DD --hasta AAAA-MM-DD --equipo RUTA --candidato RUTA`. Efectúa acceso, fases y, solo si hay una fase/grupo actuales únicos y la lista `Rondas` está vacía, una consulta `horariosJornadas` con esos valores. Rechaza rondas presentes, fechas inválidas y rangos mayores de 366 días. El archivo opcional `--guardar-horarios` contiene la respuesta completa, que puede incluir datos sensibles. Los valores de esta consulta y su respuesta siguen sin validación real; no se ha hecho tráfico en este cambio.

@@ -225,6 +225,42 @@ class RegistrationDiagnosticTests(unittest.TestCase):
                 self.assertEqual(module.main(args), 1)
                 post.assert_not_called()
 
+    def test_schedule_form_matches_current_phase_group_and_date_format(self):
+        phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [
+            {'IdFase': 'f', 'Grupos': [{'IdGrupo': 'g'}], 'Rondas': []}]}
+        form = module.schedule_fields('d', 'k', 't', phases, '2026-11-01', '2026-11-30')
+        self.assertEqual(form, {'accion': 'horariosJornadas', 'id_dispositivo': 'd', 'key': 'k',
+            'id_equipo': 't', 'id_fase': 'f', 'id_grupo': 'g', 'id_ronda': '',
+            'fecha_inicial': '2026-11-01 00:00', 'fecha_final': '2026-11-30 23:59'})
+        phases['listaFasesGrupo'][0]['Rondas'] = [{'IdRonda': 'r'}]
+        with self.assertRaises(ValueError):
+            module.schedule_fields('d', 'k', 't', phases, '2026-11-01', '2026-11-30')
+
+    def test_schedule_invalid_date_prevents_network(self):
+        with patch.object(module, 'post_device_form') as post, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                module.main(['--android-release', '16', '--identidad', 'a', '--candidato', 'b', '--equipo', 'c', '--desde', 'bad', '--hasta', '2026-11-01', '--horarios'])
+            post.assert_not_called()
+
+    def test_schedule_requires_explicit_access_and_saves_response(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity, candidate, team, target = (Path(tmp) / n for n in ('identity.json', 'candidate.json', 'team.json', 'schedule.json'))
+            module.create_identity(identity)
+            module.save_candidate(candidate, module.load_identity(identity), {'id_dispositivo': 'device'})
+            team.write_text(json.dumps({'Id': 'team'}), encoding='utf-8')
+            phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [{'IdFase': 'f', 'Grupos': [{'IdGrupo': 'g'}], 'Rondas': []}]}
+            args = ['--android-release', '16', '--identidad', str(identity), '--candidato', str(candidate), '--equipo', str(team), '--desde', '2026-11-01', '--hasta', '2026-11-30', '--horarios', '--guardar-horarios', str(target)]
+            with patch.object(module, 'post_device_form', return_value={'error': '', 'key': 'secret'}) as access, patch.object(module, 'phases_once', return_value=phases) as get_phases, patch.object(module, 'schedule_once', return_value={'error': '', 'items': []}) as schedule, contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(module.main(args), 1)
+                self.assertEqual(access.call_args.args[0]['accion'], 'acceso')
+                get_phases.assert_called_once_with('device', 'secret', 'team')
+                self.assertEqual(schedule.call_args.args[0]['accion'], 'horariosJornadas')
+                self.assertEqual(json.loads(target.read_text(encoding='utf-8')), {'error': '', 'items': []})
+                self.assertNotIn('secret', output.getvalue())
+                access.reset_mock()
+                self.assertEqual(module.main(args), 1)
+                access.assert_not_called()
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'

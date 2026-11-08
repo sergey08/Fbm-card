@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
 import importlib.util
 import json
@@ -171,6 +172,55 @@ def phases_once(device_id, key, team_id):
     return result
 
 
+def schedule_fields(device_id, key, team_id, phases, start, end):
+    """Contrato experimental observado: seleccion actual sin rondas."""
+    if not isinstance(phases, dict) or phases.get("error") != "":
+        raise ValueError("Respuesta de fases ambigua")
+    pid, gid = phases.get("faseActual"), phases.get("grupoActual")
+    all_phases = phases.get("listaFasesGrupo")
+    if not all(isinstance(v, str) and v.strip() for v in (device_id, key, team_id, pid, gid)) or not isinstance(all_phases, list):
+        raise ValueError("Identificadores incompletos")
+    matched = [p for p in all_phases if isinstance(p, dict) and p.get("IdFase") == pid]
+    if len(matched) != 1:
+        raise ValueError("Fase ambigua")
+    phase = matched[0]
+    groups, rounds = phase.get("Grupos"), phase.get("Rondas")
+    if not isinstance(groups, list) or sum(isinstance(g, dict) and g.get("IdGrupo") == gid for g in groups) != 1:
+        raise ValueError("Grupo ambiguo")
+    if not isinstance(rounds, list) or rounds:
+        raise ValueError("La seleccion de rondas aun no esta implementada")
+    first, last = date.fromisoformat(start), date.fromisoformat(end)
+    if first > last or (last - first).days > 366:
+        raise ValueError("Rango de fechas invalido")
+    return {"accion": "horariosJornadas", "id_dispositivo": device_id, "key": key,
+            "id_equipo": team_id, "id_fase": pid, "id_grupo": gid, "id_ronda": "",
+            "fecha_inicial": first.isoformat() + " 00:00",
+            "fecha_final": last.isoformat() + " 23:59"}
+
+
+def schedule_once(fields):
+    request = urllib.request.Request(
+        "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx",
+        data=urllib.parse.urlencode(fields).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            if response.status != 200:
+                raise RuntimeError("http")
+            raw = response.read(131073)
+    except (urllib.error.URLError, OSError, TimeoutError):
+        raise RuntimeError("transporte") from None
+    if len(raw) > 131072:
+        raise RuntimeError("respuesta_grande")
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise RuntimeError("json_invalido") from None
+    if not isinstance(result, dict):
+        raise RuntimeError("json_no_objeto")
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--android-release", required=True,
@@ -186,6 +236,9 @@ def main(argv=None):
     parser.add_argument("--equipo", type=Path, help="Archivo de equipo seleccionado localmente")
     parser.add_argument("--guardar-fases", type=Path,
                         help="Guarda la respuesta de fases para revision privada")
+    parser.add_argument("--desde", help="Primera fecha ISO AAAA-MM-DD")
+    parser.add_argument("--hasta", help="Ultima fecha ISO AAAA-MM-DD")
+    parser.add_argument("--guardar-horarios", type=Path, help="Archivo nuevo para revision privada")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--crear-identidad", action="store_true",
                         help="Crea una identidad local, sin red y sin sobrescribir")
@@ -197,14 +250,27 @@ def main(argv=None):
                         help="Autoriza acceso y una busqueda experimental de equipo")
     action.add_argument("--fases", action="store_true",
                         help="Autoriza acceso y una consulta experimental de fases del equipo")
+    action.add_argument("--horarios", action="store_true",
+                        help="Autoriza acceso, fases y una consulta experimental de horarios")
     args = parser.parse_args(argv)
+    if args.horarios and (not args.equipo or not args.candidato or not args.desde or not args.hasta):
+        parser.error("--horarios requiere --equipo, --candidato, --desde y --hasta")
+    if (args.desde or args.hasta or args.guardar_horarios) and not args.horarios:
+        parser.error("Fechas y --guardar-horarios requieren --horarios")
+    if args.horarios:
+        try:
+            first, last = date.fromisoformat(args.desde), date.fromisoformat(args.hasta)
+            if first > last or (last - first).days > 366:
+                raise ValueError
+        except ValueError:
+            parser.error("Fechas invalidas o rango superior a 366 dias")
     if args.guardar_fases and not args.fases:
         parser.error("--guardar-fases requiere --fases")
     if args.guardar_equipos and args.buscar_equipo is None:
         parser.error("--guardar-equipos requiere --buscar-equipo")
     if args.guardar_error and not (args.enviar or args.acceder):
         parser.error("--guardar-error requiere --enviar o --acceder")
-    if args.candidato and not (args.enviar or args.acceder or args.buscar_equipo is not None or args.fases):
+    if args.candidato and not (args.enviar or args.acceder or args.buscar_equipo is not None or args.fases or args.horarios):
         parser.error("--candidato requiere --enviar o --acceder")
     if (args.acceder or args.buscar_equipo is not None or args.fases) and not args.candidato:
         parser.error("El acceso o busqueda requiere --candidato")
@@ -214,9 +280,9 @@ def main(argv=None):
         parser.error("La version de Android no puede estar vacia")
     if args.fases and not args.equipo:
         parser.error("--fases requiere --equipo")
-    if args.equipo and not args.fases:
-        parser.error("--equipo requiere --fases")
-    if not args.crear_identidad and not args.enviar and not args.acceder and args.buscar_equipo is None and not args.fases:
+    if args.equipo and not (args.fases or args.horarios):
+        parser.error("--equipo requiere --fases o --horarios")
+    if not args.crear_identidad and not args.enviar and not args.acceder and args.buscar_equipo is None and not args.fases and not args.horarios:
         print("SIN RED: formulario previsto: accion=registrar, uid=<privado>, "
               "plataforma=Android <version>, tipo_dispositivo=mobile, version=5.0.42")
         print("Crea una identidad propia con --identidad RUTA --crear-identidad; "
@@ -232,6 +298,9 @@ def main(argv=None):
         return 1
     if args.guardar_fases and os.path.lexists(args.guardar_fases):
         print("El archivo de fases ya existe; no se envio ninguna peticion.", file=sys.stderr)
+        return 1
+    if args.guardar_horarios and os.path.lexists(args.guardar_horarios):
+        print("El archivo de horarios ya existe; no se envio ninguna peticion.", file=sys.stderr)
         return 1
     if args.enviar and args.candidato and os.path.lexists(args.candidato):
         print("El archivo de candidato ya existe; no se envio ninguna peticion.", file=sys.stderr)
@@ -249,7 +318,7 @@ def main(argv=None):
     except (OSError, ValueError):
         print("Identidad local inaccesible o invalida; no se envio ninguna peticion.", file=sys.stderr)
         return 1
-    if args.fases:
+    if args.fases or args.horarios:
         try:
             with open(args.equipo, encoding="utf-8") as source:
                 team = json.load(source)
@@ -260,7 +329,7 @@ def main(argv=None):
             print("Equipo seleccionado inaccesible o invalido; no se envio ninguna peticion.", file=sys.stderr)
             return 1
     try:
-        if args.acceder or args.buscar_equipo is not None or args.fases:
+        if args.acceder or args.buscar_equipo is not None or args.fases or args.horarios:
             try:
                 device_id = load_candidate(args.candidato, uid)
             except (OSError, ValueError):
@@ -295,7 +364,7 @@ def main(argv=None):
             print("No se pudo guardar el candidato; no se sobrescribio ningun archivo.", file=sys.stderr)
         else:
             print("Identificador candidato guardado localmente; aun no esta validado.")
-    if args.buscar_equipo is not None or args.fases:
+    if args.buscar_equipo is not None or args.fases or args.horarios:
         key = response.get("key")
         if response.get("error") != "" or not isinstance(key, str) or not key.strip():
             print("Busqueda cancelada: respuesta de acceso ambigua; valores ocultos.", file=sys.stderr)
@@ -305,9 +374,29 @@ def main(argv=None):
             print("Busqueda cancelada: identificador de acceso distinto o invalido.", file=sys.stderr)
             return 1
         try:
-            result = phases_once(device_id, key, team_id) if args.fases else search_once(device_id, key, args.buscar_equipo.strip())
+            result = phases_once(device_id, key, team_id) if (args.fases or args.horarios) else search_once(device_id, key, args.buscar_equipo.strip())
         except RuntimeError as exc:
             print("Busqueda no validada: " + str(exc) + "; detalles ocultos.", file=sys.stderr)
+            return 1
+        if args.horarios:
+            try:
+                form = schedule_fields(device_id, key, team_id, result, args.desde, args.hasta)
+                result = schedule_once(form)
+            except (ValueError, RuntimeError):
+                print("Horarios no validados: fases ambiguas, rondas presentes o fallo de consulta.", file=sys.stderr)
+                return 1
+            if args.guardar_horarios:
+                try:
+                    fd = os.open(args.guardar_horarios, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "w", encoding="utf-8") as output:
+                        json.dump(result, output, ensure_ascii=False, indent=2)
+                        output.write("\n")
+                except OSError:
+                    print("No se pudo guardar la respuesta de horarios.", file=sys.stderr)
+                else:
+                    print("Respuesta de horarios guardada localmente; revisala antes de compartirla.")
+            print("Respuesta de horarios recibida; error=" + field_shape(result, "error") +
+                  "; marcador_error=" + error_marker(result) + ". Valores ocultos; resultado no validado.")
             return 1
         if args.fases:
             if args.guardar_fases:
