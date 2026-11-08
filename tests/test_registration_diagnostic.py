@@ -60,7 +60,14 @@ class RegistrationDiagnosticTests(unittest.TestCase):
             with patch.object(module, 'post_device_form', return_value={'error': 'private-server-message'}):
                 self.assertEqual(module.main(['--android-release', '16', '--identidad', str(path), '--enviar']), 1)
             self.assertNotIn('private-server-message', err.getvalue())
-            self.assertIn('error_indicado=True', err.getvalue())
+            self.assertIn('error=texto_no_vacio', err.getvalue())
+
+    def test_field_shapes_do_not_expose_values(self):
+        response = {'key': 'private-key', 'dispositivoId': 42, 'error': False}
+        self.assertEqual(module.field_shape(response, 'key'), 'texto_no_vacio')
+        self.assertEqual(module.field_shape(response, 'idDispositivo'), 'ausente')
+        self.assertEqual(module.field_shape(response, 'dispositivoId'), 'numero')
+        self.assertEqual(module.field_shape(response, 'error'), 'booleano')
 
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:

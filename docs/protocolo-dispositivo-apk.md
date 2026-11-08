@@ -381,3 +381,7 @@ El primer comando no escribe ni conecta. El segundo crea el archivo sin sobrescr
 ### Resultado de la primera prueba independiente
 
 El usuario ejecutó la creación local de identidad y después un envío explícito. El diagnóstico devolvió «Registro no validado», pero la versión utilizada agrupaba errores de identidad, transporte y formato; no permite determinar la causa ni si el servidor procesó la solicitud. No se conocen el estado HTTP ni la respuesta. La versión posterior distingue estado HTTP, fallo de conexión, JSON inválido o no objeto, y presencia válida de los dos campos previstos, sin imprimir valores ni cuerpo. Las pruebas automatizadas de estas clasificaciones usan respuestas simuladas; no demuestran aceptación del servidor. Repetir el registro es una petición nueva que podría crear o modificar un registro remoto.
+
+### Segunda prueba independiente
+
+En una segunda solicitud explícita, el usuario observó una respuesta JSON con `key` de texto no vacía, sin `idDispositivo` de texto no vacío y con un valor en `error` distinto de los valores que el diagnóstico consideraba vacíos. Esto no demuestra un error real: el significado y el tipo de `error` siguen sin verificarse. El diagnóstico posterior informa únicamente de presencia y tipo de campos concretos candidatos, sin mostrar sus valores. Aún no hay sesión validada ni prueba de búsqueda.

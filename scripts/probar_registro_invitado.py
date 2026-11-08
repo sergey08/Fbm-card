@@ -43,6 +43,26 @@ def load_identity(path):
     return data["uid"]
 
 
+def field_shape(response, name):
+    """Solo clasifica campos conocidos, sin exponer valores del servidor."""
+    if name not in response:
+        return "ausente"
+    value = response[name]
+    if value is None:
+        return "nulo"
+    if isinstance(value, bool):
+        return "booleano"
+    if isinstance(value, str):
+        return "texto_no_vacio" if value else "texto_vacio"
+    if isinstance(value, (int, float)):
+        return "numero"
+    if isinstance(value, dict):
+        return "objeto"
+    if isinstance(value, list):
+        return "lista"
+    return "otro"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--android-release", required=True,
@@ -95,11 +115,10 @@ def main(argv=None):
         extract_identity_fields(response)
     except ValueError:
         # Solo presencia y tipo de los campos previstos, nunca valores o claves arbitrarias.
-        error = response.get("error")
-        print("Registro no validado: respuesta JSON sin identidad esperada. "
-              f"key_valida={isinstance(response.get('key'), str) and bool(response.get('key'))}, "
-              f"idDispositivo_valido={isinstance(response.get('idDispositivo'), str) and bool(response.get('idDispositivo'))}, "
-              f"error_indicado={error not in (None, '', False, 0)}. Valores ocultos.", file=sys.stderr)
+        names = ("key", "idDispositivo", "dispositivoId", "id_dispositivo", "error")
+        shapes = ", ".join(f"{name}={field_shape(response, name)}" for name in names)
+        print("Registro no validado: estructura de campos conocidos: " + shapes +
+              ". Valores ocultos; no se interpreta el campo error.", file=sys.stderr)
         return 1
     print("Respuesta con key e idDispositivo recibida (valores ocultos).")
     print("La sesion no se guarda; esto no valida la busqueda ni el acceso posterior.")
