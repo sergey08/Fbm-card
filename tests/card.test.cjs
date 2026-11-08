@@ -77,3 +77,21 @@ test("sin identidad de usuario no crea clave de preferencias compartidas", () =>
   card._config = {};
   assert.equal(card._storageKey(), null);
 });
+
+test("sin usuario no se guardan favoritos", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { equipos: [{ nombre: "A", entidad_datos: "sensor.a" }] };
+  assert.equal(card._favoriteKey(), null);
+  assert.deepEqual(Array.from(card._favorites()), []);
+  card._toggleFavorite("sensor.a");
+});
+test("los favoritos se separan por identificador de usuario y tarjeta", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { id_tarjeta: "mis_equipos" };
+  card._hass = { user: { id: "usuario-1" } };
+  assert.match(card._favoriteKey(), /usuario-1:mis_equipos$/);
+  card._hass = { user: { id: "usuario-2" } };
+  assert.match(card._favoriteKey(), /usuario-2:mis_equipos$/);
+});
