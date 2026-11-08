@@ -1,0 +1,22 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+
+test("la integración incluye un manifiesto de configuración", () => {
+  const manifest = JSON.parse(fs.readFileSync("custom_components/fbm/manifest.json", "utf8"));
+  assert.equal(manifest.domain, "fbm");
+  assert.equal(manifest.config_flow, true);
+  assert.equal(manifest.requirements.length, 0);
+});
+test("la tarjeta está empaquetada dentro de la integración", () => {
+  const card = fs.readFileSync("fbm-card.js", "utf8");
+  const bundled = fs.readFileSync("custom_components/fbm/www/fbm-card.js", "utf8");
+  assert.equal(bundled, card, "El JS empaquetado debe coincidir con el código fuente");
+});
+test("la integración no incluye fuentes externas ni credenciales simuladas", () => {
+  const files = ["custom_components/fbm/__init__.py", "custom_components/fbm/config_flow.py"];
+  for (const path of files) {
+    const content = fs.readFileSync(path, "utf8");
+    assert.doesNotMatch(content, /requests\.get|aiohttp\.ClientSession|fetch\(/);
+  }
+});
