@@ -1,66 +1,65 @@
-"""Pruebas sin red del diagnóstico de registro invitado."""
 import contextlib
 import importlib.util
 import io
-import os
+import json
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
-PATH = Path(__file__).resolve().parents[1] / "scripts/probar_registro_invitado.py"
-spec = importlib.util.spec_from_file_location("fbm_registration_diagnostic_test", PATH)
+PATH = Path(__file__).resolve().parents[1] / 'scripts/probar_registro_invitado.py'
+spec = importlib.util.spec_from_file_location('diagnostic_test', PATH)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
-
 class RegistrationDiagnosticTests(unittest.TestCase):
-    def test_dry_run_does_not_contact_server_or_require_uid(self):
-        stdout = io.StringIO()
-        with patch.dict(os.environ, {}, clear=True), \
-             patch.object(module, "post_device_form") as post, \
-             contextlib.redirect_stdout(stdout):
-            result = module.main(["--android-release", "16"])
-        self.assertEqual(result, 0)
-        self.assertIn("SIN RED", stdout.getvalue())
-        post.assert_not_called()
+    def test_dry_run_has_no_network_or_file(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(module, 'post_device_form') as post, contextlib.redirect_stdout(io.StringIO()):
+            path = Path(tmp) / 'identity.json'
+            self.assertEqual(module.main(['--android-release', '16', '--identidad', str(path)]), 0)
+            self.assertFalse(path.exists())
+            post.assert_not_called()
 
-    def test_explicit_send_requires_uid(self):
-        with patch.dict(os.environ, {}, clear=True), \
-             patch.object(module, "post_device_form") as post, \
-             contextlib.redirect_stderr(io.StringIO()):
-            with self.assertRaises(SystemExit) as raised:
-                module.main(["--android-release", "16", "--enviar"])
-        self.assertEqual(raised.exception.code, 2)
-        post.assert_not_called()
+    def test_create_persists_and_refuses_overwrite(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(module, 'post_device_form') as post, contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            path = Path(tmp) / 'identity.json'
+            args = ['--android-release', '16', '--identidad', str(path), '--crear-identidad']
+            self.assertEqual(module.main(args), 0)
+            original = path.read_bytes()
+            uid = module.load_identity(path)
+            self.assertRegex(uid, r'^[0-9a-f]{16}$')
+            self.assertEqual(module.main(args), 1)
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(module.load_identity(path), uid)
+            post.assert_not_called()
 
-    def test_explicit_send_uses_exact_fields_and_hides_secrets(self):
-        stdout = io.StringIO()
-        with patch.dict(os.environ, {"FBM_ANDROID_ID": "private-uid"}), \
-             patch.object(module, "post_device_form",
-                          return_value={"key": "private-key", "idDispositivo": "private-id"}) as post, \
-             contextlib.redirect_stdout(stdout):
-            result = module.main(["--android-release", "16", "--enviar"])
-        self.assertEqual(result, 0)
-        self.assertEqual(post.call_args.args[0], {
-            "accion": "registrar", "uid": "private-uid",
-            "plataforma": "Android 16", "tipo_dispositivo": "mobile",
-            "version": "5.0.42",
-        })
-        self.assertNotIn("private-uid", stdout.getvalue())
-        self.assertNotIn("private-key", stdout.getvalue())
-        self.assertNotIn("private-id", stdout.getvalue())
+    def test_send_uses_persisted_uid_without_leaks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'identity.json'
+            module.create_identity(path)
+            uid = module.load_identity(path)
+            output = io.StringIO()
+            with patch.object(module, 'post_device_form', return_value={'key': 'private-key', 'idDispositivo': 'private-id'}) as post, contextlib.redirect_stdout(output):
+                result = module.main(['--android-release', '16', '--identidad', str(path), '--enviar'])
+            self.assertEqual(result, 0)
+            self.assertEqual(post.call_args.args[0], {'accion': 'registrar', 'uid': uid, 'plataforma': 'Android 16', 'tipo_dispositivo': 'mobile', 'version': '5.0.42'})
+            for secret in (uid, 'private-key', 'private-id'):
+                self.assertNotIn(secret, output.getvalue())
 
-    def test_rejected_response_does_not_leak(self):
-        stdout, stderr = io.StringIO(), io.StringIO()
-        with patch.dict(os.environ, {"FBM_ANDROID_ID": "private-uid"}), \
-             patch.object(module, "post_device_form",
-                          return_value={"error": "private-server-message"}), \
-             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            result = module.main(["--android-release", "16", "--enviar"])
-        self.assertEqual(result, 1)
-        self.assertNotIn("private-uid", stderr.getvalue())
-        self.assertNotIn("private-server-message", stderr.getvalue())
+    def test_invalid_identity_never_sends(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(module, 'post_device_form') as post, contextlib.redirect_stderr(io.StringIO()):
+            path = Path(tmp) / 'identity.json'
+            path.write_text(json.dumps({'format': 1, 'uid': 'invalid'}))
+            self.assertEqual(module.main(['--android-release', '16', '--identidad', str(path), '--enviar']), 1)
+            post.assert_not_called()
 
+    def test_server_error_is_hidden(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
+            path = Path(tmp) / 'identity.json'
+            module.create_identity(path)
+            with patch.object(module, 'post_device_form', return_value={'error': 'private-server-message'}):
+                self.assertEqual(module.main(['--android-release', '16', '--identidad', str(path), '--enviar']), 1)
+            self.assertNotIn('private-server-message', err.getvalue())
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

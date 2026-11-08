@@ -362,3 +362,18 @@ Se ha desensamblado el inicializador del enum `LN4/i1;-><clinit>` (offset 191184
 `version = "5.0.42"`.
 
 Estos son valores del protocolo Android observado, **no credenciales de acceso**. Sigue pendiente validar el registro real y establecer una provisión legítima del Android ID desde un dispositivo autorizado, sin inventarlo ni registrar uno ajeno.
+
+## Identidad independiente experimental (08/11/2026)
+
+El diagnóstico permite crear un UID aleatorio propio de 16 dígitos hexadecimales y guardarlo en un archivo local. No es el ANDROID_ID de la aplicación ni se afirma que el servidor acepte este formato. La plataforma Android y la versión 5.0.42 son los valores observados en la APK, usados aquí como perfil experimental, no una descripción del equipo que ejecuta el script. La aceptación de clientes independientes y los nombres JSON de respuesta siguen sin validar.
+
+Desde la raíz del repositorio en PowerShell, usando una ruta privada fuera del repositorio:
+
+```powershell
+py -3.13 .\scripts\probar_registro_invitado.py --android-release 16
+py -3.13 .\scripts\probar_registro_invitado.py --android-release 16 --identidad "$env:LOCALAPPDATA\fbm-identidad.json" --crear-identidad
+# Solo cuando se desee probar un registro real:
+py -3.13 .\scripts\probar_registro_invitado.py --android-release 16 --identidad "$env:LOCALAPPDATA\fbm-identidad.json" --enviar
+```
+
+El primer comando no escribe ni conecta. El segundo crea el archivo sin sobrescribirlo ni conectar. El tercero realiza un POST de registro: conserva el archivo para mantener la identidad y no lo compartas ni lo subas a Git. El archivo contiene un identificador, no una clave recibida del servicio; los permisos y copias de seguridad dependen del sistema. Una respuesta con ambos campos esperados no valida búsquedas ni acceso posterior. El diagnóstico no guarda la sesión; repetir el envío puede crear o modificar un registro remoto. No se ha realizado ninguna prueba real en este cambio. En caso de rechazo o respuesta inesperada no se muestran cuerpos ni identificadores.
