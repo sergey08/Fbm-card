@@ -265,3 +265,18 @@ Se ha seguido la preparación de la llamada `LZ3/B;->invokeSuspend` → `Ld4/c;-
 - En `2638774`, se carga la constante `5.0.42`; en `2638788`, se ejecuta el `invoke-*/range` de `Ld4/c;->b`.
 
 **Conclusión limitada:** los tres valores variables proceden del estado interno de la aplicación (`MutableStateFlow` y sus modelos), no de tres constantes inmediatas en la llamada. La asignación inequívoca de cada cadena a `uid`, `plataforma` y `tipo_dispositivo` exige seguir los registros hasta la construcción del formulario en `Ld4/c;->b` y rastrear quién rellena esos modelos. No se deben usar `LN4/v`, `LN4/a0` o `LN4/i1` como nombres semánticos de campos.
+
+## Verificación de registros en llamada `registrar` (DEX)
+
+Se ha comprobado el tramo de bytes de `classes2.dex` inmediatamente anterior al `invoke-range` de `Ld4/c;->b`:
+
+| Offset DEX | Bytes | Interpretación |
+| --- | --- | --- |
+| 2638774 | `1a 05 5c 21` | `const-string v5, "5.0.42"` |
+| 2638778 | `07 32` | `move-object v2, v3` |
+| 2638780 | `07 43` | `move-object v3, v4` |
+| 2638782 | `07 54` | `move-object v4, v5` |
+| 2638784 | `08 05 2d 00` | `move-object/from16 v5, v45` (continuación) |
+| 2638788 | `74 06 cc 6a 00 00` | `invoke-virtual/range {v0..v5}, Ld4/c;->b` |
+
+La firma de `Ld4/c;->b` tiene **cuatro cadenas y una continuación**. En una invocación de instancia `v0` es el receptor, `v1..v4` son las cuatro cadenas y `v5` es la continuación. Por tanto, **la versión `5.0.42` es inequívocamente el cuarto parámetro de cadena (`v4`)**. Las otras tres cadenas son `v1`, `v2` y `v3`, cuyo origen exacto sigue pendiente de seguir hacia atrás. Esta comprobación evita confundir el orden de parámetros de registro.
