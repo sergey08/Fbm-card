@@ -11,16 +11,21 @@ Una prueba de registro independiente requiere un identificador propio y autoriza
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-
-from custom_components.fbm.device_protocol import (  # noqa: E402
-    registration_fields, post_device_form, extract_identity_fields
+spec = importlib.util.spec_from_file_location(
+    "fbm_device_protocol_diagnostic",
+    ROOT / "custom_components" / "fbm" / "device_protocol.py",
 )
+protocol = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(protocol)
+registration_fields = protocol.registration_fields
+post_device_form = protocol.post_device_form
+extract_identity_fields = protocol.extract_identity_fields
 
 
 def main(argv=None):
