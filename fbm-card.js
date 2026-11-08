@@ -61,6 +61,16 @@ class FBMCard extends HTMLElement {
     this._render();
   }
 
+  _availableOfficialEntities() {
+    return Object.entries(this._hass?.states || {})
+      .filter(([id, state]) => id.startsWith("sensor.") && (state.attributes?.fbm?.fuente === "FBM" || state.attributes?.fuente === "FBM"))
+      .filter(([, state]) => {
+        const data = state.attributes.fbm || state.attributes;
+        return Array.isArray(data.partidos) && Array.isArray(data.clasificacion);
+      })
+      .map(([id, state]) => ({ nombre: String(state.attributes?.friendly_name || id), entidad_datos: id }));
+  }
+
   _data() {
     const entityId = this._selectedTeam()?.entidad_datos;
     if (!entityId) return { error: "Pendiente de conectar una fuente de datos oficiales de FBM." };
@@ -116,6 +126,14 @@ class FBMCard extends HTMLElement {
       card.append(favorite);
     }
     const teams = this._teams();
+    if (!teams.length) {
+      const official = this._availableOfficialEntities();
+      if (official.length) {
+        const notice = this._element("p", "Hay entidades FBM disponibles en Home Assistant. Añádelas a la configuración de la tarjeta para seguir tus equipos.", "muted");
+        card.append(notice);
+        for (const entry of official.slice(0, 10)) card.append(this._element("div", entry.nombre + " (" + entry.entidad_datos + ")", "muted"));
+      }
+    }
     if (teams.length > 1) {
       const label = this._element("label", "Seleccionar equipo: ", "muted");
       const select = document.createElement("select");
