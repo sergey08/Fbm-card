@@ -50,6 +50,19 @@ class FBMCard extends HTMLElement {
     const title = this._element("h2", this._config.title || "🏀 FBM Card");
     const team = this._element("div", this._config.equipo || "Sin equipo seleccionado", "muted");
     card.append(title, team);
+    if (this._config.url_oficial) {
+      try {
+        const url = new URL(String(this._config.url_oficial));
+        if (url.protocol === "https:" && (url.hostname === "fbm.es" || url.hostname.endsWith(".fbm.es"))) {
+          const link = document.createElement("a");
+          link.href = url.href;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Consultar ficha oficial en FBM";
+          card.append(link);
+        }
+      } catch (_) { /* URL no válida: no mostrar enlace */ }
+    }
     const result = this._data();
     if (result.error) {
       card.append(this._element("p", result.error, "muted"));
