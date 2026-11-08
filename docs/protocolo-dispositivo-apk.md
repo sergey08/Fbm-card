@@ -186,3 +186,16 @@ Inspección directa del archivo `/mnt/data/fbm_analysis/post_register_trace.json
 - El código de `Ly8/o;->a` hace referencia a campos de instancia, `java.time.Instant`, una comparación y constantes. Es necesario decodificarlo por completo antes de atribuirle una fórmula o describirlo como firma, caducidad o cifrado.
 
 **Implicación:** no es correcto suponer que basta con insertar sin más el `key` devuelto en el formulario de búsqueda. Hay lógica temporal/condicional en su preparación. No se han calculado ni extraído claves, ni realizado peticiones de red. Para el cliente, mantener separadas la identidad de dispositivo y la preparación del parámetro `key` hasta tener el contrato confirmado.
+
+## Corrección técnica: `Ly8/o;->a` no genera una clave (08/11/2026)
+
+Se ha vuelto a desensamblar **el método completo** `Ly8/o;->a` a partir del `code_item` original (`classes2.dex`, bytes `5744720`–`5744768`). El resultado permite corregir la interpretación provisional de la sección «Hallazgo: la búsqueda procesa la clave con una operación temporal»:
+
+- `5744720`: `iget-object` lee `Ly8/o;->e:Ljava/time/Instant;`.
+- `5744724`: `invoke-virtual java.time.Instant.toEpochMilli()`.
+- `5744730`: `move-result-wide` del resultado numérico.
+- La ruta de excepción comprueba `Instant.isAfter(Instant.EPOCH)` (`5744734`–`5744746`) y retorna `Long.MAX_VALUE` o `Long.MIN_VALUE` según corresponda (`5744750` y `5744762`).
+
+**Conclusión comprobada:** `Ly8/o;->a` es un conversor de `Instant` a milisegundos Unix con tratamiento de desbordamiento. **No es un método de firma, cifrado ni derivación de `key`.** Que se invoque mientras se construye el formulario de búsqueda **no prueba que su resultado sea el valor de `key`**; hay que seguir la selección condicional y los registros hasta `StringValuesBuilder.append`. No implementar una transformación de clave basándose en esa proximidad.
+
+La comprobación estática no realizó solicitudes HTTP ni accedió a credenciales.
