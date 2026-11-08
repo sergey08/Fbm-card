@@ -24,7 +24,8 @@ def describe(value, *, depth=0):
         for key, child in list(value.items())[:100]:
             label = str(key)
             if any(secret in label.lower() for secret in SENSITIVE):
-                safe[label] = "<omitido>"
+                # Tampoco publicar el nombre exacto del campo sensible.
+                safe["<campo_sensible>"] = "<omitido>"
             else:
                 safe[label] = describe(child, depth=depth + 1)
         return {"tipo": "objeto", "campos": safe, "truncado": len(value) > 100}
