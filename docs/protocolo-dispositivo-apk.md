@@ -344,3 +344,21 @@ Se desensamblaron instrucciones **alineadas** de los métodos `LZ3/H;->A`, `LN4/
 **Conclusión:** para la APK Android 5.0.42, el `uid` de registro procede de `Settings.Secure.ANDROID_ID`. No es un UUID aleatorio ni el `idDispositivo` que devuelve el servidor. Es un identificador del dispositivo/entorno Android, y no debe inventarse ni reutilizarse entre usuarios. El código HA no puede obtener automáticamente el Android ID de un teléfono: necesitaría un método legítimo de provisión o un mecanismo de registro alternativo contrastado.
 
 Otros dos parámetros: `LZ3/H;->A` construye una cadena con `"Android "` y `Build.VERSION.RELEASE` para el objeto `LN4/a0`, y selecciona un valor de `LN4/i1` para tipo de dispositivo. En `LZ3/B;->invokeSuspend` se leen respectivamente `LN4/v;->c -> LN4/a0;->e` (segundo argumento, `plataforma`) y `LN4/v;->a -> LN4/i1;->e` (tercero, `tipo_dispositivo`). El valor concreto de `LN4/i1;->e` requiere revisar la inicialización del enum.
+
+## Tipo de dispositivo y plataforma: valores confirmados (DEX 5.0.42)
+
+Se ha desensamblado el inicializador del enum `LN4/i1;-><clinit>` (offset 1911840) y el método de identificación `LZ3/H;->A` (offset 2641712):
+
+- Enum `PHONE` → cadena de formulario **`mobile`**, inicializado en offsets 1911844–1911860.
+- Enum `TABLET` → cadena **`tablet`**, inicializado en 1911868–1911884.
+- Enum `OTRO` → cadena **`otro`**, inicializado en 1911892–1911908.
+- `LZ3/H;->A` lee `Resources.getConfiguration().screenLayout` y compara una máscara con `0x258` (offsets 2641732–2641748). Según la rama, selecciona `TABLET` (2641752) o `PHONE` (2641758). Para la ruta de teléfono, el valor enviado en `tipo_dispositivo` es por tanto **`mobile`**.
+- En 2641804 carga **`Android `** y lo concatena con `Build.VERSION.RELEASE`; esta cadena alimenta el objeto de plataforma y posteriormente el segundo argumento `plataforma` del registro. Por ejemplo, la forma es `Android <versión del sistema>`, no el literal `Android` aislado.
+
+**Campos del registro para la ruta teléfono Android de la APK 5.0.42:**
+`uid = Settings.Secure.ANDROID_ID` del entorno Android;
+`plataforma = "Android " + Build.VERSION.RELEASE`;
+`tipo_dispositivo = "mobile"`;
+`version = "5.0.42"`.
+
+Estos son valores del protocolo Android observado, **no credenciales de acceso**. Sigue pendiente validar el registro real y establecer una provisión legítima del Android ID desde un dispositivo autorizado, sin inventarlo ni registrar uno ajeno.
