@@ -96,3 +96,7 @@ equipos:
 ```
 
 **Los nombres y entidades anteriores son marcadores de configuración, no equipos reales ni fuentes de datos.** Para visualizar información, cada entidad debe estar alimentada exclusivamente por la FBM. El selector Competición → Categoría → Club → Equipo y la búsqueda del catálogo oficial siguen pendientes de implementar y validar contra la API pública FBM.
+
+## Favoritos locales (DEV)
+
+Ya se puede marcar o desmarcar como favorito cualquiera de los equipos configurados. Los favoritos aparecen primero en el selector, identificados con ★. Se almacenan en el navegador, separados por identificador de usuario de Home Assistant y por `id_tarjeta`. **No se sincronizan entre móviles u otros navegadores** y no permiten aún buscar equipos en el catálogo oficial: para eso sigue pendiente validar la API pública FBM. Sin identidad de usuario disponible no se muestra el botón para guardar favoritos.
