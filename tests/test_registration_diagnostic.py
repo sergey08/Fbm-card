@@ -88,6 +88,27 @@ class RegistrationDiagnosticTests(unittest.TestCase):
             self.assertNotIn('private-id', err.getvalue())
             self.assertNotIn('private-key', err.getvalue())
 
+    def test_save_error_only_and_refuse_existing_file_before_send(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity = Path(tmp) / 'identity.json'
+            error_path = Path(tmp) / 'error.json'
+            module.create_identity(identity)
+            response = {'key': 'private-key', 'id_dispositivo': 'private-id', 'error': 'private-error'}
+            args = ['--android-release', '16', '--identidad', str(identity), '--enviar', '--guardar-error', str(error_path)]
+            with patch.object(module, 'post_device_form', return_value=response) as post, contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(module.main(args), 1)
+                self.assertEqual(json.loads(error_path.read_text(encoding='utf-8')), {'error': 'private-error'})
+                self.assertNotIn('private-error', out.getvalue() + err.getvalue())
+                post.reset_mock()
+                self.assertEqual(module.main(args), 1)
+                post.assert_not_called()
+
+    def test_save_error_requires_send(self):
+        with contextlib.redirect_stderr(io.StringIO()), patch.object(module, 'post_device_form') as post:
+            with self.assertRaises(SystemExit):
+                module.main(['--android-release', '16', '--guardar-error', 'error.json'])
+            post.assert_not_called()
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'

@@ -81,18 +81,32 @@ def error_marker(response):
     return "otro_valor_oculto"
 
 
+def save_error(path, response):
+    """Guarda solo el campo error en un archivo nuevo para revision local."""
+    if "error" not in response:
+        raise ValueError("Campo error ausente")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as output:
+        json.dump({"error": response["error"]}, output, ensure_ascii=False)
+        output.write("\n")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--android-release", required=True,
                         help="Version Android declarada para el experimento, por ejemplo 16")
     parser.add_argument("--identidad", type=Path,
                         help="Ruta privada del archivo de identidad local")
+    parser.add_argument("--guardar-error", type=Path,
+                        help="Guarda el campo error en un archivo nuevo para revision privada")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--crear-identidad", action="store_true",
                         help="Crea una identidad local, sin red y sin sobrescribir")
     action.add_argument("--enviar", action="store_true",
                         help="Autoriza un unico POST de registro experimental")
     args = parser.parse_args(argv)
+    if args.guardar_error and not args.enviar:
+        parser.error("--guardar-error requiere --enviar")
     if not args.android_release.strip():
         parser.error("La version de Android no puede estar vacia")
     if not args.crear_identidad and not args.enviar:
@@ -103,6 +117,9 @@ def main(argv=None):
         return 0
     if not args.identidad:
         parser.error("Se requiere --identidad RUTA")
+    if args.guardar_error and os.path.lexists(args.guardar_error):
+        print("El archivo de error ya existe; no se envio ninguna peticion.", file=sys.stderr)
+        return 1
     if args.crear_identidad:
         try:
             create_identity(args.identidad)
@@ -129,6 +146,13 @@ def main(argv=None):
     except (ValueError, RuntimeError):
         print("Registro no validado: fallo de transporte o formulario; detalles ocultos.", file=sys.stderr)
         return 1
+    if args.guardar_error:
+        try:
+            save_error(args.guardar_error, response)
+        except (OSError, ValueError):
+            print("No se pudo guardar el campo error; no se sobrescribio ningun archivo.", file=sys.stderr)
+        else:
+            print("Campo error guardado localmente; revisalo antes de compartirlo.")
     try:
         extract_identity_fields(response)
     except ValueError:

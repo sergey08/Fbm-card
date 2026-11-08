@@ -389,3 +389,7 @@ En una segunda solicitud explícita, el usuario observó una respuesta JSON con 
 ### Respuesta observada y marcador de error
 
 En la siguiente solicitud explícita se observaron `key` e `id_dispositivo` como textos no vacíos; `idDispositivo` y `dispositivoId` estaban ausentes. El campo `error` era texto no vacío. La respuesta no se guardó, por lo que no es posible recuperar su valor. El diagnóstico reconoce ahora un conjunto limitado de marcadores literales comunes de `error` sin atribuirles significado; cualquier otro contenido permanece oculto. La presencia de estos campos o de un marcador no demuestra que la sesión sea válida. El extractor de producción permanece conservador hasta conocer el contrato.
+
+### Revisión local del campo error
+
+Ante el marcador `otro_valor_oculto`, el diagnóstico permite opcionalmente `--guardar-error RUTA` junto con `--enviar`. Escribe exclusivamente el campo `error` en un archivo JSON nuevo, sin mostrar su contenido; no sobrescribe archivos y comprueba antes del envío si la ruta existe. El contenido puede contener datos sensibles, por lo que debe revisarse localmente y mantenerse fuera de Git. En Windows, los permisos dependen de la carpeta y de sus ACL. El envío vuelve a registrar el dispositivo y puede tener efectos remotos; no se ha ejecutado una nueva solicitud en este cambio. Esta opción no valida ni guarda la sesión.
