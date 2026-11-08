@@ -27,3 +27,15 @@ test("la integración intenta registrar el recurso Lovelace sin duplicados", () 
   assert.match(code, /async_items\(\)/);
   assert.match(code, /CARD_URL/);
 });
+
+test("HACS está configurado como integración y no como tarjeta independiente", () => {
+  const hacs = JSON.parse(fs.readFileSync("hacs.json", "utf8"));
+  assert.equal(typeof hacs.name, "string");
+  assert.equal("filename" in hacs, false);
+  assert.equal("content_in_root" in hacs, false);
+});
+test("el flujo de CI valida la nueva estructura de integración", () => {
+  const workflow = fs.readFileSync(".github/workflows/validacion.yml", "utf8");
+  assert.match(workflow, /custom_components\/fbm\/manifest\.json/);
+  assert.match(workflow, /Validar sintaxis de integración Python/);
+});
