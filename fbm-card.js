@@ -16,11 +16,13 @@ class FBMCard extends HTMLElement {
     wrapper.style.cssText = "padding:16px;line-height:1.5";
     const heading = document.createElement("strong");
     heading.textContent = String(this._config.title || "FBM Card");
+    const team = document.createElement("p");
+    team.textContent = "Equipo: " + String(this._config.equipo || "Sin seleccionar");
     const status = document.createElement("p");
     status.textContent = "Versión DEV: conexión con datos oficiales de FBM pendiente.";
     const note = document.createElement("small");
     note.textContent = "No se muestran partidos ni clasificaciones hasta validar la consulta pública.";
-    wrapper.append(heading, status, note);
+    wrapper.append(heading, team, status, note);
     card.append(wrapper);
     this.shadowRoot.replaceChildren(card);
   }
