@@ -16,7 +16,9 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parent
+if not (ROOT / "custom_components" / "fbm" / "device_protocol.py").is_file():
+    ROOT = ROOT.parent
 spec = importlib.util.spec_from_file_location(
     "fbm_device_protocol_diagnostic",
     ROOT / "custom_components" / "fbm" / "device_protocol.py",
