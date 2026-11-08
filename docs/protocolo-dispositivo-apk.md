@@ -27,3 +27,15 @@ Ambos métodos construyen `HttpRequestBuilder`, seleccionan `HttpMethod.Post`, e
 4. Validar las condiciones de acceso y efectuar una prueba autorizada desde un entorno con conectividad.
 
 Rama `dev`; `main` y Home Assistant sin modificar.
+
+## Comprobación adicional del APK original
+
+Se ha reabierto directamente `/mnt/data/fbm_analysis/base.apk` y leído `classes2.dex` como tabla de cadenas DEX. Se confirman las siguientes referencias (índices de cadena, no offsets de instrucciones):
+
+- `39654`: `https://appaficionfbm.gesdeportiva.es/dispositivo.ashx`.
+- `39651`: `https://appaficionfbm.gesdeportiva.es/autenticar.ashx`.
+- `18566`: clase `GuardarDispositivoResponseDto`.
+- `18567`: clase `IniciarSesionDispositivoResponseDto`.
+- `12270` y `12852`: cadenas `toString` de esos DTO, ambas comienzan por `duracionIntersticia=`.
+
+**Importante:** la presencia de `dispositivo.ashx` junto a las operaciones `registrar` y `acceso` no basta para demostrar que ambas se envíen a esa URL. Es necesario seguir el argumento de `HttpRequestKt.url` y su origen. No se han enviado peticiones, ni leído tokens, ni reconstruido claves.
