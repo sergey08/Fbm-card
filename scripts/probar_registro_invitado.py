@@ -184,6 +184,8 @@ def main(argv=None):
     parser.add_argument("--guardar-equipos", type=Path,
                         help="Guarda solo la lista de equipos para revision local")
     parser.add_argument("--equipo", type=Path, help="Archivo de equipo seleccionado localmente")
+    parser.add_argument("--guardar-fases", type=Path,
+                        help="Guarda la respuesta de fases para revision privada")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--crear-identidad", action="store_true",
                         help="Crea una identidad local, sin red y sin sobrescribir")
@@ -196,6 +198,8 @@ def main(argv=None):
     action.add_argument("--fases", action="store_true",
                         help="Autoriza acceso y una consulta experimental de fases del equipo")
     args = parser.parse_args(argv)
+    if args.guardar_fases and not args.fases:
+        parser.error("--guardar-fases requiere --fases")
     if args.guardar_equipos and args.buscar_equipo is None:
         parser.error("--guardar-equipos requiere --buscar-equipo")
     if args.guardar_error and not (args.enviar or args.acceder):
@@ -225,6 +229,9 @@ def main(argv=None):
         return 1
     if args.guardar_equipos and os.path.lexists(args.guardar_equipos):
         print("El archivo de equipos ya existe; no se envio ninguna peticion.", file=sys.stderr)
+        return 1
+    if args.guardar_fases and os.path.lexists(args.guardar_fases):
+        print("El archivo de fases ya existe; no se envio ninguna peticion.", file=sys.stderr)
         return 1
     if args.enviar and args.candidato and os.path.lexists(args.candidato):
         print("El archivo de candidato ya existe; no se envio ninguna peticion.", file=sys.stderr)
@@ -303,6 +310,16 @@ def main(argv=None):
             print("Busqueda no validada: " + str(exc) + "; detalles ocultos.", file=sys.stderr)
             return 1
         if args.fases:
+            if args.guardar_fases:
+                try:
+                    fd = os.open(args.guardar_fases, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "w", encoding="utf-8") as output:
+                        json.dump(result, output, ensure_ascii=False, indent=2)
+                        output.write("\n")
+                except OSError:
+                    print("No se pudo guardar la respuesta; no se sobrescribio ningun archivo.", file=sys.stderr)
+                else:
+                    print("Respuesta de fases guardada localmente; revisala antes de compartirla.")
             print("Respuesta de fases recibida; " +
                   ", ".join(f"{name}={field_shape(result, name)}" for name in ("error", "resultado", "fases", "grupos")) +
                   "; marcador_error=" + error_marker(result) + ". Valores ocultos; resultado no validado.")

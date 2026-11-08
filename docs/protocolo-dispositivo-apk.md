@@ -436,3 +436,7 @@ En `Lx5/k;` el constructor carga la URL `https://appaficionfbm.gesdeportiva.es/v
 - `g`: `accion=detalleEquipo`, `id_dispositivo`, `key`, `id_equipo`.
 
 Los métodos construyen formularios URL-encoded. Estos hallazgos no verifican la respuesta real ni el origen exacto de cada argumento en la interfaz. El diagnóstico incorpora una prueba explícita `--fases --equipo RUTA`, que usa el `Id` opaco del equipo seleccionado como candidato para `id_equipo`; requiere acceso explícito, no hace registro y muestra solo tipos de campos conocidos. La equivalencia entre el `Id` de búsqueda y el argumento de fases es una hipótesis pendiente de prueba. No se ha hecho ninguna petición real en este cambio.
+
+### Primera respuesta de fases
+
+La prueba real `fasesGrupos` del usuario devolvió JSON con `error` vacío y `resultado` como texto no vacío; las claves `fases` y `grupos` estaban ausentes. El diagnóstico anterior no conservó la respuesta, por lo que no se conocen sus restantes campos ni se puede confirmar que el Id o la operación hayan producido fases válidas. La opción explícita `--guardar-fases` permite guardar la respuesta completa en un archivo local nuevo para examinar su estructura; puede contener datos privados y debe revisarse antes de compartir. La prueba requiere repetir acceso y consulta. No se ha hecho en este cambio.

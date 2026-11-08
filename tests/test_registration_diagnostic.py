@@ -211,6 +211,20 @@ class RegistrationDiagnosticTests(unittest.TestCase):
             self.assertEqual(request.full_url, 'https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx')
             self.assertEqual(module.urllib.parse.parse_qs(request.data.decode()), {'accion': ['fasesGrupos'], 'id_dispositivo': ['device'], 'key': ['key'], 'id_equipo': ['team']})
 
+    def test_save_phases_is_explicit_and_never_overwrites(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity, candidate, team, target = (Path(tmp) / name for name in ('identity.json', 'candidate.json', 'team.json', 'phases.json'))
+            module.create_identity(identity)
+            module.save_candidate(candidate, module.load_identity(identity), {'id_dispositivo': 'device'})
+            team.write_text(json.dumps({'Id': 'team'}), encoding='utf-8')
+            args = ['--android-release', '16', '--identidad', str(identity), '--candidato', str(candidate), '--equipo', str(team), '--fases', '--guardar-fases', str(target)]
+            with patch.object(module, 'post_device_form', return_value={'error': '', 'key': 'key'}) as post, patch.object(module, 'phases_once', return_value={'error': '', 'items': [1]}), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(module.main(args), 1)
+                self.assertEqual(json.loads(target.read_text(encoding='utf-8')), {'error': '', 'items': [1]})
+                post.reset_mock()
+                self.assertEqual(module.main(args), 1)
+                post.assert_not_called()
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'
