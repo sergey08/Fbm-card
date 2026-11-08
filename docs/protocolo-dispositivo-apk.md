@@ -176,3 +176,13 @@ Se ha contrastado el resultado de identidad con `verified_post_literals.json` y 
 Las tres rutinas configuran POST con `application/x-www-form-urlencoded`. La coincidencia de nombres de campos es evidencia de un contrato de formulario compartido; la correspondencia exacta de los **valores** debe comprobarse siguiendo los registros hasta cada `append` (el análisis actual solo asocia el literal anterior más próximo).
 
 **Implicación práctica:** el primer cliente funcional debe probar `buscarEquipo` (además de `buscarClub` y `buscarCategoria`) usando una identidad invitada obtenida legítimamente, sin inventar ni registrar claves en los logs. El diagnóstico anterior sin `id_dispositivo` y `key` no era una prueba completa del contrato observado en la APK.
+
+## Hallazgo: la búsqueda procesa la clave con una operación temporal (08/11/2026)
+
+Inspección directa del archivo `/mnt/data/fbm_analysis/post_register_trace.json`, contrastado con el desensamblado de `Ly8/o;->a`:
+
+- En `Lb5/e;->a` (`buscarClub`), después del literal de formulario `key` (offset DEX `2688864`), se obtiene `java.time.Clock.systemUTC()` (2688882), se invoca `Clock.instant()` (2688890), se construye `Ly8/o` con ese `Instant` (2688908) y se llama a `Ly8/o;->a` (2688914). La operación de `append` de `key` se encuentra en 2688950.
+- La secuencia contiene además una comparación y una selección de registros entre la llamada a `Ly8/o;->a` y el `append`. **No se ha demostrado aún qué valor concreto se añade**; la lógica es condicional.
+- El código de `Ly8/o;->a` hace referencia a campos de instancia, `java.time.Instant`, una comparación y constantes. Es necesario decodificarlo por completo antes de atribuirle una fórmula o describirlo como firma, caducidad o cifrado.
+
+**Implicación:** no es correcto suponer que basta con insertar sin más el `key` devuelto en el formulario de búsqueda. Hay lógica temporal/condicional en su preparación. No se han calculado ni extraído claves, ni realizado peticiones de red. Para el cliente, mantener separadas la identidad de dispositivo y la preparación del parámetro `key` hasta tener el contrato confirmado.
