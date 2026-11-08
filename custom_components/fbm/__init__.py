@@ -8,6 +8,7 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
@@ -19,7 +20,7 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
 
     En dashboards YAML no se modifican archivos del usuario.
     """
-    lovelace = hass.data.get("lovelace")
+    lovelace = hass.data.get(LOVELACE_DOMAIN)
     resources = getattr(lovelace, "resources", None)
     if resources is None:
         return False
