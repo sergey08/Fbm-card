@@ -314,3 +314,20 @@ Se ha buscado la instrucción DEX `const-string` (`0x1a`) para los índices de c
 | `firebaseInstallations` | 35494 | ninguna referencia directa `const-string` encontrada |
 
 **Pista prioritaria:** `android_id` aparece en `2641778`, próximo al bloque de inicialización de dispositivo, y los nombres de persistencia `dispositivoRegistradoDbFBM` e `idDispositivoDbFBM` aparecen en `2642xxx`. La proximidad por sí sola no demuestra flujo de datos ni permite afirmar que `uid = ANDROID_ID`. Debemos desensamblar el método propietario del offset `2641778` y seguir el resultado de `Settings.Secure.getString` (si existe) hasta el argumento `uid` de `Ld4/c;->b`. **No enviar todavía solicitudes con un identificador supuesto.**
+
+## Descarte de falsos positivos de UID por método propietario (8-11-2026)
+
+Se ha cruzado cada offset candidato con los `code_item` de **45.403 métodos** de `classes2.dex`, usando la tabla de clases y las posiciones reales de código. Esto permite distinguir código de FBM de bibliotecas externas:
+
+| Referencia | Método propietario | Interpretación |
+| --- | --- | --- |
+| `android_id` @2641778 | `LZ3/H;->A` | **Código de inicialización FBM; candidato prioritario** |
+| `android_id` @2715090 | `com/google/android/gms/internal/consent_sdk/C;->a` | Biblioteca Google Consent, no prueba UID FBM |
+| `android_id` @3206456, 3215480, 3225914 | `com/google/android/gms/measurement/internal/zzav` | Biblioteca Google Analytics, no prueba UID FBM |
+| `android_id` @3862812 | `com/qonversion/android/sdk/internal/EnvironmentProvider;->getDeviceId` | SDK Qonversion, no prueba UID FBM |
+| `randomUUID().toString()` @5339440 | `okhttp3/MultipartBody$Builder;-><init>` | **Descartado como evidencia de UID FBM:** identificador interno de multipart |
+| `dispositivoRegistradoDbFBM`, `idDispositivoDbFBM` @2642476–2643176 | `LZ3/H;->e` y `LZ3/H;->m` | Persistencia propia FBM; relevante para ciclo de vida |
+| `idDispositivoDbFBM` @2640026 | `LZ3/D;->invokeSuspend` | Acceso de dispositivo |
+| `idDispositivoDbFBM` @2659668 | `LZ3/u;->invokeSuspend` | Otra lectura propia de FBM |
+
+**Resultado:** cinco de las seis referencias a `android_id` son de bibliotecas externas; la única candidata de código FBM es `LZ3/H;->A`. El candidato `randomUUID().toString()` pertenece a OkHttp y no debe usarse para generar UID. El siguiente paso es analizar las instrucciones de `LZ3/H;->A` y los lugares que consumen su valor. Este análisis de pertenencia a método **no demuestra aún** que `android_id` sea el UID del formulario de registro.
