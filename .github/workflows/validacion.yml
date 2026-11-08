@@ -35,6 +35,15 @@ jobs:
               print("CONNECTIVITY_ERROR_TYPE:", type(exc).__name__)
               print("CONNECTIVITY_ERROR:", str(exc)[:200])
           PY
+      - name: Consulta de búsqueda FBM con identidad vacía (diagnóstico no bloqueante)
+        shell: bash
+        run: |
+          set +e
+          timeout 25s python3 scripts/diagnostico_fbm.py
+          status=$?
+          echo "DIAGNOSTICO_FBM_EXIT_CODE=$status"
+          echo "Este resultado NO valida una sesión invitada autenticada."
+          exit 0
       - name: Comprobar sintaxis JavaScript
         run: |
           node --check fbm-card.js
