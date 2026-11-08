@@ -1,6 +1,4 @@
 {
-  "name": "FBM Card",
-  "content_in_root": true,
-  "filename": "fbm-card.js",
+  "name": "FBM para Home Assistant",
   "render_readme": true
 }
