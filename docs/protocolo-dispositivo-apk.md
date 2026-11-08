@@ -385,3 +385,7 @@ El usuario ejecutó la creación local de identidad y después un envío explíc
 ### Segunda prueba independiente
 
 En una segunda solicitud explícita, el usuario observó una respuesta JSON con `key` de texto no vacía, sin `idDispositivo` de texto no vacío y con un valor en `error` distinto de los valores que el diagnóstico consideraba vacíos. Esto no demuestra un error real: el significado y el tipo de `error` siguen sin verificarse. El diagnóstico posterior informa únicamente de presencia y tipo de campos concretos candidatos, sin mostrar sus valores. Aún no hay sesión validada ni prueba de búsqueda.
+
+### Respuesta observada y marcador de error
+
+En la siguiente solicitud explícita se observaron `key` e `id_dispositivo` como textos no vacíos; `idDispositivo` y `dispositivoId` estaban ausentes. El campo `error` era texto no vacío. La respuesta no se guardó, por lo que no es posible recuperar su valor. El diagnóstico reconoce ahora un conjunto limitado de marcadores literales comunes de `error` sin atribuirles significado; cualquier otro contenido permanece oculto. La presencia de estos campos o de un marcador no demuestra que la sesión sea válida. El extractor de producción permanece conservador hasta conocer el contrato.

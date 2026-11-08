@@ -63,6 +63,24 @@ def field_shape(response, name):
     return "otro"
 
 
+def error_marker(response):
+    """Identifica solo literales comunes, sin atribuirles significado."""
+    if "error" not in response:
+        return "ausente"
+    value = response["error"]
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "booleano_true" if value else "booleano_false"
+    if type(value) in (int, float) and value in (0, 1):
+        return "numero_0" if value == 0 else "numero_1"
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("", "0", "1", "true", "false", "ok", "success", "null"):
+            return "texto_" + (normalized or "vacio")
+    return "otro_valor_oculto"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--android-release", required=True,
@@ -118,7 +136,8 @@ def main(argv=None):
         names = ("key", "idDispositivo", "dispositivoId", "id_dispositivo", "error")
         shapes = ", ".join(f"{name}={field_shape(response, name)}" for name in names)
         print("Registro no validado: estructura de campos conocidos: " + shapes +
-              ". Valores ocultos; no se interpreta el campo error.", file=sys.stderr)
+              "; marcador_error=" + error_marker(response) +
+              ". Valores ocultos; el significado del marcador no esta verificado.", file=sys.stderr)
         return 1
     print("Respuesta con key e idDispositivo recibida (valores ocultos).")
     print("La sesion no se guarda; esto no valida la busqueda ni el acceso posterior.")

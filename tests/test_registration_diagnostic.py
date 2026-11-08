@@ -69,6 +69,25 @@ class RegistrationDiagnosticTests(unittest.TestCase):
         self.assertEqual(module.field_shape(response, 'dispositivoId'), 'numero')
         self.assertEqual(module.field_shape(response, 'error'), 'booleano')
 
+    def test_error_marker_allowlist_does_not_expose_unrecognized_content(self):
+        for value, expected in [('false', 'texto_false'), (' 0 ', 'texto_0'),
+                                (False, 'booleano_false'), (0, 'numero_0'),
+                                ('private-server-message', 'otro_valor_oculto')]:
+            with self.subTest(value=value):
+                self.assertEqual(module.error_marker({'error': value}), expected)
+
+    def test_observed_shape_remains_unvalidated(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
+            path = Path(tmp) / 'identity.json'
+            module.create_identity(path)
+            response = {'key': 'private-key', 'id_dispositivo': 'private-id', 'error': 'false'}
+            with patch.object(module, 'post_device_form', return_value=response):
+                self.assertEqual(module.main(['--android-release', '16', '--identidad', str(path), '--enviar']), 1)
+            self.assertIn('id_dispositivo=texto_no_vacio', err.getvalue())
+            self.assertIn('marcador_error=texto_false', err.getvalue())
+            self.assertNotIn('private-id', err.getvalue())
+            self.assertNotIn('private-key', err.getvalue())
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'
