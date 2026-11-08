@@ -39,6 +39,20 @@ class GuestIdentityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.identity.search_fields("buscarClub", "Pinto", -1, self.now)
 
+    def test_reject_empty_identity(self):
+        with self.assertRaises(ValueError):
+            GuestIdentity.from_response("", "device", self.now)
+        with self.assertRaises(ValueError):
+            GuestIdentity.from_response("key", "", self.now)
+
+    def test_reject_invalid_search_types(self):
+        with self.assertRaises(ValueError):
+            self.identity.search_fields("buscarEquipo", "Pinto", True, self.now)
+        with self.assertRaises(ValueError):
+            self.identity.search_fields("buscarEquipo", "Pinto", 1.5, self.now)
+        with self.assertRaises(ValueError):
+            self.identity.search_fields("buscarEquipo", None, 0, self.now)
+
     def test_reject_naive_datetime(self):
         with self.assertRaises(ValueError):
             module.utc_epoch_ms(datetime(2026, 11, 8))
