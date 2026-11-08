@@ -248,3 +248,9 @@ Inspección directa de los bytes de `classes2.dex` confirma **la misma fórmula 
 **Fórmula comprobada:** `Ll7/I.c = Instant.now().toEpochMilli() + 84_400_000`, aproximadamente **23 h 26 min 40 s**. Esta duración no es exactamente 24 horas; no redondearla ni sustituirla por 86.400.000 ms. La comprobación en `buscarClub` utiliza la clave almacenada mientras `ahora < Ll7/I.c`.
 
 **Límite de la evidencia:** se conoce el umbral local utilizado para decidir si enviar `key`; no se ha probado que sea la caducidad efectiva de una sesión en el servidor ni cómo se renueva. No se han hecho solicitudes de registro ni cambios en Home Assistant.
+
+## Versión enviada durante el registro (verificación DEX)
+
+En `LZ3/B;->invokeSuspend`, offset `2638774`, se carga literalmente `5.0.42` mediante `const-string`. En `2638788` se invoca `Ld4/c;->b` con cuatro argumentos `String` y la continuación de corrutina; esta es la ruta que construye el formulario `registrar` en `dispositivo.ashx`. El valor `5.0.42` se encuentra en la preparación inmediata de la llamada y corresponde a la versión de la APK analizada.
+
+**Precaución:** la evidencia confirma la constante de versión de esta compilación, no que sea un valor permanente ni que pueda utilizarse como sustituto de UID, plataforma o tipo de dispositivo. Sigue pendiente rastrear el origen de esos campos hasta sus productores y validar la petición con el servidor.
