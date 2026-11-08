@@ -99,3 +99,26 @@ Ambas clases declaran, entre otros, estos campos de instancia con el mismo tipo:
 También se identifican campos de configuración `mostrarPublicidad`, `mostrarJugadaJugadaVersionGratis`, `mostrarJugadaJugadaVersionPago`, `noticiasXmlActivo`, `noticiasXmlUrl`, `requiereVersionMinimaAndroid` y `versionActualAndroid`.
 
 **Conclusión:** las dos clases de respuesta **declaran** `key` e `idDispositivo`. Falta demostrar mediante las anotaciones del serializador o una respuesta HTTP autorizada el nombre exacto en JSON, su obligatoriedad y la vinculación con las consultas deportivas. No se han obtenido claves reales ni datos de usuario.
+
+## Origen de argumentos: campos DEX anteriores a las llamadas (08/11/2026)
+
+Se han decodificado los índices de campo de instrucciones `iget-object` / `iput-object` reales inmediatamente anteriores a las invocaciones de las corrutinas de registro y acceso. Los offsets son absolutos en `classes2.dex`:
+
+| Método | Offset | Opcode | Campo DEX tipado |
+|---|---:|---|---|
+| `LZ3/B;->invokeSuspend` (registro) | 2638692 | `iget-object` | `LN4/v;->b:Ljava/lang/String;` |
+| registro | 2638712 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| registro | 2638720 | `iget-object` | `LN4/v;->c:LN4/a0;` |
+| registro | 2638724 | `iget-object` | `LN4/a0;->e:Ljava/lang/String;` |
+| registro | 2638744 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| registro | 2638752 | `iget-object` | `LN4/v;->a:LN4/i1;` |
+| registro | 2638756 | `iget-object` | `LN4/i1;->e:Ljava/lang/String;` |
+| registro | 2638770 | `iget-object` | `LZ3/H;->e:Ld4/c;` |
+| `LZ3/D;->invokeSuspend` (acceso) | 2640310 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| acceso | 2640342 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| acceso | 2640350 | `iget-object` | `LN4/v;->a:LN4/i1;` |
+| acceso | 2640354 | `iget-object` | `LN4/i1;->e:Ljava/lang/String;` |
+| acceso | 2640370 | `iget-object` | `LZ3/H;->e:Ld4/c;` |
+| acceso | 2640374 | `iget-object` | `LN4/v;->b:Ljava/lang/String;` |
+
+**Hallazgo:** ambos caminos leen `LN4/v;->b` y `LN4/i1;->e`, mientras el registro también lee `LN4/a0;->e`. Esto identifica clases y campos concretos que hay que seguir hasta sus constructores o escrituras. **No asignar aún los nombres `uid`, `token_push` ni `id_dispositivo` a esos campos sin decodificar la propagación de registros y el orden de argumentos del `invoke-range`**. La inspección ha sido estática, sin red ni secretos.
