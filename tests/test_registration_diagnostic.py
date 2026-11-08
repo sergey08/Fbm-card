@@ -143,6 +143,35 @@ class RegistrationDiagnosticTests(unittest.TestCase):
                 post.assert_not_called()
                 self.assertEqual(candidate.read_text(), 'existing')
 
+    def test_search_only_after_unambiguous_access(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity, candidate = Path(tmp) / 'identity.json', Path(tmp) / 'candidate.json'
+            module.create_identity(identity)
+            module.save_candidate(candidate, module.load_identity(identity), {'id_dispositivo': 'private-id'})
+            args = ['--android-release', '16', '--identidad', str(identity), '--candidato', str(candidate), '--buscar-equipo', 'Pinto']
+            with patch.object(module, 'post_device_form', return_value={'error': '', 'key': 'private-key', 'id_dispositivo': ''}) as post, patch.object(module, 'search_once', return_value={'equipos': []}) as search, contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(module.main(args), 1)
+                self.assertEqual(post.call_args.args[0]['accion'], 'acceso')
+                search.assert_called_once_with('private-id', 'private-key', 'Pinto')
+                self.assertNotIn('private-key', out.getvalue())
+                self.assertNotIn('private-id', out.getvalue())
+            for response in ({'error': 'no', 'key': 'k'}, {'error': '', 'key': ''}, {'error': '', 'key': 'k', 'id_dispositivo': 'other'}):
+                with self.subTest(response=response), patch.object(module, 'post_device_form', return_value=response), patch.object(module, 'search_once') as search, contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(module.main(args), 1)
+                    search.assert_not_called()
+
+    def test_search_form_is_limited_to_known_fields(self):
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read(self, limit): return b'{"equipos": []}'
+        with patch('urllib.request.urlopen', return_value=Response()) as urlopen:
+            self.assertEqual(module.search_once('device', 'key', 'Pinto'), {'equipos': []})
+            request = urlopen.call_args.args[0]
+            self.assertEqual(request.full_url, 'https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx')
+            self.assertEqual(module.urllib.parse.parse_qs(request.data.decode()), {'accion': ['buscarEquipo'], 'id_dispositivo': ['device'], 'key': ['key'], 'texto': ['Pinto'], 'skip': ['0']})
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'
