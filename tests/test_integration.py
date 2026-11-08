@@ -5,7 +5,7 @@ import pathlib
 import sys
 import types
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PKG = ROOT / "custom_components" / "fbm"
@@ -68,6 +68,12 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.resources.async_items.return_value = []
         self.resources.async_create_item.side_effect = ValueError("storage disabled")
         self.assertFalse(await fbm._async_register_lovelace_resource(self.hass))
+
+    async def test_missing_bundled_card_fails_setup(self):
+        self.hass.http.async_register_static_paths = AsyncMock()
+        with patch.object(pathlib.Path, "is_file", return_value=False):
+            self.assertFalse(await fbm.async_setup(self.hass, {}))
+        self.hass.http.async_register_static_paths.assert_not_awaited()
 
     async def test_card_static_path_is_served(self):
         self.hass.http.async_register_static_paths = AsyncMock()
