@@ -254,8 +254,11 @@ def main(argv=None):
             return 1
         names = ("error", "resultado", "equipos", "datos")
         shapes = ", ".join(f"{name}={field_shape(result, name)}" for name in names)
+        equipos = result.get("equipos")
+        count = str(len(equipos)) if isinstance(equipos, list) else "no_disponible"
         print("Respuesta de busqueda recibida; campos conocidos: " + shapes +
-              "; marcador_error=" + error_marker(result) + ". No se muestran valores; resultado no validado.")
+              "; numero_equipos=" + count + "; marcador_error=" + error_marker(result) +
+              ". No se muestran valores; resultado no validado.")
         return 1
     if args.acceder:
         names = ("key", "idDispositivo", "dispositivoId", "id_dispositivo", "error")

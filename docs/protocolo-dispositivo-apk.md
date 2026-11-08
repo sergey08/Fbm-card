@@ -403,3 +403,7 @@ El diagnóstico ofrece `--candidato RUTA --enviar` para guardar únicamente el `
 ### Prueba de búsqueda experimental
 
 El candidato guardado no era ninguno de `0`, `-1`, `null` o `none`; esto no valida su identidad. La opción `--buscar-equipo TEXTO` requiere el UID y candidato locales y autoriza dos POST: acceso y, si devuelve `error` exactamente vacío y una clave no vacía, una búsqueda `buscarEquipo` con el candidato y esa clave. Se cancela si el identificador de respuesta no está vacío y difiere del candidato. La ausencia de error no está documentada como éxito; se usa únicamente como condición conservadora para el experimento. No se almacena la clave, no se muestran valores de respuesta y solo se informa de los tipos de campos conocidos. Las pruebas son simuladas; no se ha realizado esta prueba real ni se afirma que el servicio acepte la sesión o devuelva resultados válidos.
+
+### Respuesta real de búsqueda
+
+El usuario ejecutó una búsqueda de `Pinto`: el servicio devolvió JSON con `error` vacío, `resultado` de texto no vacío y `equipos` como lista. No se registró el número de elementos ni su contenido, por lo que no se sabe si hubo coincidencias. El usuario precisó que busca «Grupo Egido Pintobasket negro». El diagnóstico informa ahora del número de elementos de `equipos`, sin afirmar que sean coincidencias válidas ni mostrar sus datos. La sesión y el contrato siguen pendientes de validación.

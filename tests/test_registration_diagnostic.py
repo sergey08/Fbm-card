@@ -153,6 +153,7 @@ class RegistrationDiagnosticTests(unittest.TestCase):
                 self.assertEqual(module.main(args), 1)
                 self.assertEqual(post.call_args.args[0]['accion'], 'acceso')
                 search.assert_called_once_with('private-id', 'private-key', 'Pinto')
+                self.assertIn('numero_equipos=0', out.getvalue())
                 self.assertNotIn('private-key', out.getvalue())
                 self.assertNotIn('private-id', out.getvalue())
             for response in ({'error': 'no', 'key': 'k'}, {'error': '', 'key': ''}, {'error': '', 'key': 'k', 'id_dispositivo': 'other'}):
