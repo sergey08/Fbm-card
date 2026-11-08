@@ -299,3 +299,18 @@ Por la disposición de los registros de parámetros de `Lc4/c;->b`, los cuatro a
 Se inspeccionó directamente la tabla `string_ids` de `classes2.dex` de la APK 5.0.42. Contiene las cadenas `randomUUID` (índice 45221), `randomUUID().toString()` (45222), `android_id` (31811), `firebaseInstallations` (35494), `dispositivoRegistradoDbFBM` (34560) e `idDispositivoDbFBM` (39714).
 
 **Importante:** la presencia de esas cadenas **no demuestra** que ninguna sea la fuente del `uid` enviado a `dispositivo.ashx`. Firebase y Android ID pueden pertenecer a bibliotecas incluidas en la APK; `idDispositivoDbFBM` puede ser un identificador recibido del servidor y no el UID local. La siguiente comprobación es buscar las referencias de código a estas cadenas y rastrear los valores hasta `LN4/v` y `LZ3/B;->invokeSuspend`. No usar UUID aleatorios ni Android ID sin ese enlace.
+
+## Referencias directas a candidatos de UID en classes2.dex (análisis local)
+
+Se ha buscado la instrucción DEX `const-string` (`0x1a`) para los índices de cadenas identificados previamente. Este barrido es **de candidatos**: cada coincidencia debe comprobarse contra los límites reales de instrucciones de un método.
+
+| Cadena | Índice `string_ids` | Offsets candidatos |
+| --- | ---: | --- |
+| `android_id` | 31811 | 2641778, 2715090, 3206456, 3215480, 3225914, 3862812 |
+| `randomUUID().toString()` | 45222 | 5339440 |
+| `dispositivoRegistradoDbFBM` | 34560 | 2642502, 2643134 |
+| `idDispositivoDbFBM` | 39714 | 2640026, 2642476, 2643176, 2659668 |
+| `randomUUID` | 45221 | ninguna referencia directa `const-string` encontrada |
+| `firebaseInstallations` | 35494 | ninguna referencia directa `const-string` encontrada |
+
+**Pista prioritaria:** `android_id` aparece en `2641778`, próximo al bloque de inicialización de dispositivo, y los nombres de persistencia `dispositivoRegistradoDbFBM` e `idDispositivoDbFBM` aparecen en `2642xxx`. La proximidad por sí sola no demuestra flujo de datos ni permite afirmar que `uid = ANDROID_ID`. Debemos desensamblar el método propietario del offset `2641778` y seguir el resultado de `Settings.Secure.getString` (si existe) hasta el argumento `uid` de `Ld4/c;->b`. **No enviar todavía solicitudes con un identificador supuesto.**
