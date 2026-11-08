@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .guest_identity import GuestIdentity
+from .guest_session import DeviceProfile, register_guest, access_guest
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -59,6 +60,18 @@ class AficionFBMAdapter:
 
     def __init__(self, identity: GuestIdentity | None = None):
         self._identity = identity
+
+    @classmethod
+    async def register_with_profile(cls, profile: DeviceProfile) -> "AficionFBMAdapter":
+        """Registro explícito, solo con parámetros contrastados del APK."""
+        return cls(await register_guest(profile))
+
+    @classmethod
+    async def access_with_profile(
+        cls, profile: DeviceProfile, device_id: str
+    ) -> "AficionFBMAdapter":
+        """Recuperación explícita de una sesión de dispositivo existente."""
+        return cls(await access_guest(profile, device_id))
 
     async def search(self, action: str, text: str, skip: int = 0) -> dict[str, Any]:
         if self._identity is None:
