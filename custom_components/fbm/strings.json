@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Federación de Baloncesto de Madrid",
+        "description": "Configura FBM en modo invitado. La conexión con la API oficial todavía está pendiente de validación."
+      }
+    },
+    "abort": {
+      "already_configured": "La integración FBM ya está configurada."
+    }
+  }
+}
