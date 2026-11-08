@@ -56,3 +56,24 @@ test("rechaza entidades con formato incompleto", () => {
   card._hass = { states: { "sensor.fbm": { state: "ok", attributes: {} } } };
   assert.match(card._data().error, /formato esperado/);
 });
+
+test("la configuración inicial no impone Pintobasket", () => {
+  const { elements } = loadCard();
+  assert.equal(elements.get("fbm-card").getStubConfig().equipos.length, 0);
+});
+test("admite varios equipos y selecciona el primero si no hay preferencia", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { equipos: [
+    { nombre: "Equipo A", entidad_datos: "sensor.fbm_a" },
+    { nombre: "Equipo B", entidad_datos: "sensor.fbm_b" }
+  ] };
+  assert.equal(card._teams().length, 2);
+  assert.equal(card._selectedTeam().nombre, "Equipo A");
+});
+test("sin identidad de usuario no crea clave de preferencias compartidas", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = {};
+  assert.equal(card._storageKey(), null);
+});
