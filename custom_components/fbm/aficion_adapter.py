@@ -15,6 +15,7 @@ from typing import Any
 
 from .guest_identity import GuestIdentity
 from .guest_session import DeviceProfile, register_guest, access_guest
+from .team_search import normalize_team_results
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -82,6 +83,11 @@ class AficionFBMAdapter:
             action, text, skip, datetime.now(timezone.utc)
         )
         return await asyncio.to_thread(_post_search, fields)
+
+    async def search_teams(self, text: str, skip: int = 0) -> list[dict[str, str]]:
+        """Normaliza equipos sin elegir automaticamente entre categorias o temporadas."""
+        response = await self.search("buscarEquipo", text, skip)
+        return normalize_team_results(response)
 
     async def query(self, kind: str, identifiers: dict) -> dict[str, Any]:
         """Conserva el bloqueo del contrato general hasta mapear sus consultas."""

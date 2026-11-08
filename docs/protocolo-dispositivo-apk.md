@@ -411,3 +411,9 @@ El usuario ejecutó una búsqueda de `Pinto`: el servicio devolvió JSON con `er
 ### Búsqueda del equipo concreto
 
 La consulta real «Grupo Egido Pintobasket negro» devolvió una lista `equipos` con 12 elementos y `error` vacío. La estructura y el contenido de los elementos no se mostraron ni conservaron, por lo que no se ha identificado el equipo. La opción explícita `--guardar-equipos RUTA`, junto con `--buscar-equipo`, permite guardar únicamente esa lista en un archivo nuevo para revisión local. Puede contener campos sensibles o inesperados: revisar antes de compartir y mantener fuera de Git. No guarda el resto de la respuesta ni la sesión. Requiere nuevas solicitudes de acceso y búsqueda.
+
+### Selección genérica de equipos
+
+La búsqueda real devolvió doce equipos con el mismo nombre en varias categorías y temporadas. El usuario seleccionó alevín masculino de segundo año, temporada 2026/27: categoría `Alv Mas 2ºaño LIGA MARCO ALDANY - PLATA`, con `IdEquipoNotificacion` 837041. Este valor no se ha validado como identificador para otras consultas; `Id` es un campo distinto y debe conservarse opaco.
+
+El adaptador incorpora una normalización genérica de resultados: conserva `Id`, nombre, club, categoría y temporada para que se pueda elegir sin suponer que el nombre identifica un único equipo. No selecciona automáticamente ni incorpora valores de un equipo concreto. Se rechazan respuestas ambiguas o incompletas. Esta normalización no conecta por sí sola el catálogo a Home Assistant ni valida la sesión, los endpoints de partidos o las estadísticas. La presentación de caracteres con tildes en la salida compartida estaba corrupta; no se ha determinado si se produjo en la fuente o al visualizar el archivo.
