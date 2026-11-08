@@ -73,6 +73,21 @@ class DeviceTransportTests(unittest.TestCase):
             self.assertEqual(request.full_url, module.DEVICE_URL)
             self.assertEqual(parse_qs(request.data.decode())["accion"], ["registrar"])
 
+    def test_incomplete_form_rejected_without_network(self):
+        with patch("urllib.request.urlopen") as urlopen:
+            with self.assertRaises(ValueError):
+                module.post_device_form({"accion": "registrar"})
+            urlopen.assert_not_called()
+
+    def test_extra_field_rejected_without_network(self):
+        fields = module.registration_fields(
+            uid="u", plataforma="p", tipo_dispositivo="t", version="v")
+        fields["unexpected"] = "x"
+        with patch("urllib.request.urlopen") as urlopen:
+            with self.assertRaises(ValueError):
+                module.post_device_form(fields)
+            urlopen.assert_not_called()
+
     def test_bad_json_rejected(self):
         class Response:
             status = 200
@@ -84,7 +99,7 @@ class DeviceTransportTests(unittest.TestCase):
                 return b'not-json'
         with patch("urllib.request.urlopen", return_value=Response()):
             with self.assertRaises(RuntimeError):
-                module.post_device_form({"accion": "acceso"})
+                module.post_device_form(module.access_fields(uid="u", token_push="", id_dispositivo="d", plataforma="p", tipo_dispositivo="t", version="v"))
 
 if __name__ == "__main__":
     unittest.main()
