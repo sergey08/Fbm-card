@@ -109,6 +109,40 @@ class RegistrationDiagnosticTests(unittest.TestCase):
                 module.main(['--android-release', '16', '--guardar-error', 'error.json'])
             post.assert_not_called()
 
+    def test_candidate_access_is_explicit_and_uses_matching_uid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity = Path(tmp) / 'identity.json'
+            candidate = Path(tmp) / 'candidate.json'
+            module.create_identity(identity)
+            uid = module.load_identity(identity)
+            registration = {'key': 'secret-key', 'id_dispositivo': 'candidate-id', 'error': 'uuid ya registrado'}
+            with patch.object(module, 'post_device_form', return_value=registration) as post, contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()) as err:
+                args = ['--android-release', '16', '--identidad', str(identity), '--candidato', str(candidate)]
+                self.assertEqual(module.main(args + ['--enviar']), 1)
+                self.assertEqual(module.load_candidate(candidate, uid), 'candidate-id')
+                self.assertNotIn('secret-key', candidate.read_text())
+                post.reset_mock()
+                self.assertEqual(module.main(args + ['--acceder']), 1)
+                self.assertEqual(post.call_args.args[0]['accion'], 'acceso')
+                self.assertEqual(post.call_args.args[0]['id_dispositivo'], 'candidate-id')
+                self.assertNotIn('candidate-id', out.getvalue() + err.getvalue())
+                other = Path(tmp) / 'other.json'
+                module.create_identity(other)
+                post.reset_mock()
+                self.assertEqual(module.main(['--android-release', '16', '--identidad', str(other), '--candidato', str(candidate), '--acceder']), 1)
+                post.assert_not_called()
+
+    def test_existing_candidate_prevents_registration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity = Path(tmp) / 'identity.json'
+            candidate = Path(tmp) / 'candidate.json'
+            module.create_identity(identity)
+            candidate.write_text('existing')
+            with patch.object(module, 'post_device_form') as post, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(module.main(['--android-release', '16', '--identidad', str(identity), '--candidato', str(candidate), '--enviar']), 1)
+                post.assert_not_called()
+                self.assertEqual(candidate.read_text(), 'existing')
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'

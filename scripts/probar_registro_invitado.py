@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -91,6 +92,30 @@ def save_error(path, response):
         output.write("\n")
 
 
+def save_candidate(path, uid, response):
+    """Conserva solo el identificador candidato y su vinculo con el UID local."""
+    device_id = response.get("id_dispositivo")
+    if not isinstance(device_id, str) or not device_id.strip():
+        raise ValueError("Sin identificador candidato")
+    data = {"format": 1, "uid_sha256": hashlib.sha256(uid.encode()).hexdigest(),
+            "id_dispositivo": device_id}
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as output:
+        json.dump(data, output)
+        output.write("\n")
+
+
+def load_candidate(path, uid):
+    with open(path, encoding="utf-8") as source:
+        data = json.load(source)
+    if (not isinstance(data, dict) or set(data) != {"format", "uid_sha256", "id_dispositivo"}
+            or type(data["format"]) is not int or data["format"] != 1
+            or data["uid_sha256"] != hashlib.sha256(uid.encode()).hexdigest()
+            or not isinstance(data["id_dispositivo"], str) or not data["id_dispositivo"].strip()):
+        raise ValueError("Identificador candidato invalido o de otra identidad")
+    return data["id_dispositivo"]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--android-release", required=True,
@@ -99,17 +124,25 @@ def main(argv=None):
                         help="Ruta privada del archivo de identidad local")
     parser.add_argument("--guardar-error", type=Path,
                         help="Guarda el campo error en un archivo nuevo para revision privada")
+    parser.add_argument("--candidato", type=Path,
+                        help="Archivo privado nuevo al registrar, existente al probar acceso")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--crear-identidad", action="store_true",
                         help="Crea una identidad local, sin red y sin sobrescribir")
     action.add_argument("--enviar", action="store_true",
                         help="Autoriza un unico POST de registro experimental")
+    action.add_argument("--acceder", action="store_true",
+                        help="Autoriza un POST de acceso experimental con el candidato guardado")
     args = parser.parse_args(argv)
-    if args.guardar_error and not args.enviar:
-        parser.error("--guardar-error requiere --enviar")
+    if args.guardar_error and not (args.enviar or args.acceder):
+        parser.error("--guardar-error requiere --enviar o --acceder")
+    if args.candidato and not (args.enviar or args.acceder):
+        parser.error("--candidato requiere --enviar o --acceder")
+    if args.acceder and not args.candidato:
+        parser.error("--acceder requiere --candidato")
     if not args.android_release.strip():
         parser.error("La version de Android no puede estar vacia")
-    if not args.crear_identidad and not args.enviar:
+    if not args.crear_identidad and not args.enviar and not args.acceder:
         print("SIN RED: formulario previsto: accion=registrar, uid=<privado>, "
               "plataforma=Android <version>, tipo_dispositivo=mobile, version=5.0.42")
         print("Crea una identidad propia con --identidad RUTA --crear-identidad; "
@@ -119,6 +152,9 @@ def main(argv=None):
         parser.error("Se requiere --identidad RUTA")
     if args.guardar_error and os.path.lexists(args.guardar_error):
         print("El archivo de error ya existe; no se envio ninguna peticion.", file=sys.stderr)
+        return 1
+    if args.enviar and args.candidato and os.path.lexists(args.candidato):
+        print("El archivo de candidato ya existe; no se envio ninguna peticion.", file=sys.stderr)
         return 1
     if args.crear_identidad:
         try:
@@ -134,8 +170,17 @@ def main(argv=None):
         print("Identidad local inaccesible o invalida; no se envio ninguna peticion.", file=sys.stderr)
         return 1
     try:
-        fields = registration_fields(uid=uid, plataforma="Android " + args.android_release.strip(),
-                                     tipo_dispositivo="mobile", version="5.0.42")
+        if args.acceder:
+            try:
+                device_id = load_candidate(args.candidato, uid)
+            except (OSError, ValueError):
+                print("Candidato inaccesible, invalido o de otra identidad; no se envio ninguna peticion.", file=sys.stderr)
+                return 1
+            fields = protocol.access_fields(uid=uid, token_push="", id_dispositivo=device_id,
+                plataforma="Android " + args.android_release.strip(), tipo_dispositivo="mobile", version="5.0.42")
+        else:
+            fields = registration_fields(uid=uid, plataforma="Android " + args.android_release.strip(),
+                                         tipo_dispositivo="mobile", version="5.0.42")
         response = post_device_form(fields)
     except protocol.DeviceTransportError as exc:
         if exc.category == "http":
@@ -153,6 +198,19 @@ def main(argv=None):
             print("No se pudo guardar el campo error; no se sobrescribio ningun archivo.", file=sys.stderr)
         else:
             print("Campo error guardado localmente; revisalo antes de compartirlo.")
+    if args.enviar and args.candidato:
+        try:
+            save_candidate(args.candidato, uid, response)
+        except (OSError, ValueError):
+            print("No se pudo guardar el candidato; no se sobrescribio ningun archivo.", file=sys.stderr)
+        else:
+            print("Identificador candidato guardado localmente; aun no esta validado.")
+    if args.acceder:
+        names = ("key", "idDispositivo", "dispositivoId", "id_dispositivo", "error")
+        shapes = ", ".join(f"{name}={field_shape(response, name)}" for name in names)
+        print("Acceso no validado: " + shapes + "; marcador_error=" + error_marker(response) +
+              ". Valores ocultos; significado no verificado.")
+        return 1
     try:
         extract_identity_fields(response)
     except ValueError:

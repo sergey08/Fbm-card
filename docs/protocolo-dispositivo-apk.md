@@ -393,3 +393,9 @@ En la siguiente solicitud explícita se observaron `key` e `id_dispositivo` como
 ### Revisión local del campo error
 
 Ante el marcador `otro_valor_oculto`, el diagnóstico permite opcionalmente `--guardar-error RUTA` junto con `--enviar`. Escribe exclusivamente el campo `error` en un archivo JSON nuevo, sin mostrar su contenido; no sobrescribe archivos y comprueba antes del envío si la ruta existe. El contenido puede contener datos sensibles, por lo que debe revisarse localmente y mantenerse fuera de Git. En Windows, los permisos dependen de la carpeta y de sus ACL. El envío vuelve a registrar el dispositivo y puede tener efectos remotos; no se ha ejecutado una nueva solicitud en este cambio. Esta opción no valida ni guarda la sesión.
+
+### Acceso experimental a partir de la respuesta
+
+El usuario examinó el campo `error` y comunicó `uuid ya registrado`. Esto indica que el servidor reconoce el UID, pero no confirma que el `id_dispositivo` devuelto sea utilizable ni que se haya iniciado sesión. Las respuestas anteriores no guardaron ese identificador.
+
+El diagnóstico ofrece `--candidato RUTA --enviar` para guardar únicamente el `id_dispositivo` candidato y una huella del UID local en un archivo nuevo; no guarda la clave. Una ejecución separada con `--candidato RUTA --acceder` envía explícitamente `accion=acceso` con ese identificador, el mismo UID, el perfil Android declarado y `token_push` vacío. Rechaza otra identidad, no muestra valores y no considera el acceso validado automáticamente. El archivo contiene información sensible; mantenerlo privado y fuera de Git. En Windows sus permisos dependen de las ACL de la carpeta. Una nueva solicitud de registro puede modificar el estado remoto y la llamada de acceso es otra petición. No se han ejecutado en este cambio; falta contrastar el significado de la respuesta real.
