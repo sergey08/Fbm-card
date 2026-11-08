@@ -1,0 +1,81 @@
+"""Pruebas aisladas del registro Lovelace sin instalar Home Assistant."""
+import asyncio
+import importlib.util
+import pathlib
+import sys
+import types
+import unittest
+from unittest.mock import AsyncMock, MagicMock
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+PKG = ROOT / "custom_components" / "fbm"
+
+
+def module(name, **attrs):
+    obj = types.ModuleType(name)
+    obj.__dict__.update(attrs)
+    sys.modules[name] = obj
+    return obj
+
+
+# Sustitutos mínimos para probar el comportamiento, no la API real de HA.
+module("homeassistant")
+module("homeassistant.components")
+module("homeassistant.components.http", StaticPathConfig=lambda *a, **kw: (a, kw))
+module("homeassistant.components.lovelace")
+module("homeassistant.components.lovelace.const", DOMAIN="lovelace")
+module("homeassistant.core", HomeAssistant=object)
+module("homeassistant.config_entries", ConfigEntry=object)
+module("custom_components")
+module("custom_components.fbm").__path__ = [str(PKG)]
+
+spec = importlib.util.spec_from_file_location(
+    "custom_components.fbm", PKG / "__init__.py",
+    submodule_search_locations=[str(PKG)],
+)
+fbm = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = fbm
+spec.loader.exec_module(fbm)
+
+
+class ResourceTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.resources = MagicMock()
+        self.resources.async_load = AsyncMock()
+        self.resources.async_create_item = AsyncMock()
+        self.hass = MagicMock()
+        self.hass.data = {"lovelace": types.SimpleNamespace(resources=self.resources)}
+
+    async def test_register_once(self):
+        self.resources.async_items.return_value = []
+        self.assertTrue(await fbm._async_register_lovelace_resource(self.hass))
+        self.resources.async_create_item.assert_awaited_once_with(
+            {"res_type": "module", "url": "/fbm_static/fbm-card.js"}
+        )
+
+    async def test_existing_resource_not_duplicated(self):
+        self.resources.async_items.return_value = [
+            {"url": "/fbm_static/fbm-card.js?v=1", "type": "module"}
+        ]
+        self.assertTrue(await fbm._async_register_lovelace_resource(self.hass))
+        self.resources.async_create_item.assert_not_awaited()
+
+    async def test_missing_lovelace_resources(self):
+        self.hass.data = {}
+        self.assertFalse(await fbm._async_register_lovelace_resource(self.hass))
+
+    async def test_resource_error_is_nonfatal(self):
+        self.resources.async_items.return_value = []
+        self.resources.async_create_item.side_effect = ValueError("storage disabled")
+        self.assertFalse(await fbm._async_register_lovelace_resource(self.hass))
+
+    async def test_card_static_path_is_served(self):
+        self.hass.http.async_register_static_paths = AsyncMock()
+        self.assertTrue(await fbm.async_setup(self.hass, {}))
+        self.hass.http.async_register_static_paths.assert_awaited_once()
+        config = self.hass.http.async_register_static_paths.await_args.args[0][0]
+        self.assertEqual(config[0][0], "/fbm_static/fbm-card.js")
+
+
+if __name__ == "__main__":
+    unittest.main()
