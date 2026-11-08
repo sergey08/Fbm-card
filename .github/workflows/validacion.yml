@@ -1,0 +1,22 @@
+name: Validación DEV
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main, dev]
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Comprobar sintaxis JavaScript
+        run: node --check fbm-card.js
+      - name: Ejecutar pruebas
+        run: node --test tests/*.test.cjs
+      - name: Validar manifiesto HACS
+        run: node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync("hacs.json","utf8"));if(h.filename!=="fbm-card.js"||h.content_in_root!==true)process.exit(1)'
