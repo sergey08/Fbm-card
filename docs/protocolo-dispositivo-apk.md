@@ -134,3 +134,16 @@ El rastreo de escrituras contiene llamadas a `LZ3/b;->z` con literales `key` y `
 El barrido automático contabilizó `45403` métodos y `26` errores de decodificación de payload; por tanto el inventario no es exhaustivo y no debe presentarse como prueba de ausencia de otros accesos. Ninguna petición HTTP ni dato privado se ha obtenido en esta comprobación.
 
 **Próximo paso técnico:** desensamblar completamente `LH5/j;->a` y las escrituras sobre `Ll7/I;->a/b`, asociar registros de `key` / `dispositivoId` con los campos de formulario de búsqueda y crear un test de contrato sin valores reales antes de probar el acceso.
+
+## Escrituras directas de identidad tras registro y acceso — 08/11/2026
+
+Nueva comprobación del inventario `guest_field_writes.json` y los contextos de instrucciones de `guest_write_context.json`, generados desde el APK original:
+
+| Flujo | Método | Escritura campo `Ll7/I;->a` | Escritura campo `Ll7/I;->b` |
+|---|---|---:|---:|
+| Registro | `LZ3/B;->invokeSuspend` | `sput-object` offset 2639244, registro v2 | `sput-object` offset 2639312, registro v1 |
+| Acceso | `LZ3/D;->invokeSuspend` | `sput-object` offset 2640510, registro v3 | `sput-object` offset 2640578, registro v2 |
+
+En el contexto de ambas rutas aparecen lecturas de propiedades `key` y `dispositivoId` mediante `Lkotlin/jvm/internal/k;->f` y una invocación `Lv8/o;->C0` inmediatamente antes de la primera escritura. En el inventario anterior, `LH5/j;->a` lee los dos campos estáticos.
+
+**Conclusión limitada:** el APK escribe los dos campos compartidos tras los flujos de registro y acceso, y los consulta posteriormente. Para afirmar que `a=key` y `b=idDispositivo` (o viceversa) hace falta seguir el registro de retorno de cada acceso al DTO hasta cada `sput-object`, incluyendo `move-result-object` y conversiones. No inferir el orden por proximidad de literales. Ninguna petición HTTP realizada.
