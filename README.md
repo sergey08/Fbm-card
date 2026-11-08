@@ -79,3 +79,20 @@ FBM Card es universal: **no estará limitada a Pintobasket**. Cada persona debe 
 **Fuente única:** FBM (web oficial o API oficial de Afición FBM, en modo invitado). Prohibido obtener calendarios, resultados, clasificación o catálogo de equipos desde clubes o fuentes de terceros.
 
 **Estado actual:** este es un requisito de producto, **todavía no implementado**. El ejemplo de Pintobasket del README es solo un caso de prueba inicial y nunca debe fijarse como equipo obligatorio o predeterminado en la versión pública.
+
+## Selector de varios equipos (implementado parcialmente en DEV)
+
+La tarjeta permite configurar una lista de equipos y alternar entre ellos. La última selección se guarda **en el navegador/dispositivo**, con una clave que incluye el identificador del usuario de Home Assistant y `id_tarjeta`. No hay sincronización entre dispositivos ni catálogo automático de equipos todavía. Sin identidad de usuario no se guarda la preferencia.
+
+```yaml
+type: custom:fbm-card
+title: Mis equipos FBM
+id_tarjeta: mis_equipos
+equipos:
+  - nombre: Equipo A
+    entidad_datos: sensor.fbm_equipo_a
+  - nombre: Equipo B
+    entidad_datos: sensor.fbm_equipo_b
+```
+
+**Los nombres y entidades anteriores son marcadores de configuración, no equipos reales ni fuentes de datos.** Para visualizar información, cada entidad debe estar alimentada exclusivamente por la FBM. El selector Competición → Categoría → Club → Equipo y la búsqueda del catálogo oficial siguen pendientes de implementar y validar contra la API pública FBM.
