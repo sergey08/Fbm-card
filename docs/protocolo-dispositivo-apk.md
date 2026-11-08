@@ -254,3 +254,14 @@ Inspección directa de los bytes de `classes2.dex` confirma **la misma fórmula 
 En `LZ3/B;->invokeSuspend`, offset `2638774`, se carga literalmente `5.0.42` mediante `const-string`. En `2638788` se invoca `Ld4/c;->b` con cuatro argumentos `String` y la continuación de corrutina; esta es la ruta que construye el formulario `registrar` en `dispositivo.ashx`. El valor `5.0.42` se encuentra en la preparación inmediata de la llamada y corresponde a la versión de la APK analizada.
 
 **Precaución:** la evidencia confirma la constante de versión de esta compilación, no que sea un valor permanente ni que pueda utilizarse como sustituto de UID, plataforma o tipo de dispositivo. Sigue pendiente rastrear el origen de esos campos hasta sus productores y validar la petición con el servidor.
+
+## Trazado de procedencia de argumentos del registro (DEX, 8-11-2026)
+
+Se ha seguido la preparación de la llamada `LZ3/B;->invokeSuspend` → `Ld4/c;->b` (offset `2638788`), sin asumir valores por sus nombres ofuscados:
+
+- En `2638692`, se lee `LN4/v;->b` desde un valor de `MutableStateFlow`; se prepara como argumento de la llamada.
+- En `2638720` y `2638724`, se sigue `LN4/v;->c` → `LN4/a0;->e`; se prepara como otro argumento.
+- En `2638752` y `2638756`, se sigue `LN4/v;->a` → `LN4/i1;->e`; se prepara como otro argumento.
+- En `2638774`, se carga la constante `5.0.42`; en `2638788`, se ejecuta el `invoke-*/range` de `Ld4/c;->b`.
+
+**Conclusión limitada:** los tres valores variables proceden del estado interno de la aplicación (`MutableStateFlow` y sus modelos), no de tres constantes inmediatas en la llamada. La asignación inequívoca de cada cadena a `uid`, `plataforma` y `tipo_dispositivo` exige seguir los registros hasta la construcción del formulario en `Ld4/c;->b` y rastrear quién rellena esos modelos. No se deben usar `LN4/v`, `LN4/a0` o `LN4/i1` como nombres semánticos de campos.
