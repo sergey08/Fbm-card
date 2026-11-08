@@ -47,3 +47,9 @@ test("la configuración en español informa de que la API sigue pendiente", () =
   assert.match(es.config.step.user.description, /pendiente de validación/);
   assert.ok(es.config.abort.already_configured);
 });
+
+test("el manifiesto declara dependencias para servir y registrar la tarjeta", () => {
+  const manifest = JSON.parse(fs.readFileSync("custom_components/fbm/manifest.json", "utf8"));
+  assert.ok(manifest.dependencies.includes("http"));
+  assert.ok(manifest.dependencies.includes("lovelace"));
+});
