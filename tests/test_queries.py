@@ -63,6 +63,29 @@ class QueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(service._locks, {})
         self.assertEqual(service._waiters, {})
 
+    async def test_concurrent_failure_then_retry(self):
+        class Flaky:
+            def __init__(self):
+                self.calls = 0
+
+            async def query(self, kind, identifiers):
+                self.calls += 1
+                await asyncio.sleep(0)
+                if self.calls == 1:
+                    raise RuntimeError("fallo temporal")
+                return {"fuente": "FBM", "tipo": kind}
+
+        adapter = Flaky()
+        service = queries.FBMQueries(adapter)
+        results = await asyncio.gather(
+            *(service.query("jornada", grupo=1, jornada=2) for _ in range(5)),
+            return_exceptions=True,
+        )
+        self.assertEqual(adapter.calls, 2)
+        self.assertEqual(sum(isinstance(x, RuntimeError) for x in results), 1)
+        self.assertEqual(sum(isinstance(x, dict) for x in results), 4)
+        self.assertEqual(len(service._locks), 0)
+
     async def test_cache_returns_defensive_copy(self):
         adapter = Adapter()
         service = queries.FBMQueries(adapter)
