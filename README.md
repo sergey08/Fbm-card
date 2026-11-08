@@ -22,6 +22,7 @@ Copiar `fbm-card.js` de `dev` a `/config/www/fbm-card.js`, registrar `/local/fbm
 ```yaml
 type: custom:fbm-card
 title: FBM Card
+equipo: GRUPO EGIDO PINTOBASKET NEGRO
 ```
 
 Actualmente muestra un aviso de desarrollo; no presenta resultados inventados.
