@@ -50,6 +50,7 @@ La entidad debe incluir un atributo `fbm` (o atributos de primer nivel) con esta
 
 ```json
 {
+  "fuente": "FBM",
   "partidos": [
     {"local": "Equipo local", "visitante": "Equipo visitante", "fecha": "2026-11-14", "resultado": null}
   ],
@@ -100,3 +101,7 @@ equipos:
 ## Favoritos locales (DEV)
 
 Ya se puede marcar o desmarcar como favorito cualquiera de los equipos configurados. Los favoritos aparecen primero en el selector, identificados con ★. Se almacenan en el navegador, separados por identificador de usuario de Home Assistant y por `id_tarjeta`. **No se sincronizan entre móviles u otros navegadores** y no permiten aún buscar equipos en el catálogo oficial: para eso sigue pendiente validar la API pública FBM. Sin identidad de usuario disponible no se muestra el botón para guardar favoritos.
+
+## Restricción de procedencia de datos
+
+El adaptador de datos debe obtener información **exclusivamente de endpoints oficiales de la FBM**. La tarjeta rechaza entidades cuyo atributo `fuente` no sea exactamente `FBM`. **Esta etiqueta es una comprobación de formato, no una prueba criptográfica de origen**: la garantía real depende del adaptador que consulte únicamente la FBM y de pruebas de integración contra sus endpoints oficiales. Está prohibido sustituirlos por fuentes de clubes o terceros.
