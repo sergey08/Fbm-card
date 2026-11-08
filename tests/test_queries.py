@@ -32,7 +32,7 @@ class QueryTests(unittest.IsolatedAsyncioTestCase):
     async def test_concurrent_requests_use_one_adapter_call(self):
         adapter = Adapter()
         service = queries.FBMQueries(adapter)
-        results = await asyncio.gather(*(service.query("jornada", grupo=4, jornada=2) for _ in range(5)))
+        results = await asyncio.gather(*(service.query("jornada", competicion=1, grupo=4, jornada=2) for _ in range(5)))
         self.assertEqual(adapter.calls, 1)
         self.assertTrue(all(x == results[0] for x in results))
 
@@ -78,7 +78,7 @@ class QueryTests(unittest.IsolatedAsyncioTestCase):
         adapter = Flaky()
         service = queries.FBMQueries(adapter)
         results = await asyncio.gather(
-            *(service.query("jornada", grupo=1, jornada=2) for _ in range(5)),
+            *(service.query("jornada", competicion=1, grupo=1, jornada=2) for _ in range(5)),
             return_exceptions=True,
         )
         self.assertEqual(adapter.calls, 2)
