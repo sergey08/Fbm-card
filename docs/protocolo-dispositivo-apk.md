@@ -199,3 +199,20 @@ Se ha vuelto a desensamblar **el método completo** `Ly8/o;->a` a partir del `co
 **Conclusión comprobada:** `Ly8/o;->a` es un conversor de `Instant` a milisegundos Unix con tratamiento de desbordamiento. **No es un método de firma, cifrado ni derivación de `key`.** Que se invoque mientras se construye el formulario de búsqueda **no prueba que su resultado sea el valor de `key`**; hay que seguir la selección condicional y los registros hasta `StringValuesBuilder.append`. No implementar una transformación de clave basándose en esa proximidad.
 
 La comprobación estática no realizó solicitudes HTTP ni accedió a credenciales.
+
+## Resuelto: valor de `key` en `buscarClub` condicionado por caducidad (DEX)
+
+La inspección de los opcodes y registros del método `Lb5/e;->a` aclara la secuencia que se había interpretado provisionalmente como posible transformación de clave:
+
+- `2688844`: `sget-object v12, Ll7/I;->b:Ljava/lang/String;` prepara `id_dispositivo`; si es nulo, el flujo utiliza la cadena vacía (2688848–2688858).
+- `2688864`: literal `key`.
+- `2688914`–`2688920`: conversión de la hora UTC actual a milisegundos (`Ly8/o;->a`, `move-result-wide v14`).
+- `2688922`: `sget-wide v16, Ll7/I;->c:J`, un umbral temporal compartido.
+- `2688926`: `cmp-long v12, v14, v16`, compara hora actual con umbral.
+- `2688930`: `if-gez v12` salta la lectura de clave cuando `ahora >= umbral`.
+- `2688934`: en la rama `ahora < umbral`, `sget-object v12, Ll7/I;->a:Ljava/lang/String;`.
+- `2688942`–`2688950`: comprobación de nulidad y `StringValuesBuilder.append(..., "key", ...)` con valor seleccionado; la rama sin clave conserva el valor vacío previamente inicializado.
+
+**Conclusión:** en esta operación la clave no se cifra ni se deriva del reloj. Se **usa la clave almacenada solo mientras el umbral temporal no ha vencido**, y se envía un valor vacío si falta o ha caducado. El significado preciso y origen de `Ll7/I;->c` (expiración de sesión u otro plazo) todavía debe seguirse hasta sus escrituras; no etiquetarlo como caducidad de autenticación confirmada. Este análisis es estático y no contiene claves reales.
+
+**Siguiente paso:** localizar todas las escrituras de `Ll7/I;->c` y vincularlas con el procesamiento de respuestas; comprobar que `buscarEquipo` y `buscarCategoria` siguen la misma condición antes de implementar una política de renovación. No se han realizado peticiones HTTP.
