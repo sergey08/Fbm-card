@@ -50,6 +50,20 @@ class GuestSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(post.call_args.args[0]["id_dispositivo"], "d")
         self.assertEqual(post.call_args.args[0]["accion"], "acceso")
 
+    def test_android_phone_profile_exact_fields(self):
+        profile = DeviceProfile.from_android_phone(
+            android_id="abc123", android_release="16")
+        self.assertEqual(profile.uid, "abc123")
+        self.assertEqual(profile.plataforma, "Android 16")
+        self.assertEqual(profile.tipo_dispositivo, "mobile")
+        self.assertEqual(profile.version, "5.0.42")
+
+    def test_android_phone_requires_real_values(self):
+        with self.assertRaises(ValueError):
+            DeviceProfile.from_android_phone(android_id="", android_release="16")
+        with self.assertRaises(ValueError):
+            DeviceProfile.from_android_phone(android_id="abc", android_release="")
+
     def test_missing_uid_rejected(self):
         with self.assertRaises(ValueError):
             DeviceProfile(uid="", plataforma="p", tipo_dispositivo="t", version="v")
