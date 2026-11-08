@@ -39,3 +39,11 @@ test("el flujo de CI valida la nueva estructura de integración", () => {
   assert.match(workflow, /custom_components\/fbm\/manifest\.json/);
   assert.match(workflow, /Validar sintaxis de integración Python/);
 });
+
+test("la configuración en español informa de que la API sigue pendiente", () => {
+  const strings = JSON.parse(fs.readFileSync("custom_components/fbm/strings.json", "utf8"));
+  const es = JSON.parse(fs.readFileSync("custom_components/fbm/translations/es.json", "utf8"));
+  assert.deepEqual(es, strings);
+  assert.match(es.config.step.user.description, /pendiente de validación/);
+  assert.ok(es.config.abort.already_configured);
+});
