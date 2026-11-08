@@ -2,10 +2,8 @@
 
 No se consultan resultados hasta validar el acceso oficial a FBM.
 """
-from pathlib import Path
 import logging
-
-_LOGGER = logging.getLogger(__name__)
+from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
@@ -13,6 +11,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
 from .const import CARD_URL, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
@@ -39,10 +39,12 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Servir la tarjeta empaquetada en la misma instalación."""
     card_path = Path(__file__).parent / "www" / "fbm-card.js"
-    if card_path.is_file():
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
-        )
+    if not card_path.is_file():
+        _LOGGER.error("Falta la tarjeta empaquetada FBM: %s", card_path)
+        return False
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
+    )
     return True
 
 
