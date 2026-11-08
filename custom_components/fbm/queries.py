@@ -26,6 +26,7 @@ class FBMQueries:
         self._adapter = adapter
         self._cache = cache if cache is not None else QueryCache()
         self._locks = {}
+        self._waiters = {}
         self._guard = asyncio.Lock()
 
     async def query(self, kind: str, **identifiers):
@@ -49,6 +50,7 @@ class FBMQueries:
             return cached
         async with self._guard:
             lock = self._locks.setdefault(key, asyncio.Lock())
+            self._waiters[key] = self._waiters.get(key, 0) + 1
         try:
             async with lock:
                 cached = self._cache.get(key)
@@ -65,7 +67,9 @@ class FBMQueries:
                 return deepcopy(result)
         finally:
             async with self._guard:
-                if not lock.locked():
+                self._waiters[key] -= 1
+                if self._waiters[key] == 0:
+                    self._waiters.pop(key, None)
                     self._locks.pop(key, None)
 
     def clear(self):
