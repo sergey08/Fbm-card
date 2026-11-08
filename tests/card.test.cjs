@@ -28,6 +28,31 @@ test("rechaza configuración no válida", () => {
   assert.throws(() => card.setConfig(null), /Configuración inválida/);
 });
 test("no hay resultados ficticios ni solicitudes automáticas", () => {
-  assert.match(source, /conexión con datos oficiales de FBM pendiente/);
+  assert.match(source, /Pendiente de conectar una fuente de datos oficiales de FBM/);
   assert.doesNotMatch(source, /fetch\s*\(/);
+});
+
+test("sin entidad muestra estado pendiente", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { equipo: "GRUPO EGIDO PINTOBASKET NEGRO" };
+  assert.match(card._data().error, /Pendiente/);
+});
+test("acepta partidos y clasificación desde una entidad de HA", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { entidad_datos: "sensor.fbm" };
+  card._hass = { states: { "sensor.fbm": { state: "ok", attributes: { fbm: {
+    partidos: [{ local: "A", visitante: "B", resultado: "50-48" }],
+    clasificacion: [{ posicion: 1, equipo: "A", jugados: 3, puntos: 6 }]
+  } } } } };
+  assert.equal(card._data().data.partidos.length, 1);
+  assert.equal(card._data().data.clasificacion.length, 1);
+});
+test("rechaza entidades con formato incompleto", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { entidad_datos: "sensor.fbm" };
+  card._hass = { states: { "sensor.fbm": { state: "ok", attributes: {} } } };
+  assert.match(card._data().error, /formato esperado/);
 });
