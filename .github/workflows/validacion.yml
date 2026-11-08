@@ -15,9 +15,13 @@ jobs:
         with:
           node-version: '22'
       - name: Comprobar sintaxis JavaScript
-        run: node --check fbm-card.js
+        run: |
+          node --check fbm-card.js
+          node --check custom_components/fbm/www/fbm-card.js
       - name: Ejecutar pruebas
         run: node --test tests/*.test.cjs
+      - name: Comprobar empaquetado sincronizado
+        run: cmp fbm-card.js custom_components/fbm/www/fbm-card.js
       - name: Validar manifiesto HACS
         run: node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync("hacs.json","utf8"));const m=JSON.parse(fs.readFileSync("custom_components/fbm/manifest.json","utf8"));if(!h.name||m.domain!=="fbm"||!m.config_flow)process.exit(1)'
       - name: Comprobar sintaxis del diagnóstico oficial FBM
