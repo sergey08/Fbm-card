@@ -115,3 +115,16 @@ test("rechaza estructuras incompletas aunque declaren FBM", () => {
   } } } };
   assert.match(card._data().error, /formato esperado/);
 });
+
+test("descubre únicamente sensores con estructura FBM válida", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = {};
+  card._hass = { states: {
+    "sensor.fbm_a": { state: "ok", attributes: { friendly_name: "Equipo A", fbm: { fuente: "FBM", partidos: [], clasificacion: [] } } },
+    "sensor.tercero": { state: "ok", attributes: { fuente: "TERCEROS", partidos: [], clasificacion: [] } },
+    "sensor.fbm_incompleto": { state: "ok", attributes: { fuente: "FBM", partidos: [] } }
+  } };
+  assert.equal(card._availableOfficialEntities().length, 1);
+  assert.equal(card._availableOfficialEntities()[0].entidad_datos, "sensor.fbm_a");
+});
