@@ -229,3 +229,22 @@ Una nueva exploración de todos los `code_item` de `classes2.dex`, buscando las 
 Se confirma que el campo temporal compartido se actualiza tanto tras registro como tras acceso, en los mismos métodos que almacenan `key` e `idDispositivo`. **No se confirma todavía el cálculo ni la duración exacta**: hace falta seguir los registros de la operación y descartar errores de alineación en el desensamblado parcial antes de implementar el vencimiento.
 
 **Estado de pruebas externas:** el flujo de GitHub Actions incluye DNS, HTTPS y diagnóstico `buscarEquipo` con los cinco campos observados, pero una consulta de ejecuciones asociadas al commit previo no devolvió resultados; no hay prueba de conectividad satisfactoria confirmada. Ningún cambio se ha aplicado a Home Assistant.
+
+## Cálculo exacto del umbral temporal en el APK (08/11/2026)
+
+Inspección directa de los bytes de `classes2.dex` confirma **la misma fórmula en registro y acceso**:
+
+| Flujo | Instrucciones DEX | Significado |
+|---|---|---|
+| Registro `LZ3/B;->invokeSuspend` | `2639286: 0b 02` | `move-result-wide v2`: milisegundos Unix devueltos por `Ly8/o;->a` |
+| | `2639288: 17 04 80 d7 07 05` | `const-wide/32 v4, 0x0507d780` = **84.400.000 ms** |
+| | `2639294: bb 42` | `add-long/2addr v2, v4` |
+| | `2639296: 68 02 2c 5b` | `sput-wide v2, Ll7/I;->c:J` |
+| Acceso `LZ3/D;->invokeSuspend` | `2640552: 0b 03` | `move-result-wide v3` |
+| | `2640554: 17 05 80 d7 07 05` | `const-wide/32 v5, 0x0507d780` = **84.400.000 ms** |
+| | `2640560: bb 53` | `add-long/2addr v3, v5` |
+| | `2640562: 68 03 2c 5b` | `sput-wide v3, Ll7/I;->c:J` |
+
+**Fórmula comprobada:** `Ll7/I.c = Instant.now().toEpochMilli() + 84_400_000`, aproximadamente **23 h 26 min 40 s**. Esta duración no es exactamente 24 horas; no redondearla ni sustituirla por 86.400.000 ms. La comprobación en `buscarClub` utiliza la clave almacenada mientras `ahora < Ll7/I.c`.
+
+**Límite de la evidencia:** se conoce el umbral local utilizado para decidir si enviar `key`; no se ha probado que sea la caducidad efectiva de una sesión en el servidor ni cómo se renueva. No se han hecho solicitudes de registro ni cambios en Home Assistant.
