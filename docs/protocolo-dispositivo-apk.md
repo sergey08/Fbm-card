@@ -122,3 +122,15 @@ Se han decodificado los índices de campo de instrucciones `iget-object` / `iput
 | acceso | 2640374 | `iget-object` | `LN4/v;->b:Ljava/lang/String;` |
 
 **Hallazgo:** ambos caminos leen `LN4/v;->b` y `LN4/i1;->e`, mientras el registro también lee `LN4/a0;->e`. Esto identifica clases y campos concretos que hay que seguir hasta sus constructores o escrituras. **No asignar aún los nombres `uid`, `token_push` ni `id_dispositivo` a esos campos sin decodificar la propagación de registros y el orden de argumentos del `invoke-range`**. La inspección ha sido estática, sin red ni secretos.
+
+## Rastreo de uso posterior de la identidad invitada (08/11/2026)
+
+Se ha revisado el inventario de accesos a los campos estáticos `Ll7/I;->a:Ljava/lang/String;` (field_id `23338`) y `Ll7/I;->b:Ljava/lang/String;` (field_id `23339`), elaborado al recorrer los `code_item` de `classes2.dex`.
+
+**Evidencia adicional:** en el método `LH5/j;->a` (method_id `2524`) aparecen lecturas `sget-object` de ambos campos (offsets DEX `1708102` y `1708192`), y se repiten en otras ramas de la misma rutina. La presencia de **dos campos estáticos compartidos** en una rutina de consultas es una pista concreta para conectar la inicialización con las peticiones posteriores.
+
+El rastreo de escrituras contiene llamadas a `LZ3/b;->z` con literales `key` y `dispositivoId` (por ejemplo offsets `1784504`–`1784512`, `2209894`–`2209902`), que sugieren lectura de propiedades del resultado. **Todavía no está demostrado** que esas propiedades se asignen a `Ll7/I;->a/b` ni qué campo representa cada una: se necesita seguir registros y la asignación `sput-object` correspondiente.
+
+El barrido automático contabilizó `45403` métodos y `26` errores de decodificación de payload; por tanto el inventario no es exhaustivo y no debe presentarse como prueba de ausencia de otros accesos. Ninguna petición HTTP ni dato privado se ha obtenido en esta comprobación.
+
+**Próximo paso técnico:** desensamblar completamente `LH5/j;->a` y las escrituras sobre `Ll7/I;->a/b`, asociar registros de `key` / `dispositivoId` con los campos de formulario de búsqueda y crear un test de contrato sin valores reales antes de probar el acceso.
