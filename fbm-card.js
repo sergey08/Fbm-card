@@ -68,7 +68,10 @@ class FBMCard extends HTMLElement {
     if (!state) return { error: "La entidad de datos no está disponible: " + entityId };
     if (["unknown", "unavailable"].includes(state.state)) return { error: "La entidad de datos no está disponible." };
     const data = state.attributes?.fbm || state.attributes;
-    if (!data || !Array.isArray(data.partidos) || !Array.isArray(data.clasificacion)) {
+    if (!data || data.fuente !== "FBM") {
+      return { error: "Datos rechazados: la entidad debe identificar a FBM como fuente oficial." };
+    }
+    if (!Array.isArray(data.partidos) || !Array.isArray(data.clasificacion)) {
       return { error: "La entidad no contiene partidos y clasificación en el formato esperado." };
     }
     return { data };
