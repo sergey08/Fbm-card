@@ -105,3 +105,7 @@ Ya se puede marcar o desmarcar como favorito cualquiera de los equipos configura
 ## Restricción de procedencia de datos
 
 El adaptador de datos debe obtener información **exclusivamente de endpoints oficiales de la FBM**. La tarjeta rechaza entidades cuyo atributo `fuente` no sea exactamente `FBM`. **Esta etiqueta es una comprobación de formato, no una prueba criptográfica de origen**: la garantía real depende del adaptador que consulte únicamente la FBM y de pruebas de integración contra sus endpoints oficiales. Está prohibido sustituirlos por fuentes de clubes o terceros.
+
+## Descubrimiento de sensores FBM (DEV)
+
+Cuando no hay equipos configurados, la tarjeta enumera hasta diez entidades `sensor.*` de Home Assistant con estructura de partidos/clasificación y `fuente: FBM`, para ayudar a configurar equipos. **No es aún el buscador oficial de clubes y equipos**: únicamente inspecciona sensores ya existentes, y una etiqueta declarada no certifica la procedencia. Sigue pendiente el adaptador que consulte exclusivamente FBM.
