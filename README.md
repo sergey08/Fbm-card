@@ -109,3 +109,16 @@ El adaptador de datos debe obtener información **exclusivamente de endpoints of
 ## Descubrimiento de sensores FBM (DEV)
 
 Cuando no hay equipos configurados, la tarjeta enumera hasta diez entidades `sensor.*` de Home Assistant con estructura de partidos/clasificación y `fuente: FBM`, para ayudar a configurar equipos. **No es aún el buscador oficial de clubes y equipos**: únicamente inspecciona sensores ya existentes, y una etiqueta declarada no certifica la procedencia. Sigue pendiente el adaptador que consulte exclusivamente FBM.
+
+## Modo de descubrimiento automático (DEV)
+
+Si ya existen sensores de equipos con el contrato FBM, se puede activar el selector sin enumerarlos manualmente:
+
+```yaml
+type: custom:fbm-card
+title: Mis equipos FBM
+id_tarjeta: mis_equipos
+descubrir_entidades: true
+```
+
+En este modo la tarjeta muestra los sensores con `fuente: FBM` y estructura válida, permite cambiar entre ellos y marcar favoritos. **No descarga equipos de la FBM** ni verifica criptográficamente el origen de un sensor. No sustituye el conector oficial pendiente.
