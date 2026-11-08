@@ -71,3 +71,11 @@ El flujo `.github/workflows/validacion.yml` comprueba sintaxis, pruebas Node y m
 Puede añadirse opcionalmente `url_oficial: https://www.fbm.es/...` para mostrar un enlace a la ficha pública del equipo o competición. Solo se aceptan enlaces HTTPS bajo `fbm.es`; no se asigna ninguna URL por defecto hasta confirmar la ficha exacta.
 
 La web del club Pintobasket publica partidos y resultados, pero no se considera sustituto de la fuente oficial FBM para alimentar automáticamente la tarjeta.
+
+## Selección de equipos por cada usuario (requisito obligatorio)
+
+FBM Card es universal: **no estará limitada a Pintobasket**. Cada persona debe poder buscar y seleccionar equipos de cualquier competición de la Federación de Baloncesto de Madrid, mediante el recorrido **Competición → Categoría → Club → Equipo**. Debe poder seguir **varios equipos** y conservar sus favoritos de manera local, sin cuentas de Afición FBM. La selección y los favoritos serán independientes por usuario cuando Home Assistant permita identificar el usuario; no se deben compartir favoritos accidentalmente entre usuarios del mismo hogar.
+
+**Fuente única:** FBM (web oficial o API oficial de Afición FBM, en modo invitado). Prohibido obtener calendarios, resultados, clasificación o catálogo de equipos desde clubes o fuentes de terceros.
+
+**Estado actual:** este es un requisito de producto, **todavía no implementado**. El ejemplo de Pintobasket del README es solo un caso de prueba inicial y nunca debe fijarse como equipo obligatorio o predeterminado en la versión pública.
