@@ -30,3 +30,9 @@ El prototipo `custom_components/fbm/history.py` y su prueba se conservan tempora
 
 ### Próximo hito
 Validar lectura de jornadas y detalles de partidos en la fuente oficial. Después, implementar consultas bajo demanda y caché TTL antes de añadir sensores y consultas para MCP.
+
+## Avance implementado en DEV
+- `custom_components/fbm/query_cache.py`: caché temporal LRU con TTL, máximo 128 entradas y 300 segundos por defecto, configurable para el futuro sondeo en directo.
+- `__init__.py`: crea una caché por entrada de configuración y la vacía al descargarla.
+- `tests/test_query_cache.py`: pruebas de caducidad, aislamiento, expulsión LRU y validación de parámetros.
+- **No hay aún peticiones a la FBM, ni consultas de jornadas, ni acceso desde el MCP.** La caché no almacena históricos de forma permanente.
