@@ -53,3 +53,16 @@ La inspección del flujo `LZ3/B;->invokeSuspend` muestra, en este orden de códi
 Se ejecutó de nuevo sobre `classes2.dex` la comprobación que exige que una instrucción `const-string` de URL esté seguida inmediatamente por `sput-object` del mismo registro. Para `dispositivo.ashx` y `autenticar.ashx`, **el resultado fue una lista vacía**. Esto significa exclusivamente que **no se ha demostrado una asignación estática directa con ese patrón**; no que las rutas no se utilicen. El patrón sí había encontrado cinco asignaciones para `v2/busqueda.ashx`, por lo que es una comprobación útil, aunque incompleta.
 
 La búsqueda de referencias dentro de instrucciones reconocidas por el inventario parcial `method_owners.json` tampoco devuelve coincidencias para las dos rutas de dispositivo. Se debe ampliar el rastreo a `const-string/jumbo`, otras clases DEX, construcción dinámica y propagación de registros. **No se atribuye ninguna URL a las operaciones `registrar` o `acceso` sin esa prueba**.
+
+## URL de registro y acceso resuelta por seguimiento de registros (08/11/2026)
+
+**Confirmado en instrucciones DEX alineadas**, no por proximidad de cadenas:
+
+1. `Lc4/c;-><init>` (código desde offset decimal `2702352`) ejecuta `const-string v1, "https://appaficionfbm.gesdeportiva.es/dispositivo.ashx"` en `2702362`, seguido de `iput-object v1, v0, Lc4/c;->b:Ljava/lang/String;` en `2702366`. El campo `a` es el cliente HTTP Ktor.
+2. En `Lc4/c;->a` (`acceso`), en `2701116` se lee `iget-object v5, v1, Lc4/c;->b:Ljava/lang/String;`; en `2701148`, `HttpRequestKt.url` recibe `v9` (request builder) y `v5` (URL).
+3. En `Lc4/c;->b` (`registrar`), en `2701818` se lee el **mismo campo** `Lc4/c;->b` a `v5`; en `2701850`, `HttpRequestKt.url` recibe igualmente `v9` y `v5`.
+4. Ambos métodos fijan `POST` y construyen `application/x-www-form-urlencoded` (documentado anteriormente).
+
+**Conclusión confirmada:** `registrar` y `acceso` de la versión APK 5.0.42 se envían a `https://appaficionfbm.gesdeportiva.es/dispositivo.ashx`. Esto corrige la limitación del apartado anterior: la URL no se asigna a un campo estático mediante `sput-object`, sino al campo **de instancia** mediante `iput-object` en el constructor.
+
+**Pendiente:** origen exacto de `uid`, semántica de `token_push`, campos de respuesta y verificación de acceso autorizado. No se ha realizado tráfico de red ni extraído claves.
