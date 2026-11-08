@@ -22,6 +22,27 @@ class DeviceProfile:
     version: str
     token_push: str = ""
 
+    @classmethod
+    def from_android_phone(
+        cls, *, android_id: str, android_release: str, token_push: str = ""
+    ) -> "DeviceProfile":
+        """Perfil observado en la ruta PHONE de la APK 5.0.42.
+
+        android_id debe obtenerse de un dispositivo autorizado. No se genera
+        ni se solicita automáticamente un identificador.
+        """
+        if not isinstance(android_id, str) or not android_id.strip():
+            raise ValueError("Se requiere Android ID real del dispositivo")
+        if not isinstance(android_release, str) or not android_release.strip():
+            raise ValueError("Se requiere versión Android real del dispositivo")
+        return cls(
+            uid=android_id.strip(),
+            plataforma="Android " + android_release.strip(),
+            tipo_dispositivo="mobile",
+            version="5.0.42",
+            token_push=token_push,
+        )
+
     def __post_init__(self):
         if not all(isinstance(x, str) and x for x in (
             self.uid, self.plataforma, self.tipo_dispositivo, self.version
