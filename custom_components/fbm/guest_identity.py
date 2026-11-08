@@ -27,6 +27,10 @@ class GuestIdentity:
 
     @classmethod
     def from_response(cls, key: str, device_id: str, now: datetime) -> "GuestIdentity":
+        if not isinstance(key, str) or not key:
+            raise ValueError("Clave invitada inválida")
+        if not isinstance(device_id, str) or not device_id:
+            raise ValueError("ID de dispositivo inválido")
         return cls(key=key, device_id=device_id,
                    key_until_ms=utc_epoch_ms(now) + KEY_WINDOW_MS)
 
@@ -38,7 +42,9 @@ class GuestIdentity:
         """Cinco campos observados; no realiza solicitudes ni valida el endpoint."""
         if action not in {"buscarClub", "buscarCategoria", "buscarEquipo"}:
             raise ValueError("Acción no verificada")
-        if skip < 0:
-            raise ValueError("skip no puede ser negativo")
+        if not isinstance(text, str):
+            raise ValueError("texto debe ser una cadena")
+        if isinstance(skip, bool) or not isinstance(skip, int) or skip < 0:
+            raise ValueError("skip debe ser un entero no negativo")
         return {"accion": action, "id_dispositivo": self.device_id,
                 "key": self.key_for_request(now), "texto": text, "skip": str(skip)}
