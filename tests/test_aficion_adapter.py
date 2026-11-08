@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1] / "custom_components/fbm"
 package = types.ModuleType("fbm_adapter_test_pkg")
 package.__path__ = [str(ROOT)]
 sys.modules[package.__name__] = package
-for name in ("guest_identity", "aficion_adapter"):
+for name in ("device_protocol", "guest_identity", "guest_session", "aficion_adapter"):
     spec = importlib.util.spec_from_file_location(
         package.__name__ + "." + name, ROOT / (name + ".py")
     )
@@ -64,6 +64,21 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(fields["id_dispositivo"], ["device"])
             self.assertEqual(fields["key"], ["dummy"])
             self.assertEqual(fields["texto"], ["Pinto"])
+
+    async def test_explicit_registration_connects_to_search(self):
+        from fbm_adapter_test_pkg.guest_session import DeviceProfile
+        profile = DeviceProfile(uid="u", plataforma="p",
+                                tipo_dispositivo="t", version="5.0.42")
+        with patch("fbm_adapter_test_pkg.guest_session.post_device_form",
+                   return_value={"key": "k", "idDispositivo": "d"}) as register:
+            adapter = await AficionFBMAdapter.register_with_profile(profile)
+        self.assertEqual(register.call_args.args[0]["accion"], "registrar")
+        with patch("fbm_adapter_test_pkg.aficion_adapter._post_search",
+                   return_value={"resultado": "ok"}) as search:
+            result = await adapter.search("buscarEquipo", "Pinto")
+        self.assertEqual(result, {"resultado": "ok"})
+        self.assertEqual(search.call_args.args[0]["key"], "k")
+        self.assertEqual(search.call_args.args[0]["id_dispositivo"], "d")
 
     async def test_non_json_rejected(self):
         with patch("urllib.request.urlopen", return_value=FakeResponse(b"not-json")):
