@@ -280,3 +280,16 @@ Se ha comprobado el tramo de bytes de `classes2.dex` inmediatamente anterior al 
 | 2638788 | `74 06 cc 6a 00 00` | `invoke-virtual/range {v0..v5}, Ld4/c;->b` |
 
 La firma de `Ld4/c;->b` tiene **cuatro cadenas y una continuación**. En una invocación de instancia `v0` es el receptor, `v1..v4` son las cuatro cadenas y `v5` es la continuación. Por tanto, **la versión `5.0.42` es inequívocamente el cuarto parámetro de cadena (`v4`)**. Las otras tres cadenas son `v1`, `v2` y `v3`, cuyo origen exacto sigue pendiente de seguir hacia atrás. Esta comprobación evita confundir el orden de parámetros de registro.
+
+## Asociación inequívoca entre argumentos y campos HTTP (DEX)
+
+La función `Lc4/c;->b` construye el formulario de `registrar` con estas instrucciones:
+
+| Offset | Instrucción DEX | Campo HTTP | Valor en registro |
+| --- | --- | --- | --- |
+| 2701898–2701904 | `const-string "uid"; move-object v12,v14; append` | `uid` | `v14` |
+| 2701910–2701916 | `const-string "plataforma"; move-object v12,v15; append` | `plataforma` | `v15` |
+| 2701922–2701930 | `const-string "tipo_dispositivo"; move-object/from16 v12,v16; append` | `tipo_dispositivo` | `v16` |
+| 2701936–2701944 | `const-string "version"; move-object/from16 v12,v17; append` | `version` | `v17` |
+
+Por la disposición de los registros de parámetros de `Lc4/c;->b`, los cuatro argumentos de cadena del llamador corresponden, **en orden**, a `uid`, `plataforma`, `tipo_dispositivo` y `version`. Esto resuelve la correspondencia posicional, pero **no** el origen ni los valores concretos de las primeras tres cadenas. Para resolverlos hay que rastrear los productores de los valores de `StateFlow` que llegan a `LZ3/B;->invokeSuspend`; no se deben sustituir por cadenas genéricas ni por un UUID aleatorio sin evidencia.
