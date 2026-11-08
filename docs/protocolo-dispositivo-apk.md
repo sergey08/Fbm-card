@@ -293,3 +293,9 @@ La función `Lc4/c;->b` construye el formulario de `registrar` con estas instruc
 | 2701936–2701944 | `const-string "version"; move-object/from16 v12,v17; append` | `version` | `v17` |
 
 Por la disposición de los registros de parámetros de `Lc4/c;->b`, los cuatro argumentos de cadena del llamador corresponden, **en orden**, a `uid`, `plataforma`, `tipo_dispositivo` y `version`. Esto resuelve la correspondencia posicional, pero **no** el origen ni los valores concretos de las primeras tres cadenas. Para resolverlos hay que rastrear los productores de los valores de `StateFlow` que llegan a `LZ3/B;->invokeSuspend`; no se deben sustituir por cadenas genéricas ni por un UUID aleatorio sin evidencia.
+
+## Candidatos a generación del UID: inventario de cadenas DEX (8-11-2026)
+
+Se inspeccionó directamente la tabla `string_ids` de `classes2.dex` de la APK 5.0.42. Contiene las cadenas `randomUUID` (índice 45221), `randomUUID().toString()` (45222), `android_id` (31811), `firebaseInstallations` (35494), `dispositivoRegistradoDbFBM` (34560) e `idDispositivoDbFBM` (39714).
+
+**Importante:** la presencia de esas cadenas **no demuestra** que ninguna sea la fuente del `uid` enviado a `dispositivo.ashx`. Firebase y Android ID pueden pertenecer a bibliotecas incluidas en la APK; `idDispositivoDbFBM` puede ser un identificador recibido del servidor y no el UID local. La siguiente comprobación es buscar las referencias de código a estas cadenas y rastrear los valores hasta `LN4/v` y `LZ3/B;->invokeSuspend`. No usar UUID aleatorios ni Android ID sin ese enlace.
