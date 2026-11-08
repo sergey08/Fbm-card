@@ -19,6 +19,13 @@ class FBMQueries:
     ALLOWED = frozenset({"jornadas", "jornada", "partido", "equipo", "clasificacion"})
     TTL = {"jornadas": 3600, "jornada": 300, "partido": 60,
            "equipo": 300, "clasificacion": 300}
+    REQUIRED = {
+        "jornadas": frozenset({"competicion", "grupo"}),
+        "jornada": frozenset({"competicion", "grupo", "jornada"}),
+        "partido": frozenset({"partido"}),
+        "equipo": frozenset({"equipo"}),
+        "clasificacion": frozenset({"competicion", "grupo"}),
+    }
 
     def __init__(self, adapter, *, cache=None):
         # adapter.query(kind, identifiers) es una corrutina; el adaptador
@@ -38,6 +45,8 @@ class FBMQueries:
             raise FBMQueryError("Tipo de consulta no permitido")
         if not identifiers or len(identifiers) > 5:
             raise FBMQueryError("Se requieren identificadores oficiales")
+        if not self.REQUIRED[kind].issubset(identifiers):
+            raise FBMQueryError("Faltan identificadores oficiales requeridos")
         for name, value in identifiers.items():
             if (not isinstance(name, str) or not name.isidentifier()
                     or type(value) not in (str, int)
