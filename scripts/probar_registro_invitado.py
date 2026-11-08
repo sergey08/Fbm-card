@@ -75,12 +75,31 @@ def main(argv=None):
         return 0
     try:
         uid = load_identity(args.identidad)
+    except (OSError, ValueError):
+        print("Identidad local inaccesible o invalida; no se envio ninguna peticion.", file=sys.stderr)
+        return 1
+    try:
         fields = registration_fields(uid=uid, plataforma="Android " + args.android_release.strip(),
                                      tipo_dispositivo="mobile", version="5.0.42")
         response = post_device_form(fields)
+    except protocol.DeviceTransportError as exc:
+        if exc.category == "http":
+            print(f"Registro no validado: HTTP {exc.status}; cuerpo oculto.", file=sys.stderr)
+        else:
+            print(f"Registro no validado: {exc.category}; detalles ocultos.", file=sys.stderr)
+        return 1
+    except (ValueError, RuntimeError):
+        print("Registro no validado: fallo de transporte o formulario; detalles ocultos.", file=sys.stderr)
+        return 1
+    try:
         extract_identity_fields(response)
-    except (OSError, ValueError, RuntimeError):
-        print("Registro no validado: comprueba la identidad y la conexion; valores ocultos.", file=sys.stderr)
+    except ValueError:
+        # Solo presencia y tipo de los campos previstos, nunca valores o claves arbitrarias.
+        error = response.get("error")
+        print("Registro no validado: respuesta JSON sin identidad esperada. "
+              f"key_valida={isinstance(response.get('key'), str) and bool(response.get('key'))}, "
+              f"idDispositivo_valido={isinstance(response.get('idDispositivo'), str) and bool(response.get('idDispositivo'))}, "
+              f"error_indicado={error not in (None, '', False, 0)}. Valores ocultos.", file=sys.stderr)
         return 1
     print("Respuesta con key e idDispositivo recibida (valores ocultos).")
     print("La sesion no se guarda; esto no valida la busqueda ni el acceso posterior.")

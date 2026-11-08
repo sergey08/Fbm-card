@@ -50,6 +50,16 @@ class DeviceProtocolTests(unittest.TestCase):
 
 
 class DeviceTransportTests(unittest.TestCase):
+    def test_http_error_reports_status_without_body(self):
+        from urllib.error import HTTPError
+        error = HTTPError('https://example.invalid/private', 403, 'secret', {}, None)
+        fields = module.registration_fields(uid='u', plataforma='p', tipo_dispositivo='t', version='v')
+        with patch('urllib.request.urlopen', side_effect=error):
+            with self.assertRaises(module.DeviceTransportError) as raised:
+                module.post_device_form(fields)
+        self.assertEqual((raised.exception.category, raised.exception.status), ('http', 403))
+        self.assertNotIn('secret', str(raised.exception))
+
     def test_reject_unknown_action_without_network(self):
         with patch("urllib.request.urlopen") as urlopen:
             with self.assertRaises(ValueError):

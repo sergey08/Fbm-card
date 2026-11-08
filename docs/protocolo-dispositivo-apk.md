@@ -377,3 +377,7 @@ py -3.13 .\scripts\probar_registro_invitado.py --android-release 16 --identidad 
 ```
 
 El primer comando no escribe ni conecta. El segundo crea el archivo sin sobrescribirlo ni conectar. El tercero realiza un POST de registro: conserva el archivo para mantener la identidad y no lo compartas ni lo subas a Git. El archivo contiene un identificador, no una clave recibida del servicio; los permisos y copias de seguridad dependen del sistema. Una respuesta con ambos campos esperados no valida búsquedas ni acceso posterior. El diagnóstico no guarda la sesión; repetir el envío puede crear o modificar un registro remoto. No se ha realizado ninguna prueba real en este cambio. En caso de rechazo o respuesta inesperada no se muestran cuerpos ni identificadores.
+
+### Resultado de la primera prueba independiente
+
+El usuario ejecutó la creación local de identidad y después un envío explícito. El diagnóstico devolvió «Registro no validado», pero la versión utilizada agrupaba errores de identidad, transporte y formato; no permite determinar la causa ni si el servidor procesó la solicitud. No se conocen el estado HTTP ni la respuesta. La versión posterior distingue estado HTTP, fallo de conexión, JSON inválido o no objeto, y presencia válida de los dos campos previstos, sin imprimir valores ni cuerpo. Las pruebas automatizadas de estas clasificaciones usan respuestas simuladas; no demuestran aceptación del servidor. Repetir el registro es una petición nueva que podría crear o modificar un registro remoto.

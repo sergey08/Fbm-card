@@ -60,6 +60,16 @@ class RegistrationDiagnosticTests(unittest.TestCase):
             with patch.object(module, 'post_device_form', return_value={'error': 'private-server-message'}):
                 self.assertEqual(module.main(['--android-release', '16', '--identidad', str(path), '--enviar']), 1)
             self.assertNotIn('private-server-message', err.getvalue())
+            self.assertIn('error_indicado=True', err.getvalue())
+
+    def test_transport_failure_is_classified_without_secrets(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
+            path = Path(tmp) / 'identity.json'
+            module.create_identity(path)
+            with patch.object(module, 'post_device_form', side_effect=module.protocol.DeviceTransportError('http', 403)):
+                self.assertEqual(module.main(['--android-release', '16', '--identidad', str(path), '--enviar']), 1)
+            self.assertIn('HTTP 403', err.getvalue())
+            self.assertNotIn(module.load_identity(path), err.getvalue())
 
 if __name__ == '__main__':
     unittest.main()

@@ -54,6 +54,15 @@ def extract_identity_fields(response: object) -> tuple[str, str]:
 DEVICE_URL = "https://appaficionfbm.gesdeportiva.es/dispositivo.ashx"
 
 
+class DeviceTransportError(RuntimeError):
+    """Fallo clasificado sin datos de la solicitud ni de la respuesta."""
+
+    def __init__(self, category: str, status: int | None = None):
+        super().__init__(category)
+        self.category = category
+        self.status = status
+
+
 def post_device_form(fields: dict[str, str], *, timeout: int = 12) -> dict:
     """Transporta un formulario explícito; no genera UID ni inicia registro solo.
 
@@ -89,16 +98,18 @@ def post_device_form(fields: dict[str, str], *, timeout: int = 12) -> dict:
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             if response.status != 200:
-                raise RuntimeError("Respuesta HTTP de dispositivo no válida")
+                raise DeviceTransportError("http", response.status)
             raw = response.read(131073)
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError("No se pudo conectar con el servicio de dispositivo FBM") from None
+    except urllib.error.HTTPError as exc:
+        raise DeviceTransportError("http", exc.code) from None
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise DeviceTransportError("conexion") from None
     if len(raw) > 131072:
-        raise RuntimeError("Respuesta de dispositivo demasiado grande")
+        raise DeviceTransportError("respuesta_grande")
     try:
         data = json.loads(raw)
     except (UnicodeDecodeError, ValueError):
-        raise RuntimeError("La respuesta de dispositivo no contiene JSON válido") from None
+        raise DeviceTransportError("json_invalido") from None
     if not isinstance(data, dict):
-        raise RuntimeError("Estructura de dispositivo inesperada")
+        raise DeviceTransportError("json_no_objeto")
     return data
