@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Diagnóstico mínimo de acceso invitado a Afición FBM.
 
-Solo envía una consulta de prueba, sin credenciales ni evasión de controles.
+Solo envía una consulta de prueba con los cinco campos observados en el APK,
+con identidad vacía: NO constituye una prueba de sesión invitada válida.
 No imprime valores de la respuesta ni datos de jugadores/equipos.
 """
 import json
@@ -32,7 +33,7 @@ def main():
     request = urllib.request.Request(
         BASE,
         data=urllib.parse.urlencode(
-            {"accion": "buscarEquipo", "texto": "PINTOBASKET", "skip": "0"}
+            {"accion": "buscarEquipo", "id_dispositivo": "", "key": "", "texto": "PINTOBASKET", "skip": "0"}
         ).encode(),
         headers={"Content-Type": "application/x-www-form-urlencoded",
                  "User-Agent": "FBMCard-DEV/0.1"},
