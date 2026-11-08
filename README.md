@@ -1,3 +1,5 @@
+> **Arquitectura DEV en transición (08/11/2026).** Este repositorio está pasando de tarjeta independiente a **integración + tarjeta en una sola instalación**. La integración se encuentra en `custom_components/fbm/`, con la tarjeta empaquetada en `custom_components/fbm/www/fbm-card.js`. El manifiesto y el flujo de configuración están creados, pero **no hay todavía conexión validada a la API oficial de FBM, ni registro automático del recurso Lovelace, ni instalación probada en Home Assistant**. Las instrucciones anteriores de instalación manual de la tarjeta son históricas y no describen aún la instalación final desde Marketplace. **No instalar como versión estable.**
+
 # FBM Card
 
 Tarjeta para Home Assistant con calendarios, resultados y clasificaciones de la Federación de Baloncesto de Madrid (FBM).
