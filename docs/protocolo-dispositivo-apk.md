@@ -66,3 +66,14 @@ La búsqueda de referencias dentro de instrucciones reconocidas por el inventari
 **Conclusión confirmada:** `registrar` y `acceso` de la versión APK 5.0.42 se envían a `https://appaficionfbm.gesdeportiva.es/dispositivo.ashx`. Esto corrige la limitación del apartado anterior: la URL no se asigna a un campo estático mediante `sput-object`, sino al campo **de instancia** mediante `iput-object` en el constructor.
 
 **Pendiente:** origen exacto de `uid`, semántica de `token_push`, campos de respuesta y verificación de acceso autorizado. No se ha realizado tráfico de red ni extraído claves.
+
+## Identificación adicional de DTO y campos (análisis directo del DEX)
+
+La lectura de la tabla de cadenas de `classes2.dex` en el APK original identifica los tipos completos:
+
+- `Lcom/indalweb/appaficion/app/app_data/data/dto/GuardarDispositivoResponseDto;` (índice DEX de cadena 18566).
+- `Lcom/indalweb/appaficion/app/app_data/data/dto/IniciarSesionDispositivoResponseDto;` (índice 18567).
+- El nombre de campo serializable `duracionIntersticia` (índice 34668), con acceso `getDuracionIntersticia` (índice 36698).
+- El literal de almacenamiento local `idDispositivoDbFBM` (índice 39714), el nombre de formulario `token_push` (48249) y `uid` (48516).
+
+**Precaución:** los índices de cadenas no prueban por sí solos que un campo esté presente en una respuesta concreta. Para determinar los nombres JSON de `key`, `dispositivoId` y demás atributos hay que resolver las anotaciones de serialización de cada DTO y las lecturas de sus propiedades; el `toString` de una clase no constituye un contrato JSON. No se han recuperado valores de dispositivo ni tokens.
