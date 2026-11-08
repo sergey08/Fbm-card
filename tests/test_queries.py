@@ -36,6 +36,33 @@ class QueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(adapter.calls, 1)
         self.assertTrue(all(x == results[0] for x in results))
 
+    async def test_waiting_requests_keep_single_lock(self):
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        class SlowAdapter:
+            def __init__(self):
+                self.calls = 0
+
+            async def query(self, kind, identifiers):
+                self.calls += 1
+                started.set()
+                await release.wait()
+                return {"fuente": "FBM", "ids": identifiers}
+
+        adapter = SlowAdapter()
+        service = queries.FBMQueries(adapter)
+        first = asyncio.create_task(service.query("partido", partido=123))
+        await started.wait()
+        others = [asyncio.create_task(service.query("partido", partido=123))
+                  for _ in range(8)]
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(first, *others)
+        self.assertEqual(adapter.calls, 1)
+        self.assertEqual(service._locks, {})
+        self.assertEqual(service._waiters, {})
+
     async def test_cache_returns_defensive_copy(self):
         adapter = Adapter()
         service = queries.FBMQueries(adapter)
