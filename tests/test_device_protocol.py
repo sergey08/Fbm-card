@@ -79,6 +79,29 @@ class DeviceTransportTests(unittest.TestCase):
                 module.post_device_form({"accion": "registrar"})
             urlopen.assert_not_called()
 
+    def test_access_post_uses_exact_fields(self):
+        class Response:
+            status = 200
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def read(self, limit):
+                return b'{"key":"k","idDispositivo":"d"}'
+        fields = module.access_fields(
+            uid="u", token_push="", id_dispositivo="d",
+            plataforma="p", tipo_dispositivo="t", version="5.0.42")
+        with patch("urllib.request.urlopen", return_value=Response()) as urlopen:
+            module.post_device_form(fields)
+        request = urlopen.call_args.args[0]
+        from urllib.parse import parse_qsl
+        actual = dict(parse_qsl(request.data.decode(), keep_blank_values=True))
+        self.assertEqual(actual, fields)
+        self.assertEqual(set(actual), {
+            "accion", "uid", "token_push", "id_dispositivo",
+            "plataforma", "tipo_dispositivo", "version"
+        })
+
     def test_extra_field_rejected_without_network(self):
         fields = module.registration_fields(
             uid="u", plataforma="p", tipo_dispositivo="t", version="v")
