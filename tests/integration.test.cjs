@@ -20,3 +20,10 @@ test("la integración no incluye fuentes externas ni credenciales simuladas", ()
     assert.doesNotMatch(content, /requests\.get|aiohttp\.ClientSession|fetch\(/);
   }
 });
+
+test("la integración intenta registrar el recurso Lovelace sin duplicados", () => {
+  const code = fs.readFileSync("custom_components/fbm/__init__.py", "utf8");
+  assert.match(code, /async_create_item/);
+  assert.match(code, /async_items\(\)/);
+  assert.match(code, /CARD_URL/);
+});
