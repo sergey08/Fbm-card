@@ -49,8 +49,8 @@ class FBMQueries:
             return cached
         async with self._guard:
             lock = self._locks.setdefault(key, asyncio.Lock())
-        async with lock:
-            try:
+        try:
+            async with lock:
                 cached = self._cache.get(key)
                 if cached is not None:
                     return cached
@@ -63,10 +63,10 @@ class FBMQueries:
                 # debe validar el endpoint real antes de devolver datos.
                 self._cache.put(key, result, ttl_seconds=self.TTL[kind])
                 return deepcopy(result)
-            finally:
-                async with self._guard:
-                    if not lock.locked():
-                        self._locks.pop(key, None)
+        finally:
+            async with self._guard:
+                if not lock.locked():
+                    self._locks.pop(key, None)
 
     def clear(self):
         self._cache.clear()
