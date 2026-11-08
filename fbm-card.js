@@ -20,6 +20,31 @@ class FBMCard extends HTMLElement {
     return "fbm-card:seleccion:v1:" + userId + ":" + String(this._config?.id_tarjeta || "predeterminada");
   }
 
+  _favoriteKey() {
+    const userId = this._hass?.user?.id;
+    if (!userId) return null;
+    return "fbm-card:favoritos:v1:" + userId + ":" + String(this._config?.id_tarjeta || "predeterminada");
+  }
+
+  _favorites() {
+    const key = this._favoriteKey();
+    if (!key) return [];
+    try {
+      const data = JSON.parse(window.localStorage?.getItem(key) || "[]");
+      return Array.isArray(data) ? data.filter(id => typeof id === "string") : [];
+    } catch (_) { return []; }
+  }
+
+  _toggleFavorite(entityId) {
+    if (!this._teams().some(team => team.entidad_datos === entityId)) return;
+    const key = this._favoriteKey();
+    if (!key) return;
+    const favorites = this._favorites();
+    const updated = favorites.includes(entityId) ? favorites.filter(id => id !== entityId) : [...favorites, entityId];
+    try { window.localStorage?.setItem(key, JSON.stringify(updated)); } catch (_) { return; }
+    this._render();
+  }
+
   _selectedTeam() {
     const teams = this._teams();
     const key = this._storageKey();
@@ -78,15 +103,25 @@ class FBMCard extends HTMLElement {
     const selected = this._selectedTeam();
     const team = this._element("div", selected?.nombre || this._config.equipo || "Sin equipo seleccionado", "muted");
     card.append(title, team);
+    if (selected && this._favoriteKey()) {
+      const favorite = document.createElement("button");
+      const active = this._favorites().includes(selected.entidad_datos);
+      favorite.textContent = active ? "★ Quitar de favoritos" : "☆ Añadir a favoritos";
+      favorite.type = "button";
+      favorite.setAttribute("aria-pressed", String(active));
+      favorite.addEventListener("click", () => this._toggleFavorite(selected.entidad_datos));
+      card.append(favorite);
+    }
     const teams = this._teams();
     if (teams.length > 1) {
       const label = this._element("label", "Seleccionar equipo: ", "muted");
       const select = document.createElement("select");
       select.setAttribute("aria-label", "Seleccionar equipo");
-      for (const entry of teams) {
+      const favorites = this._favorites();
+      for (const entry of [...teams].sort((a, b) => Number(favorites.includes(b.entidad_datos)) - Number(favorites.includes(a.entidad_datos)))) {
         const option = document.createElement("option");
         option.value = entry.entidad_datos;
-        option.textContent = entry.nombre;
+        option.textContent = (favorites.includes(entry.entidad_datos) ? "★ " : "") + entry.nombre;
         select.append(option);
       }
       select.value = selected?.entidad_datos || "";
