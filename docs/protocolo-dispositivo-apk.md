@@ -77,3 +77,25 @@ La lectura de la tabla de cadenas de `classes2.dex` en el APK original identific
 - El literal de almacenamiento local `idDispositivoDbFBM` (índice 39714), el nombre de formulario `token_push` (48249) y `uid` (48516).
 
 **Precaución:** los índices de cadenas no prueban por sí solos que un campo esté presente en una respuesta concreta. Para determinar los nombres JSON de `key`, `dispositivoId` y demás atributos hay que resolver las anotaciones de serialización de cada DTO y las lecturas de sus propiedades; el `toString` de una clase no constituye un contrato JSON. No se han recuperado valores de dispositivo ni tokens.
+
+## Campos reales de las dos clases DTO (lectura directa de field_ids)
+
+Se ha leído `classes2.dex` desde el `base.apk` original, interpretando las tablas `string_ids`, `type_ids` y `field_ids` según el formato DEX, filtrando por los tipos `GuardarDispositivoResponseDto` e `IniciarSesionDispositivoResponseDto`. **No se trata de mera coincidencia de cadenas**.
+
+Ambas clases declaran, entre otros, estos campos de instancia con el mismo tipo:
+
+| Campo | Tipo DEX | Interpretación prudente |
+|---|---|---|
+| `key` | `Ljava/lang/String;` | Candidato a clave devuelta por el servicio; contenido desconocido |
+| `idDispositivo` | `Ljava/lang/String;` | Candidato a identificador devuelto; contenido desconocido |
+| `resultado` | `Ljava/lang/String;` | Estado textual, semántica no confirmada |
+| `error` | `Ljava/lang/String;` | Error textual, semántica no confirmada |
+| `perfil` | `Lcom/indalweb/appaficion/app/app_data/data/dto/PerfilDto;` | Objeto de perfil, contenido desconocido |
+| `email` | `Ljava/lang/String;` | Campo opcional/no confirmada su presencia |
+| `emailVerificado` | `Z` | Booleano |
+| `duracionIntersticia` | `I` | Entero |
+| `tiempoReseteoIntersticial` | `J` | Entero largo |
+
+También se identifican campos de configuración `mostrarPublicidad`, `mostrarJugadaJugadaVersionGratis`, `mostrarJugadaJugadaVersionPago`, `noticiasXmlActivo`, `noticiasXmlUrl`, `requiereVersionMinimaAndroid` y `versionActualAndroid`.
+
+**Conclusión:** las dos clases de respuesta **declaran** `key` e `idDispositivo`. Falta demostrar mediante las anotaciones del serializador o una respuesta HTTP autorizada el nombre exacto en JSON, su obligatoriedad y la vinculación con las consultas deportivas. No se han obtenido claves reales ni datos de usuario.
