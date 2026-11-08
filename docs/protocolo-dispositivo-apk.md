@@ -162,3 +162,17 @@ Se decodificaron los operandos reales `22c` (`iget-object`) y `21c` (`sput-objec
 Entre lectura y escritura hay comprobaciones de nulidad `Lkotlin/jvm/internal/k;->f` y validaciones `Lv8/o;->C0`; no se aprecia sobrescritura de los registros correspondientes en los tramos analizados. Los literales `key` y `dispositivoId` se utilizan en ese mismo orden en dichas comprobaciones, de modo que la interpretación más fundada es **`Ll7/I;->a = key`** y **`Ll7/I;->b = dispositivoId`**. La correspondencia `w/v` → `key/dispositivoId` aún debe contrastarse con los metadatos de serialización del DTO, para no confundir nombres internos ofuscados con nombres JSON.
 
 **Confirmado sin red:** los flujos de registro y acceso almacenan los mismos dos campos de respuesta en los mismos dos campos estáticos. **Pendiente:** confirmar nombres JSON, cómo se transmiten en `LH5/j;->a` y validar acceso autorizado.
+
+## Contraste con las tres operaciones de búsqueda (análisis local de código DEX)
+
+Se ha contrastado el resultado de identidad con `verified_post_literals.json` y `post_append_sequence.json`, que inspeccionan instrucciones `const-string` alineadas y las invocaciones a `StringValuesBuilder.append` entre la creación del POST y el contenido del formulario.
+
+| Operación literal en el APK | Método DEX | Offset literal de operación | Parámetros literales observados | Número de llamadas `append` |
+|---|---|---:|---|---:|
+| `buscarClub` | `Lb5/e;->a` | 2688830 | `accion`, `id_dispositivo`, `key`, `texto`, `skip` | 5 |
+| `buscarCategoria` | `Lk5/m;->b` | 4832406 | `accion`, `id_dispositivo`, `key`, `texto`, `skip` | 5 |
+| `buscarEquipo` | `Lx5/k;->h` | 5682166 | `accion`, `id_dispositivo`, `key`, `texto`, `skip` | 5 |
+
+Las tres rutinas configuran POST con `application/x-www-form-urlencoded`. La coincidencia de nombres de campos es evidencia de un contrato de formulario compartido; la correspondencia exacta de los **valores** debe comprobarse siguiendo los registros hasta cada `append` (el análisis actual solo asocia el literal anterior más próximo).
+
+**Implicación práctica:** el primer cliente funcional debe probar `buscarEquipo` (además de `buscarClub` y `buscarCategoria`) usando una identidad invitada obtenida legítimamente, sin inventar ni registrar claves en los logs. El diagnóstico anterior sin `id_dispositivo` y `key` no era una prueba completa del contrato observado en la APK.
