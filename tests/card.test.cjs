@@ -128,3 +128,17 @@ test("descubre únicamente sensores con estructura FBM válida", () => {
   assert.equal(card._availableOfficialEntities().length, 1);
   assert.equal(card._availableOfficialEntities()[0].entidad_datos, "sensor.fbm_a");
 });
+
+test("el descubrimiento automático es opcional y utiliza solo sensores declarados FBM", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { descubrir_entidades: true };
+  card._hass = { states: {
+    "sensor.fbm_a": { state: "ok", attributes: { friendly_name: "A", fbm: { fuente: "FBM", partidos: [], clasificacion: [] } } },
+    "sensor.otro": { state: "ok", attributes: { friendly_name: "Otro", fuente: "OTRO", partidos: [], clasificacion: [] } }
+  } };
+  assert.equal(card._teams().length, 1);
+  assert.equal(card._selectedTeam().entidad_datos, "sensor.fbm_a");
+  card._config = { descubrir_entidades: false };
+  assert.equal(card._teams().length, 0);
+});
