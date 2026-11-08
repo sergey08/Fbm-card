@@ -7,10 +7,37 @@ class FBMCard extends HTMLElement {
   }
   set hass(hass) { this._hass = hass; this._render(); }
   getCardSize() { return 5; }
-  static getStubConfig() { return { title: "FBM Card", equipo: "GRUPO EGIDO PINTOBASKET NEGRO" }; }
+  static getStubConfig() { return { title: "FBM Card", equipos: [] }; }
+
+  _teams() {
+    if (Array.isArray(this._config?.equipos)) return this._config.equipos.filter(x => x && typeof x.nombre === "string" && typeof x.entidad_datos === "string");
+    return this._config?.entidad_datos ? [{ nombre: String(this._config.equipo || "Equipo"), entidad_datos: this._config.entidad_datos }] : [];
+  }
+
+  _storageKey() {
+    const userId = this._hass?.user?.id;
+    if (!userId) return null;
+    return "fbm-card:seleccion:v1:" + userId + ":" + String(this._config?.id_tarjeta || "predeterminada");
+  }
+
+  _selectedTeam() {
+    const teams = this._teams();
+    const key = this._storageKey();
+    let saved = null;
+    try { if (key) saved = window.localStorage?.getItem(key); } catch (_) { /* almacenamiento deshabilitado */ }
+    return teams.find(t => t.entidad_datos === saved) || teams[0] || null;
+  }
+
+  _selectTeam(entityId) {
+    const team = this._teams().find(t => t.entidad_datos === entityId);
+    if (!team) return;
+    const key = this._storageKey();
+    try { if (key) window.localStorage?.setItem(key, entityId); } catch (_) { /* almacenamiento deshabilitado */ }
+    this._render();
+  }
 
   _data() {
-    const entityId = this._config.entidad_datos;
+    const entityId = this._selectedTeam()?.entidad_datos;
     if (!entityId) return { error: "Pendiente de conectar una fuente de datos oficiales de FBM." };
     const state = this._hass?.states?.[entityId];
     if (!state) return { error: "La entidad de datos no está disponible: " + entityId };
@@ -48,8 +75,25 @@ class FBMCard extends HTMLElement {
     `;
     const card = document.createElement("ha-card");
     const title = this._element("h2", this._config.title || "🏀 FBM Card");
-    const team = this._element("div", this._config.equipo || "Sin equipo seleccionado", "muted");
+    const selected = this._selectedTeam();
+    const team = this._element("div", selected?.nombre || this._config.equipo || "Sin equipo seleccionado", "muted");
     card.append(title, team);
+    const teams = this._teams();
+    if (teams.length > 1) {
+      const label = this._element("label", "Seleccionar equipo: ", "muted");
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", "Seleccionar equipo");
+      for (const entry of teams) {
+        const option = document.createElement("option");
+        option.value = entry.entidad_datos;
+        option.textContent = entry.nombre;
+        select.append(option);
+      }
+      select.value = selected?.entidad_datos || "";
+      select.addEventListener("change", () => this._selectTeam(select.value));
+      label.append(select);
+      card.append(label);
+    }
     if (this._config.url_oficial) {
       try {
         const url = new URL(String(this._config.url_oficial));
