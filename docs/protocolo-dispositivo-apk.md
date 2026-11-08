@@ -331,3 +331,16 @@ Se ha cruzado cada offset candidato con los `code_item` de **45.403 métodos** d
 | `idDispositivoDbFBM` @2659668 | `LZ3/u;->invokeSuspend` | Otra lectura propia de FBM |
 
 **Resultado:** cinco de las seis referencias a `android_id` son de bibliotecas externas; la única candidata de código FBM es `LZ3/H;->A`. El candidato `randomUUID().toString()` pertenece a OkHttp y no debe usarse para generar UID. El siguiente paso es analizar las instrucciones de `LZ3/H;->A` y los lugares que consumen su valor. Este análisis de pertenencia a método **no demuestra aún** que `android_id` sea el UID del formulario de registro.
+
+## UID confirmado mediante flujo de datos DEX (8-11-2026)
+
+Se desensamblaron instrucciones **alineadas** de los métodos `LZ3/H;->A`, `LN4/v;-><init>` y `LZ3/B;->invokeSuspend` del APK 5.0.42:
+
+1. `LZ3/H;->A` en offset `2641778` carga `"android_id"`; en `2641782` invoca `Landroid/provider/Settings$Secure;->getString` con `ContentResolver` y esa cadena. El resultado se conserva en `v2`.
+2. En `2641888` se invoca `LN4/v;-><init>` con receptor `v0` y tres argumentos `v1`, `v2`, `v3`.
+3. El constructor `LN4/v;-><init>` escribe esos argumentos en los campos `a`, `b` y `c`, respectivamente (offsets `1917526`, `1917530`, `1917534`). **Por tanto, `LN4/v;->b` contiene el Android ID leído.**
+4. En el registro `LZ3/B;->invokeSuspend`, offset `2638692`, se lee `LN4/v;->b`. La llamada de registro `Ld4/c;->b` en `2638788` utiliza ese valor como primer argumento de cadena, que la construcción del formulario mapea a `uid`.
+
+**Conclusión:** para la APK Android 5.0.42, el `uid` de registro procede de `Settings.Secure.ANDROID_ID`. No es un UUID aleatorio ni el `idDispositivo` que devuelve el servidor. Es un identificador del dispositivo/entorno Android, y no debe inventarse ni reutilizarse entre usuarios. El código HA no puede obtener automáticamente el Android ID de un teléfono: necesitaría un método legítimo de provisión o un mecanismo de registro alternativo contrastado.
+
+Otros dos parámetros: `LZ3/H;->A` construye una cadena con `"Android "` y `Build.VERSION.RELEASE` para el objeto `LN4/a0`, y selecciona un valor de `LN4/i1` para tipo de dispositivo. En `LZ3/B;->invokeSuspend` se leen respectivamente `LN4/v;->c -> LN4/a0;->e` (segundo argumento, `plataforma`) y `LN4/v;->a -> LN4/i1;->e` (tercero, `tipo_dispositivo`). El valor concreto de `LN4/i1;->e` requiere revisar la inicialización del enum.
