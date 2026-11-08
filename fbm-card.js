@@ -10,7 +10,7 @@ class FBMCard extends HTMLElement {
   static getStubConfig() { return { title: "FBM Card", equipos: [] }; }
 
   _teams() {
-    if (Array.isArray(this._config?.equipos)) return this._config.equipos.filter(x => x && typeof x.nombre === "string" && typeof x.entidad_datos === "string");
+    if (Array.isArray(this._config?.equipos) && this._config.equipos.length) return this._config.equipos.filter(x => x && typeof x.nombre === "string" && typeof x.entidad_datos === "string");
     if (this._config?.entidad_datos) return [{ nombre: String(this._config.equipo || "Equipo"), entidad_datos: this._config.entidad_datos }];
     return this._config?.descubrir_entidades === true ? this._availableOfficialEntities() : [];
   }
@@ -64,7 +64,7 @@ class FBMCard extends HTMLElement {
 
   _availableOfficialEntities() {
     return Object.entries(this._hass?.states || {})
-      .filter(([id, state]) => id.startsWith("sensor.") && (state.attributes?.fbm?.fuente === "FBM" || state.attributes?.fuente === "FBM"))
+      .filter(([id, state]) => id.startsWith("sensor.") && state && !["unknown", "unavailable"].includes(state.state) && (state.attributes?.fbm?.fuente === "FBM" || state.attributes?.fuente === "FBM"))
       .filter(([, state]) => {
         const data = state.attributes.fbm || state.attributes;
         return Array.isArray(data.partidos) && Array.isArray(data.clasificacion);
