@@ -155,6 +155,8 @@ def main(argv=None):
                         help="Guarda el campo error en un archivo nuevo para revision privada")
     parser.add_argument("--candidato", type=Path,
                         help="Archivo privado nuevo al registrar, existente al probar acceso")
+    parser.add_argument("--guardar-equipos", type=Path,
+                        help="Guarda solo la lista de equipos para revision local")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--crear-identidad", action="store_true",
                         help="Crea una identidad local, sin red y sin sobrescribir")
@@ -165,6 +167,8 @@ def main(argv=None):
     action.add_argument("--buscar-equipo", metavar="TEXTO",
                         help="Autoriza acceso y una busqueda experimental de equipo")
     args = parser.parse_args(argv)
+    if args.guardar_equipos and args.buscar_equipo is None:
+        parser.error("--guardar-equipos requiere --buscar-equipo")
     if args.guardar_error and not (args.enviar or args.acceder):
         parser.error("--guardar-error requiere --enviar o --acceder")
     if args.candidato and not (args.enviar or args.acceder or args.buscar_equipo is not None):
@@ -185,6 +189,9 @@ def main(argv=None):
         parser.error("Se requiere --identidad RUTA")
     if args.guardar_error and os.path.lexists(args.guardar_error):
         print("El archivo de error ya existe; no se envio ninguna peticion.", file=sys.stderr)
+        return 1
+    if args.guardar_equipos and os.path.lexists(args.guardar_equipos):
+        print("El archivo de equipos ya existe; no se envio ninguna peticion.", file=sys.stderr)
         return 1
     if args.enviar and args.candidato and os.path.lexists(args.candidato):
         print("El archivo de candidato ya existe; no se envio ninguna peticion.", file=sys.stderr)
@@ -256,6 +263,19 @@ def main(argv=None):
         shapes = ", ".join(f"{name}={field_shape(result, name)}" for name in names)
         equipos = result.get("equipos")
         count = str(len(equipos)) if isinstance(equipos, list) else "no_disponible"
+        if args.guardar_equipos:
+            if not isinstance(equipos, list):
+                print("No se pudo guardar: equipos no es una lista.", file=sys.stderr)
+            else:
+                try:
+                    fd = os.open(args.guardar_equipos, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "w", encoding="utf-8") as output:
+                        json.dump(equipos, output, ensure_ascii=False, indent=2)
+                        output.write("\n")
+                except OSError:
+                    print("No se pudo guardar la lista; no se sobrescribio ningun archivo.", file=sys.stderr)
+                else:
+                    print("Lista de equipos guardada localmente; revisala antes de compartirla.")
         print("Respuesta de busqueda recibida; campos conocidos: " + shapes +
               "; numero_equipos=" + count + "; marcador_error=" + error_marker(result) +
               ". No se muestran valores; resultado no validado.")

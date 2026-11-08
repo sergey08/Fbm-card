@@ -407,3 +407,7 @@ El candidato guardado no era ninguno de `0`, `-1`, `null` o `none`; esto no vali
 ### Respuesta real de búsqueda
 
 El usuario ejecutó una búsqueda de `Pinto`: el servicio devolvió JSON con `error` vacío, `resultado` de texto no vacío y `equipos` como lista. No se registró el número de elementos ni su contenido, por lo que no se sabe si hubo coincidencias. El usuario precisó que busca «Grupo Egido Pintobasket negro». El diagnóstico informa ahora del número de elementos de `equipos`, sin afirmar que sean coincidencias válidas ni mostrar sus datos. La sesión y el contrato siguen pendientes de validación.
+
+### Búsqueda del equipo concreto
+
+La consulta real «Grupo Egido Pintobasket negro» devolvió una lista `equipos` con 12 elementos y `error` vacío. La estructura y el contenido de los elementos no se mostraron ni conservaron, por lo que no se ha identificado el equipo. La opción explícita `--guardar-equipos RUTA`, junto con `--buscar-equipo`, permite guardar únicamente esa lista en un archivo nuevo para revisión local. Puede contener campos sensibles o inesperados: revisar antes de compartir y mantener fuera de Git. No guarda el resto de la respuesta ni la sesión. Requiere nuevas solicitudes de acceso y búsqueda.
