@@ -93,6 +93,55 @@ test("una ronda requiere selección explícita antes de consultar horarios", asy
   assert.equal(calls[1].ronda, "r");
 });
 
+test("muestra el equipo por nombre o el grupo completo sin hacer peticiones", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._render = () => {};
+  let calls = 0; card._hass = { callWS: async () => { calls++; } };
+  const state = card._experimentalState();
+  state.teams = [{ id: "team", nombre: "Equipo A" }]; state.selected = "team";
+  state.schedule = { partidos: [
+    { local: "Equipo A", visitante: "B" }, { local: "C", visitante: "equipo a" },
+    { local: "Equipo AA", visitante: "D" }
+  ] };
+  assert.equal(card._experimentalMatches().length, 2);
+  card._toggleExperimentalGroup();
+  assert.equal(card._experimentalMatches().length, 3);
+  card._toggleExperimentalGroup();
+  assert.equal(card._experimentalMatches().length, 2);
+  assert.equal(calls, 0);
+});
+
+test("sin equipo coincidente no atribuye partidos a otro equipo", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  const state = card._experimentalState();
+  state.selected = "missing"; state.teams = [];
+  state.schedule = { partidos: [{ local: "A", visitante: "B" }] };
+  assert.equal(card._experimentalMatches().length, 0);
+});
+
+test("la tarjeta conserva fecha, hora y marcador tal como se recibieron", () => {
+  const { elements, sandbox } = loadCard();
+  class Element {
+    constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; this.textContent = ""; }
+    append(...children) { this.children.push(...children); }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    setAttribute() {}
+  }
+  sandbox.document = { createElement: tag => new Element(tag) };
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true };
+  const state = card._experimentalState();
+  state.status = { identidad_creada: true, candidato_guardado: true, sesion_en_memoria: true };
+  state.teams = [{ id: "a", nombre: "A", club: "C", categoria: "Cat", temporada: "26/27" }];
+  state.selected = "a"; state.schedule = { partidos: [{ local: "A", visitante: "B", fecha: "07/11/2026", hora: "00:00:00", marcador: { local: 32, visitante: 57 } }] };
+  const parent = new Element("card"); card._renderExperimental(parent);
+  const row = parent.children.find(el => el.className === "row");
+  assert.equal(row.children[0].children[0].textContent, "07/11/2026 00:00:00");
+  assert.equal(row.children[1].textContent, "32–57");
+});
+
 test("error de registro avisa de posible procesamiento sin reintentar", async () => {
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();

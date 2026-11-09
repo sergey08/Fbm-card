@@ -97,7 +97,24 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, showGroup: false, message: "", busy: false };
+  }
+
+  _experimentalMatches() {
+    const state = this._experimentalState();
+    const matches = Array.isArray(state.schedule?.partidos) ? state.schedule.partidos : [];
+    if (state.showGroup) return matches;
+    const name = state.teams.find(team => team.id === state.selected)?.nombre;
+    if (typeof name !== "string" || !name.trim()) return [];
+    const target = name.trim().toLowerCase();
+    return matches.filter(match => [match.local, match.visitante].some(value =>
+      typeof value === "string" && value.trim().toLowerCase() === target));
+  }
+
+  _toggleExperimentalGroup() {
+    const state = this._experimentalState();
+    state.showGroup = !state.showGroup;
+    this._render();
   }
 
   async _experimentalAction(action) {
@@ -126,7 +143,7 @@ class FBMCard extends HTMLElement {
           if (!state.query.trim()) throw new Error("Escribe el nombre de un equipo.");
           const data = await this._hass.callWS({ type: "fbm/team/search", ...common, texto: state.query.trim(), skip: 0 });
           state.teams = Array.isArray(data.equipos) ? data.equipos : [];
-          state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null;
+          state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null; state.showGroup = false;
           state.message = state.teams.length ? "Elige un equipo, categoría y temporada." : "No se han encontrado equipos.";
         } else if (action === "phases") {
           if (!state.selected) throw new Error("Elige un equipo.");
@@ -191,7 +208,7 @@ class FBMCard extends HTMLElement {
           option.value = team.id; select.append(option);
         }
         select.value = state.selected;
-        select.addEventListener("change", event => { state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; this._render(); });
+        select.addEventListener("change", event => { state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.showGroup = false; this._render(); });
         label.append(select); card.append(label);
         button("Consultar fase y rondas", "phases", !!state.selected && state.status.sesion_en_memoria);
         if (Array.isArray(state.rounds)) {
@@ -213,11 +230,22 @@ class FBMCard extends HTMLElement {
         button("Consultar horarios", "schedule", !!state.selected && state.status.sesion_en_memoria && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
       }
       if (state.schedule && Array.isArray(state.schedule.partidos)) {
-        card.append(this._element("h3", "Partidos devueltos por FBM"));
-        card.append(this._element("p", "La respuesta puede incluir todo el grupo y fechas fuera del intervalo solicitado.", "muted"));
-        for (const match of state.schedule.partidos) {
-          const result = match.marcador ? `${match.marcador.local}–${match.marcador.visitante}` : (match.fecha || "Fecha pendiente");
-          card.append(this._element("div", `${match.local} – ${match.visitante} | ${result}`, "row"));
+        const visible = this._experimentalMatches();
+        card.append(this._element("h3", state.showGroup ? "Partidos del grupo" : "Partidos del equipo"));
+        card.append(this._element("p", "La selección del equipo compara nombres; los homónimos pueden coincidir. FBM puede devolver fechas fuera del intervalo solicitado.", "muted"));
+        const toggle = this._element("button", state.showGroup ? "Ver solo mi equipo" : "Ver todo el grupo");
+        toggle.type = "button"; toggle.setAttribute("aria-pressed", String(state.showGroup));
+        toggle.addEventListener("click", () => this._toggleExperimentalGroup()); card.append(toggle);
+        card.append(this._element("p", `${visible.length} de ${state.schedule.partidos.length} partidos`, "muted"));
+        if (!visible.length) card.append(this._element("p", "No hay partidos que coincidan con la selección.", "muted"));
+        for (const match of visible) {
+          const result = match.marcador ? `${match.marcador.local}–${match.marcador.visitante}` : (match.estado_oficial || "Resultado no disponible");
+          const when = [match.fecha, match.hora].filter(Boolean).join(" ") || "Fecha pendiente";
+          const row = this._element("div", "", "row");
+          const details = this._element("div", `${match.local} – ${match.visitante}`, "teams");
+          details.append(this._element("div", when, "muted"));
+          row.append(details, this._element("span", result, "score"));
+          card.append(row);
         }
       }
     }
