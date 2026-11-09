@@ -51,10 +51,19 @@ class BridgeTests(unittest.TestCase):
 
     def test_admin_required_for_all_commands(self):
         self.connection.user.is_admin = False
-        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings):
+        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings, module.ws_club_logo):
             with self.subTest(command=command), self.assertRaises(PermissionError):
                 run_immediate(command(self.hass, self.connection, {'id': 1, 'entry_id': 'entry'}))
         self.client.async_register.assert_not_awaited()
+
+    def test_club_logo_uses_shared_catalog_and_validates_entry(self):
+        catalog = types.SimpleNamespace(logo=AsyncMock(return_value='https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg'))
+        self.hass.data['fbm']['_club_logo_catalog'] = catalog
+        run_immediate(module.ws_club_logo(self.hass, self.connection, {'id': 7, 'entry_id': 'entry', 'club': 'PINTOBASKET E.C.B.'}))
+        catalog.logo.assert_awaited_once_with('PINTOBASKET E.C.B.')
+        self.connection.send_result.assert_called_once_with(7, {'url': 'https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg'})
+        run_immediate(module.ws_club_logo(self.hass, self.connection, {'id': 8, 'entry_id': 'missing', 'club': 'X'}))
+        self.connection.send_error.assert_called_once()
 
     def test_entries_omits_unrelated_runtime_values(self):
         self.hass.data['fbm']['unrelated'] = {'secret': 'hidden'}
@@ -99,3 +108,5 @@ class BridgeTests(unittest.TestCase):
         self.connection.send_result.assert_called_once_with(1, {'clasificacion': []})
         run_immediate(module.ws_standings(self.hass, self.connection, {'id': 2, 'entry_id': 'entry', 'equipo': ' '}))
         self.assertEqual(self.client.async_team_standings.await_count, 1)
+
+

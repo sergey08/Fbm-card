@@ -6,6 +6,7 @@ import probatio
 from homeassistant.components import websocket_api
 
 from .const import DOMAIN
+from .club_logos import ClubLogoCatalog
 
 
 def _client(hass, entry_id):
@@ -180,6 +181,22 @@ async def ws_standings(hass, connection, msg):
     await _dispatch(hass, connection, msg, _standings)
 
 
+@websocket_api.websocket_command({"type": "fbm/club/logo", probatio.Required("entry_id"): str, probatio.Required("club"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_club_logo(hass, connection, msg):
+    try:
+        _client(hass, msg["entry_id"])
+        domain_data = hass.data[DOMAIN]
+        catalog = domain_data.setdefault("_club_logo_catalog", ClubLogoCatalog())
+        url = await catalog.logo(msg["club"])
+        connection.send_result(msg["id"], {"url": url})
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudo consultar el escudo FBM.")
+
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_club_logo):
         websocket_api.async_register_command(hass, command)
+
+

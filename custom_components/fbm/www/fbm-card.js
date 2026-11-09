@@ -270,14 +270,15 @@ class FBMCard extends HTMLElement {
     return "";
   }
 
-  _verifiedClubLogo(club) {
-    if (typeof club !== "string") return "";
-    const name = club.trim().replace(/\s+/g, " ").toUpperCase();
-    const logos = {
-      "PINTOBASKET E.C.B.": "https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg",
-      "VILLA DE VALDEMORO C.B.": "https://fbmtv.fbm.es/imagenes/equipos/escudo-6892.jpg"
-    };
-    return Object.prototype.hasOwnProperty.call(logos, name) ? logos[name] : "";
+  _requestClubLogo(state, club) {
+    if (!state.entry || !this._hass?.callWS || state.logoClub === club) return;
+    state.logoClub = club;
+    state.logoUrl = "";
+    this._hass.callWS({type: "fbm/club/logo", entry_id: state.entry, club}).then(result => {
+      if (this._experimental !== state || state.logoClub !== club) return;
+      state.logoUrl = this._officialLogoUrl(result?.url);
+      this._render();
+    }).catch(() => { /* La tarjeta sigue funcionando si falta el catálogo. */ });
   }
 
   _experimentalMatches() {
@@ -435,7 +436,9 @@ class FBMCard extends HTMLElement {
       }
       if (fixed && pinned && !editing) {
         const header = this._element("div", "", "team-header");
-        const logo = this._officialLogoUrl(this._config.logo_equipo) || this._verifiedClubLogo(pinned.club);
+        const configuredLogo = this._officialLogoUrl(this._config.logo_equipo);
+        if (!configuredLogo) this._requestClubLogo(state, pinned.club);
+        const logo = configuredLogo || (state.logoClub === pinned.club ? state.logoUrl : "");
         if (logo) {
           const img = document.createElement("img");
           img.src = logo; img.alt = "Escudo oficial de " + pinned.nombre;
@@ -767,5 +770,7 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === "fbm-card")) {
   window.customCards.push({ type: "fbm-card", name: "FBM Card", description: "Calendario y clasificación FBM (en desarrollo)" });
 }
+
+
 
 
