@@ -48,3 +48,22 @@ No dar por desplegado ni operativo nada de los puntos pendientes.
 - Seis tests sintéticos verifican ausencia de candidatos, presencia en lista blanca, conflictos, exclusión de otras fases/grupos, rechazo de ambigüedades, filtrado de tipos y protección de campos privados.
 - Para validar en HA hay que instalar controladamente este backend DEV y ejecutar el comando administrador de solo lectura `fbm/team/group_identity` con el ID de equipo oficial ya configurado y sesión vigente. No se debe volcar la respuesta entera ni registrar credenciales. **El conector MCP de HA disponible no proporciona una llamada WebSocket arbitraria**, por lo que esta prueba real no se ha ejecutado aquí.
 - Sin resultado real no se desbloquea el identificador ni se activa SQLite, jobs o sensores. La web pública FBM TV dispone de selector de temporada, pero no se ha demostrado que sus IDs sean intercambiables con los de Afición FBM: no fusionar catálogos ni fabricar asociación.
+
+
+## 09/11/2026 — APK 5.0.42 reanalizada a partir del ZIP aportado
+
+Archivo local: `Afición FBM-5.0.42-split-apks(1).zip`, contiene `base.apk` con `classes2.dex` (no se incorpora el APK al repositorio). Se analizaron tablas DEX de cadenas, métodos y sus cuerpos, buscando instrucciones Dalvik `const-string` asociadas a acciones. Este análisis no extrae tokens ni realiza llamadas autenticadas.
+
+**Calendario:**
+- `Lx5/k;->f` incluye literalmente `horariosJornadas`, `id_dispositivo`, `key`, `id_equipo`, `id_fase`, `id_grupo`, `id_ronda`, `fecha_inicial`, `fecha_final`.
+- `Lk5/m;->k` contiene `horariosJornadas` y los mismos identificadores de fase/grupo/ronda/fechas, pero **`id_categoria_competicion`** en lugar de `id_equipo`. Son rutas distintas de contexto equipo y categoría.
+- También existen las variantes `horariosFecha` en `Lx5/k;->e` y `Lk5/m;->j`. No se asume todavía igualdad de respuesta ni se activan métodos alternativos de red.
+- Corregido `team_phases.schedule_selection`: se puede solicitar el grupo actual aunque FBM incluya una lista de rondas disponibles. Solo una elección explícita de ronda usa `id_ronda` y deja vacío `id_grupo`. Antes, el mero hecho de que existiesen rondas bloqueaba una consulta de grupo. Es una corrección estructural basada en los parámetros observados, **no una prueba real de calendario funcional**. Prueba actualizada en `tests/test_team_protocol.py`.
+
+**Jugadores:**
+- `LH5/j;->g` presenta acción `jugadores` con `id_equipo`; `LH5/j;->e` presenta `detalleJugador` con `id_jugador`; `LH5/j;->f` presenta `buscarJugador` con `nombre`, `texto`, `skip`. En los métodos también aparecen `accion`, `id_dispositivo`, `key`, `application/x-www-form-urlencoded`.
+- Añadido `player_protocol.py` para crear los dos primeros formularios según esos campos literales y pruebas aisladas. **No efectúa solicitudes de red**: la asociación de cada acción con el endpoint efectivo y el DTO de respuesta siguen sin demostración completa. No hay jugadores ni estadísticas activados en tarjeta o integración.
+
+**Estadísticas:** `LK4/d;->invokeSuspend` contiene `estadisticaPartido` próximo a lógica de datos deportivos, pero la acción, campos y URL efectivos no están aún reconstruidos. No asumir que sea consulta pública ni que cubra categorías de menores.
+
+**Arquitectura:** cuando se verifique cada consulta con respuesta FBM auténtica, el mismo adaptador alimentará tanto tarjetas bajo demanda como sincronización opt-in. El buscador no sigue grupos ni crea entidades. No se instaló código ni se modificaron identidad, equipos o `main`.
