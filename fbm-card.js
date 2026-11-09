@@ -423,6 +423,22 @@ class FBMCard extends HTMLElement {
         input("Buscar equipo", "query");
         button("Buscar", "search", connected);
       }
+      if (!fixed && favorites.length) {
+        const label = this._element("label", "Mis equipos favoritos:");
+        const select = document.createElement("select");
+        const empty = this._element("option", "Selecciona un favorito"); empty.value = ""; select.append(empty);
+        for (const team of favorites) {
+          const option = this._element("option", [team.nombre, team.categoria, team.temporada].join(" · "));
+          option.value = team.id; select.append(option);
+        }
+        select.addEventListener("change", event => {
+          const team = favorites.find(item => item.id === event.target.value);
+          if (!team) return;
+          state.teams = [team]; state.selected = team.id; state.standings = null;
+          this._render();
+        });
+        label.append(select); card.append(label);
+      }
       if (state.teams.length && (!fixed || editing)) {
         const label = this._element("label", "Equipo, categoría y temporada: ");
         const select = document.createElement("select");
@@ -462,7 +478,7 @@ class FBMCard extends HTMLElement {
             const summary = this._element("p", "Mis favoritos: " + favorites.map(team => team.nombre + " (" + team.categoria + ")").join(", "), "muted");
             card.append(summary);
           }
-          const copy = this._element("button", "Copiar configuración de tarjeta fija");
+          const copy = this._element("button", "Copiar tarjeta independiente de este equipo");
           copy.type = "button"; copy.disabled = state.busy || !state.selected;
           copy.addEventListener("click", async () => {
             const team = state.teams.find(t => t.id === state.selected);
