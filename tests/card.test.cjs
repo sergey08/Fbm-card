@@ -838,3 +838,32 @@ test("la ficha se rechaza si no pertenece a la plantilla o cambia el equipo", as
   assert.equal(calls.length, 1);
   assert.equal(state.playerDetail, null);
 });
+
+test("ignora una plantilla que llega después de cambiar de equipo", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true }; card._render = () => {};
+  let reply;
+  card._hass = { callWS: async () => await new Promise(resolve => { reply = resolve; }) };
+  const state = card._experimentalState(); state.entry = "entry"; state.selected = "team-a";
+  const pending = card._experimentalAction("players");
+  state.selected = "team-b";
+  reply({ jugadores: [{ id: "player-a", nombre: "Ejemplo" }], total: 1 });
+  await pending;
+  assert.equal(state.players, null);
+  assert.equal(state.playersTeamId, "");
+});
+
+test("al refrescar la plantilla se descarta la ficha individual anterior", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true }; card._render = () => {};
+  card._hass = { callWS: async () => ({ jugadores: [{ id: "player", nombre: "Ejemplo" }], total: 1 }) };
+  const state = card._experimentalState(); state.entry = "entry"; state.selected = "team";
+  state.playerDetail = { id: "old", nombre: "Anterior" };
+  state.playerDetailTeamId = "team"; state.playerDetailPlayerId = "old";
+  await card._experimentalAction("players");
+  assert.equal(state.playerDetail, null);
+  assert.equal(state.playerDetailTeamId, "");
+  assert.equal(state.playersTeamId, "team");
+});
