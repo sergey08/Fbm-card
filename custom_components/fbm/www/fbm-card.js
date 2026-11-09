@@ -240,7 +240,7 @@ class FBMCard extends HTMLElement {
     return [
       "type: custom:fbm-card", "title: " + quote(team.nombre),
       "modo_experimental: true", "tipo_tarjeta: equipo",
-      "id_tarjeta: " + quote("fbm-fijo-" + team.id.slice(0, 16)),
+      "id_tarjeta: " + quote("fbm-fijo-" + team.id),
       "equipo_fijo:",
       ...["id", "nombre", "club", "categoria", "temporada"].map(field => "  " + field + ": " + quote(team[field]))
     ].join("\n");
