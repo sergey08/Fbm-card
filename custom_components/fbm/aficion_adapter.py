@@ -20,7 +20,8 @@ from .team_protocol import phases_fields, schedule_fields, standings_fields, pos
 from .team_schedule import normalize_team_schedule
 from .team_standings import normalize_standings
 from .team_roster import normalize_team_roster
-from .player_protocol import players_fields
+from .player_protocol import players_fields, player_detail_fields
+from .player_detail import post_player_detail_form, normalize_player_detail
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
@@ -175,6 +176,14 @@ class AficionFBMAdapter:
             post_team_form, players_fields(device_id, key, team_id)
         )
         return normalize_team_roster(response)
+
+    async def player_detail(self, player_id: str) -> dict:
+        """APK LH5/j;->e on-demand player detail using existing guest access."""
+        device_id, key = self._team_key()
+        response = await asyncio.to_thread(
+            post_player_detail_form, player_detail_fields(device_id, key, player_id)
+        )
+        return normalize_player_detail(response, player_id)
 
     async def team_standings(self, team_id: str) -> dict:
         """Consulta la clasificacion del grupo actual del equipo elegido."""
