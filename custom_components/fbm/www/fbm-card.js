@@ -152,6 +152,30 @@ class FBMCard extends HTMLElement {
     } catch (_) { return null; }
   }
 
+  _recentTeamKey(entryId) {
+    const user = this._hass?.user?.id;
+    if (typeof user !== "string" || !user || !entryId) return null;
+    return "fbm-card:ultimo-equipo:v1:" + JSON.stringify([user, entryId]);
+  }
+
+  _saveRecentTeam(entryId, team) {
+    if (!this._experimentalTeamIsValid(team)) return;
+    const key = this._recentTeamKey(entryId);
+    if (!key) return;
+    const data = {};
+    for (const prop of ["id", "nombre", "club", "categoria", "temporada"]) data[prop] = team[prop];
+    try { window.localStorage?.setItem(key, JSON.stringify(data)); } catch (_) {}
+  }
+
+  _restoreRecentTeam(entryId) {
+    const key = this._recentTeamKey(entryId);
+    if (!key) return null;
+    try {
+      const value = JSON.parse(window.localStorage?.getItem(key) || "null");
+      return this._experimentalTeamIsValid(value) ? value : null;
+    } catch (_) { return null; }
+  }
+
   async _initializeFixed() {
     if (this._fixedInit || !this._hass?.callWS || this._config?.tipo_tarjeta !== "equipo") return;
     this._fixedInit = true;
@@ -333,6 +357,18 @@ class FBMCard extends HTMLElement {
         changeTeam.addEventListener("click", () => { state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id; this._render(); });
         if (!this._config.equipo_fijo) card.append(changeTeam);
       } else {
+        if (fixed && !pinned && connected) {
+          const recent = this._restoreRecentTeam(state.entry);
+          if (recent) {
+            const use = this._element("button", "Fijar último equipo buscado: " + recent.nombre);
+            use.type = "button"; use.disabled = state.busy;
+            use.addEventListener("click", () => {
+              state.teams = [recent]; state.selected = recent.id;
+              this._experimentalAction("fix_team");
+            });
+            card.append(use);
+          }
+        }
         input("Buscar equipo", "query");
         button("Buscar", "search", connected);
       }
@@ -350,6 +386,7 @@ class FBMCard extends HTMLElement {
           state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
           const selectedTeam = state.teams.find(team => team.id === state.selected);
           if (selectedTeam && this._config.tipo_tarjeta !== "equipo") this._saveExperimentalTeam(state.entry, selectedTeam);
+          if (selectedTeam) this._saveRecentTeam(state.entry, selectedTeam);
           else if (!state.selected) this._clearExperimentalTeam(state.entry);
           this._render();
         });
