@@ -168,7 +168,7 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         expected = {
             "ws_entries", "ws_status", "ws_create", "ws_register",
             "ws_recover", "ws_connect", "ws_search", "ws_schedule",
-            "ws_phases", "ws_schedule_round", "ws_standings", "ws_group_identity", "ws_schedule_probe", "ws_roster",
+            "ws_phases", "ws_schedule_round", "ws_standings", "ws_group_identity", "ws_schedule_probe", "ws_roster", "ws_player_detail",
         }
         with patch.object(websocket_api, "async_register_command") as register:
             self.assertTrue(await fbm.async_setup(self.hass, {}))
