@@ -32,6 +32,24 @@ test("no hay resultados ficticios ni solicitudes automáticas", () => {
   assert.doesNotMatch(source, /fetch\s*\(/);
 });
 
+test("el campo de búsqueda conserva foco y texto cuando Home Assistant actualiza hass", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true };
+  let renders = 0;
+  card._render = () => { renders++; };
+  card._experimental = { query: "Pinto", status: { identidad_creada: true } };
+  const initial = { user: { id: "user-1" }, callWS: async () => ({}) };
+  card.hass = initial;
+  assert.equal(renders, 1);
+  card.hass = { user: { id: "user-1" }, callWS: async () => ({}) };
+  assert.equal(renders, 1, "una actualización de hass no debe sustituir el DOM activo");
+  assert.equal(card._experimental.query, "Pinto");
+  card.hass = { user: { id: "user-2" }, callWS: async () => ({}) };
+  assert.equal(renders, 2, "el cambio de usuario sí obliga a reconstruir");
+  assert.equal(card._experimental, null);
+});
+
 test("modo experimental consulta estado y no registra automaticamente", async () => {
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();
