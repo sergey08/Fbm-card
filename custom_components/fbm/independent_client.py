@@ -159,6 +159,19 @@ class IndependentClient:
             return await adapter.team_schedule(team_id, start, end, round_id)
         return await self._cached_query(("horarios", team_id, start.isoformat(), end.isoformat(), round_id or ""), query, ttl=60)
 
+    async def async_team_schedule_probe(self, team_id: str, start: date, end: date,
+                                        round_id: str | None = None) -> dict:
+        """Explicit DEV-only diagnostic, never caches personal match data."""
+        self._validate_team_id(team_id)
+        if type(start) is not date or type(end) is not date or start > end or (end - start).days > 366:
+            raise ValueError("Rango de fechas no valido")
+        if round_id is not None:
+            self._validate_team_id(round_id)
+        async with self._lock:
+            if self._adapter is None or not self._adapter.session_is_usable():
+                raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
+            return await self._adapter.team_schedule_probe(team_id, start, end, round_id)
+
     async def async_team_group_identity(self, team_id: str) -> dict:
         """Read official current group; do not enable follow or infer season."""
         self._validate_team_id(team_id)
