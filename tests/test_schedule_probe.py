@@ -26,6 +26,19 @@ class ScheduleProbeTests(unittest.TestCase):
         self.assertEqual(result["counts"], {"jornadas": 1})
         self.assertEqual(result["entry_fields"], ["idJornada", "partidos"])
 
+    def test_apk_camelcase_fields_reported_without_values(self):
+        payload = {"error": "", "jornadaActual": 4, "partidos": [
+            {"idPartido": "private-id", "nombreEquipoLocal": "name-local",
+             "nombreEquipoVisitante": "name-visitor",
+             "numeroJornada": 5, "resultados": {"resultadoLocal": "41"}}
+        ]}
+        result = mod.summarize_schedule_shape(payload)
+        self.assertEqual(result["counts"]["partidos"], 1)
+        self.assertIn("idPartido", result["entry_fields"])
+        self.assertIn("nombreEquipoLocal", result["entry_fields"])
+        self.assertNotIn("private-id", str(result))
+        self.assertNotIn("name-local", str(result))
+
     def test_private_error_text_never_leaks(self):
         result = mod.summarize_schedule_shape({
             "error": "private-identity", "resultado": {"token": "secret"}})
