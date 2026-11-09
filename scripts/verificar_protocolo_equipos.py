@@ -30,13 +30,16 @@ def verify(data):
     literal(5684274, "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx")
     if data[5684278] != 0x5b or u16(5684280) != 0x67c0:
         raise ValueError("Asignacion de URL inesperada")
-    for field_offset, url_offset in ((5678882, 5678914), (5679646, 5679678),
+    for field_offset, url_offset in ((5678102, 5678134), (5678882, 5678914), (5679646, 5679678),
                                      (5680482, 5680514), (5681318, 5681350)):
         if data[field_offset] != 0x54 or u16(field_offset + 2) != 0x67c0:
             raise ValueError("Lectura de URL inesperada")
         if data[url_offset] != 0x71 or u16(url_offset + 2) != 0x7a77:
             raise ValueError("Invocacion de URL inesperada")
-    for offset, text in ((5678948, "accion"), (5678952, "fasesGrupos"),
+    for offset, text in ((5678168, "accion"), (5678172, "clasificacion"),
+                         (5678182, "id_dispositivo"), (5678206, "key"),
+                         (5678298, "id_grupo"), (5678312, "tipo_fase"),
+                         (5678948, "accion"), (5678952, "fasesGrupos"),
                          (5678962, "id_dispositivo"), (5678986, "key"),
                          (5679078, "id_equipo"), (5679716, "horariosFecha"),
                          (5680552, "horariosJornadas"), (5681388, "detalleEquipo")):
@@ -62,7 +65,7 @@ def main():
                 verify(apk.read("classes2.dex"))
     except (OSError, KeyError, ValueError, zipfile.BadZipFile):
         parser.exit(1, "No se pudo verificar el APK indicado.\n")
-    print("Evidencia verificada: equipo.ashx, fasesGrupos, horariosFecha, horariosJornadas y detalleEquipo.")
+    print("Evidencia verificada: equipo.ashx, clasificacion, fasesGrupos, horariosFecha, horariosJornadas y detalleEquipo.")
 
 
 if __name__ == "__main__":

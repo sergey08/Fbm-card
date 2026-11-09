@@ -261,6 +261,34 @@ class RegistrationDiagnosticTests(unittest.TestCase):
                 self.assertEqual(module.main(args), 1)
                 access.assert_not_called()
 
+    def test_classification_fields_require_unique_group_and_phase_type(self):
+        phases = {'error': '', 'faseActual': 'phase', 'grupoActual': 'group', 'listaFasesGrupo': [
+            {'IdFase': 'phase', 'TipoFase': 'LIGA', 'Grupos': [{'IdGrupo': 'group'}]}]}
+        self.assertEqual(module.classification_fields('device', 'secret', phases), {
+            'accion': 'clasificacion', 'id_dispositivo': 'device', 'key': 'secret',
+            'id_grupo': 'group', 'tipo_fase': 'LIGA'})
+        phases['listaFasesGrupo'][0]['Grupos'].append({'IdGrupo': 'group'})
+        with self.assertRaises(ValueError): module.classification_fields('device', 'secret', phases)
+
+    def test_classification_is_explicit_and_does_not_expose_secrets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            identity, candidate, team, target = (Path(tmp) / n for n in ('identity.json', 'candidate.json', 'team.json', 'classification.json'))
+            module.create_identity(identity)
+            module.save_candidate(candidate, module.load_identity(identity), {'id_dispositivo': 'private-device'})
+            team.write_text(json.dumps({'Id': 'team'}), encoding='utf-8')
+            phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [
+                {'IdFase': 'f', 'TipoFase': 'LIGA', 'Grupos': [{'IdGrupo': 'g'}]}]}
+            args = ['--android-release', '16', '--identidad', str(identity), '--candidato', str(candidate), '--equipo', str(team), '--clasificacion', '--guardar-clasificacion', str(target)]
+            with patch.object(module, 'post_device_form', return_value={'error': '', 'key': 'private-key'}) as access, patch.object(module, 'phases_once', return_value=phases), patch.object(module, 'schedule_once', return_value={'error': '', 'clasificacion': []}) as query, contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(module.main(args), 1)
+                self.assertEqual(query.call_args.args[0]['accion'], 'clasificacion')
+                self.assertIn('elementos=0', out.getvalue())
+                self.assertNotIn('private-key', out.getvalue())
+                self.assertNotIn('private-device', out.getvalue())
+                access.reset_mock()
+                self.assertEqual(module.main(args), 1)
+                access.assert_not_called()
+
     def test_transport_failure_is_classified_without_secrets(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
             path = Path(tmp) / 'identity.json'

@@ -221,6 +221,26 @@ def schedule_once(fields):
     return result
 
 
+def classification_fields(device_id, key, phases):
+    """Clasificacion de grupo actual; no deduce grupos ni tipo de fase."""
+    if not isinstance(phases, dict) or phases.get("error") != "":
+        raise ValueError("Respuesta de fases ambigua")
+    phase_id, group_id, items = phases.get("faseActual"), phases.get("grupoActual"), phases.get("listaFasesGrupo")
+    if not all(isinstance(x, str) and x.strip() for x in (device_id, key, phase_id, group_id)) or not isinstance(items, list):
+        raise ValueError("Faltan datos para clasificacion")
+    phases_found = [p for p in items if isinstance(p, dict) and p.get("IdFase") == phase_id]
+    if len(phases_found) != 1:
+        raise ValueError("Fase ambigua")
+    phase = phases_found[0]
+    groups, phase_type = phase.get("Grupos"), phase.get("TipoFase")
+    if not isinstance(groups, list) or sum(isinstance(g, dict) and g.get("IdGrupo") == group_id for g in groups) != 1:
+        raise ValueError("Grupo ambiguo")
+    if not isinstance(phase_type, str) or not phase_type.strip():
+        raise ValueError("Tipo de fase no disponible")
+    return {"accion": "clasificacion", "id_dispositivo": device_id, "key": key,
+            "id_grupo": group_id, "tipo_fase": phase_type}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--android-release", required=True,
@@ -239,6 +259,7 @@ def main(argv=None):
     parser.add_argument("--desde", help="Primera fecha ISO AAAA-MM-DD")
     parser.add_argument("--hasta", help="Ultima fecha ISO AAAA-MM-DD")
     parser.add_argument("--guardar-horarios", type=Path, help="Archivo nuevo para revision privada")
+    parser.add_argument("--guardar-clasificacion", type=Path, help="Archivo nuevo para revision privada")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--crear-identidad", action="store_true",
                         help="Crea una identidad local, sin red y sin sobrescribir")
@@ -252,7 +273,13 @@ def main(argv=None):
                         help="Autoriza acceso y una consulta experimental de fases del equipo")
     action.add_argument("--horarios", action="store_true",
                         help="Autoriza acceso, fases y una consulta experimental de horarios")
+    action.add_argument("--clasificacion", action="store_true",
+                        help="Autoriza acceso, fases y una consulta experimental de clasificacion")
     args = parser.parse_args(argv)
+    if args.clasificacion and (not args.equipo or not args.candidato):
+        parser.error("--clasificacion requiere --equipo y --candidato")
+    if args.guardar_clasificacion and not args.clasificacion:
+        parser.error("--guardar-clasificacion requiere --clasificacion")
     if args.horarios and (not args.equipo or not args.candidato or not args.desde or not args.hasta):
         parser.error("--horarios requiere --equipo, --candidato, --desde y --hasta")
     if (args.desde or args.hasta or args.guardar_horarios) and not args.horarios:
@@ -270,7 +297,7 @@ def main(argv=None):
         parser.error("--guardar-equipos requiere --buscar-equipo")
     if args.guardar_error and not (args.enviar or args.acceder):
         parser.error("--guardar-error requiere --enviar o --acceder")
-    if args.candidato and not (args.enviar or args.acceder or args.buscar_equipo is not None or args.fases or args.horarios):
+    if args.candidato and not (args.enviar or args.acceder or args.buscar_equipo is not None or args.fases or args.horarios or args.clasificacion):
         parser.error("--candidato requiere --enviar o --acceder")
     if (args.acceder or args.buscar_equipo is not None or args.fases) and not args.candidato:
         parser.error("El acceso o busqueda requiere --candidato")
@@ -280,9 +307,9 @@ def main(argv=None):
         parser.error("La version de Android no puede estar vacia")
     if args.fases and not args.equipo:
         parser.error("--fases requiere --equipo")
-    if args.equipo and not (args.fases or args.horarios):
-        parser.error("--equipo requiere --fases o --horarios")
-    if not args.crear_identidad and not args.enviar and not args.acceder and args.buscar_equipo is None and not args.fases and not args.horarios:
+    if args.equipo and not (args.fases or args.horarios or args.clasificacion):
+        parser.error("--equipo requiere --fases, --horarios o --clasificacion")
+    if not args.crear_identidad and not args.enviar and not args.acceder and args.buscar_equipo is None and not args.fases and not args.horarios and not args.clasificacion:
         print("SIN RED: formulario previsto: accion=registrar, uid=<privado>, "
               "plataforma=Android <version>, tipo_dispositivo=mobile, version=5.0.42")
         print("Crea una identidad propia con --identidad RUTA --crear-identidad; "
@@ -302,6 +329,9 @@ def main(argv=None):
     if args.guardar_horarios and os.path.lexists(args.guardar_horarios):
         print("El archivo de horarios ya existe; no se envio ninguna peticion.", file=sys.stderr)
         return 1
+    if args.guardar_clasificacion and os.path.lexists(args.guardar_clasificacion):
+        print("El archivo de clasificacion ya existe; no se envio ninguna peticion.", file=sys.stderr)
+        return 1
     if args.enviar and args.candidato and os.path.lexists(args.candidato):
         print("El archivo de candidato ya existe; no se envio ninguna peticion.", file=sys.stderr)
         return 1
@@ -318,7 +348,7 @@ def main(argv=None):
     except (OSError, ValueError):
         print("Identidad local inaccesible o invalida; no se envio ninguna peticion.", file=sys.stderr)
         return 1
-    if args.fases or args.horarios:
+    if args.fases or args.horarios or args.clasificacion:
         try:
             with open(args.equipo, encoding="utf-8") as source:
                 team = json.load(source)
@@ -329,7 +359,7 @@ def main(argv=None):
             print("Equipo seleccionado inaccesible o invalido; no se envio ninguna peticion.", file=sys.stderr)
             return 1
     try:
-        if args.acceder or args.buscar_equipo is not None or args.fases or args.horarios:
+        if args.acceder or args.buscar_equipo is not None or args.fases or args.horarios or args.clasificacion:
             try:
                 device_id = load_candidate(args.candidato, uid)
             except (OSError, ValueError):
@@ -364,7 +394,7 @@ def main(argv=None):
             print("No se pudo guardar el candidato; no se sobrescribio ningun archivo.", file=sys.stderr)
         else:
             print("Identificador candidato guardado localmente; aun no esta validado.")
-    if args.buscar_equipo is not None or args.fases or args.horarios:
+    if args.buscar_equipo is not None or args.fases or args.horarios or args.clasificacion:
         key = response.get("key")
         if response.get("error") != "" or not isinstance(key, str) or not key.strip():
             print("Busqueda cancelada: respuesta de acceso ambigua; valores ocultos.", file=sys.stderr)
@@ -374,9 +404,32 @@ def main(argv=None):
             print("Busqueda cancelada: identificador de acceso distinto o invalido.", file=sys.stderr)
             return 1
         try:
-            result = phases_once(device_id, key, team_id) if (args.fases or args.horarios) else search_once(device_id, key, args.buscar_equipo.strip())
+            result = phases_once(device_id, key, team_id) if (args.fases or args.horarios or args.clasificacion) else search_once(device_id, key, args.buscar_equipo.strip())
         except RuntimeError as exc:
             print("Busqueda no validada: " + str(exc) + "; detalles ocultos.", file=sys.stderr)
+            return 1
+        if args.clasificacion:
+            try:
+                form = classification_fields(device_id, key, result)
+                result = schedule_once(form)
+            except (ValueError, RuntimeError):
+                print("Clasificacion no validada: fase o grupo ambiguos, o fallo de consulta.", file=sys.stderr)
+                return 1
+            if args.guardar_clasificacion:
+                try:
+                    fd = os.open(args.guardar_clasificacion, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "w", encoding="utf-8") as output:
+                        json.dump(result, output, ensure_ascii=False, indent=2)
+                        output.write("\n")
+                except OSError:
+                    print("No se pudo guardar la respuesta de clasificacion.", file=sys.stderr)
+                else:
+                    print("Clasificacion guardada localmente; revisala antes de compartirla.")
+            rows = result.get("clasificacion")
+            count = str(len(rows)) if isinstance(rows, list) else "no_disponible"
+            print("Respuesta de clasificacion: error=" + field_shape(result, "error") +
+                  "; clasificacion=" + field_shape(result, "clasificacion") + "; elementos=" + count +
+                  "; marcador_error=" + error_marker(result) + ". Valores ocultos; resultado no validado.")
             return 1
         if args.horarios:
             try:
