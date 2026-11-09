@@ -162,11 +162,12 @@ class IndependentClient:
     async def async_team_group_identity(self, team_id: str) -> dict:
         """Read official current group; do not enable follow or infer season."""
         self._validate_team_id(team_id)
-        return await self._cached_query(
-            ("grupo_actual", team_id),
-            lambda adapter: adapter.team_group_identity(team_id),
-            ttl=120,
-        )
+        # No query cache here: this verification must never look fresher
+        # than it is, particularly before enabling persistent following.
+        async with self._lock:
+            if self._adapter is None or not self._adapter.session_is_usable():
+                raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
+            return await self._adapter.team_group_identity(team_id)
 
     async def async_team_standings(self, team_id: str) -> dict:
         self._validate_team_id(team_id)
