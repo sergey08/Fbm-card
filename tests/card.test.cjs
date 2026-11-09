@@ -142,6 +142,37 @@ test("buscador genera configuración portable de equipo fijo sin credenciales", 
   assert.equal(fixed._restoreExperimentalTeam("entrada").categoria,"Alevín");
 });
 
+test("cada copia de un favorito crea una tarjeta con identificador independiente", () => {
+  const {elements} = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config={tipo_tarjeta:"busqueda",modo_experimental:true};
+  const team={id:"equipo-uno",nombre:"Pinto",club:"Club",categoria:"Alevín",temporada:"26/27"};
+  const first=card._fixedCardYaml(team);
+  const second=card._fixedCardYaml(team);
+  const id = yaml => yaml.match(/^id_tarjeta:\s*(.+)$/m)?.[1];
+  assert.ok(id(first));
+  assert.notEqual(id(first),id(second));
+  assert.match(first,/tipo_tarjeta: equipo/);
+  assert.match(second,/equipo_fijo:/);
+});
+
+test("cambiar configuración fija invalida estado y no mezcla clasificaciones", () => {
+  const {elements}=loadCard();
+  const Card=elements.get("fbm-card");
+  const card=new Card();
+  card._render=()=>{};
+  const a={id:"uno",nombre:"A",club:"C",categoria:"Alevín",temporada:"26/27"};
+  const b={...a,id:"dos",nombre:"B"};
+  card.setConfig({modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"tarjeta-unica",equipo_fijo:a});
+  card._experimentalState().standings=[{equipo:"A",posicion:1}];
+  card._fixedInit=true;
+  card.setConfig({modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"tarjeta-unica",equipo_fijo:b});
+  assert.equal(card._experimentalState().standings,null);
+  assert.equal(card._restoreExperimentalTeam("entrada").id,"dos");
+  assert.equal(card._fixedInit,false);
+  assert.throws(()=>card.setConfig({modo_experimental:true,tipo_tarjeta:"equipo"}),/id_tarjeta distinto/);
+});
+
 test("tarjeta fija guarda equipo separado por tarjeta y recupera clasificación al abrir", async () => {
   const { elements, sandbox } = loadCard();
   const store = new Map();
