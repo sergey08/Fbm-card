@@ -394,11 +394,14 @@ class FBMCard extends HTMLElement {
           if (!state.selected) throw new Error("Elige un equipo.");
           state.players = null; state.playersTeamId = ""; state.playersEntryId = "";
           remoteAttempted = true;
-          const selectedTeam = state.selected;
+          const selectedTeam = state.selected, selectedEntry = state.entry;
           const data = await this._hass.callWS({ type: "fbm/team/players", ...common, equipo: selectedTeam });
-          if (!Array.isArray(data.jugadores)) throw new Error("Plantilla FBM no válida.");
+          // Reject responses arriving after a card changed team or entry.
+          if (state.selected !== selectedTeam || state.entry !== selectedEntry) return;
+          if (!data || !Array.isArray(data.jugadores)) throw new Error("Plantilla FBM no válida.");
           state.players = data.jugadores; state.playersTeamId = selectedTeam;
-          state.playersEntryId = state.entry;
+          state.playersEntryId = selectedEntry;
+          state.playerDetail = null; state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
           state.message = data.jugadores.length ? "Plantilla consultada desde FBM." : "FBM devolvió una plantilla vacía para este equipo.";
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
