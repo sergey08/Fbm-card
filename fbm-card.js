@@ -335,7 +335,7 @@ class FBMCard extends HTMLElement {
         select.addEventListener("change", event => {
           state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
           const selectedTeam = state.teams.find(team => team.id === state.selected);
-          if (selectedTeam) this._saveExperimentalTeam(state.entry, selectedTeam);
+          if (selectedTeam && this._config.tipo_tarjeta !== "equipo") this._saveExperimentalTeam(state.entry, selectedTeam);
           else if (!state.selected) this._clearExperimentalTeam(state.entry);
           this._render();
         });
