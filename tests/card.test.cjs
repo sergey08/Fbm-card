@@ -72,6 +72,54 @@ test("equipo seleccionado en buscador se comparte con tarjeta fija del mismo usu
   assert.equal(fixed._restoreRecentTeam("entry-a"),null);
 });
 
+test("favoritos experimentales múltiples se comparten con tarjetas fijas del mismo usuario", () => {
+  const {elements,sandbox} = loadCard();
+  const memory = new Map();
+  sandbox.window.localStorage = {
+    getItem:key=>memory.get(key)??null,
+    setItem:(key,value)=>memory.set(key,value),
+    removeItem:key=>memory.delete(key)
+  };
+  const Card=elements.get("fbm-card");
+  const search=new Card();
+  search._config={modo_experimental:true,tipo_tarjeta:"busqueda",id_tarjeta:"buscar"};
+  search._hass={user:{id:"user-a"}};
+  const a={id:"id-a",nombre:"Equipo A",club:"Club A",categoria:"Alevín",temporada:"26/27"};
+  const b={id:"id-b",nombre:"Equipo B",club:"Club B",categoria:"Infantil",temporada:"26/27"};
+  assert.equal(search._toggleExperimentalFavorite("entry",a),true);
+  assert.equal(search._toggleExperimentalFavorite("entry",b),true);
+  assert.equal(search._experimentalFavorites("entry").length,2);
+  assert.equal(search._toggleExperimentalFavorite("entry",a),true);
+  assert.equal(search._experimentalFavorites("entry")[0].id,"id-b");
+  const fixed=new Card();
+  fixed._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"fijo-1"};
+  fixed._hass={user:{id:"user-a"}};
+  assert.equal(fixed._experimentalFavorites("entry").length,1);
+  fixed._saveExperimentalTeam("entry",b);
+  const another=new Card();
+  another._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"fijo-2"};
+  another._hass={user:{id:"user-a"}};
+  assert.equal(another._restoreExperimentalTeam("entry"),null);
+  assert.equal(another._experimentalFavorites("entry")[0].id,"id-b");
+  another._hass={user:{id:"user-b"}};
+  assert.equal(another._experimentalFavorites("entry").length,0);
+  assert.equal(another._restoreExperimentalTeam("entry"),null);
+});
+
+test("los favoritos no contienen claves privadas ni aceptan equipos inválidos", () => {
+  const {elements,sandbox}=loadCard();
+  const memory=new Map();
+  sandbox.window.localStorage={getItem:key=>memory.get(key)??null,setItem:(key,val)=>memory.set(key,val)};
+  const card=new (elements.get("fbm-card"))();
+  card._config={tipo_tarjeta:"busqueda"};
+  card._hass={user:{id:"user-a"}};
+  const team={id:"id-a",nombre:"Equipo A",club:"C",categoria:"Alevín",temporada:"26/27",key:"privada",uid:"secreto"};
+  assert.equal(card._toggleExperimentalFavorite("entry",team),true);
+  assert.doesNotMatch([...memory.values()].join(" "),/privada|secreto|uid/);
+  assert.equal(card._toggleExperimentalFavorite("entry",{id:"x"}),false);
+  assert.equal(card._experimentalFavorites("entry").length,1);
+});
+
 test("buscador genera configuración portable de equipo fijo sin credenciales", () => {
   const {elements} = loadCard();
   const card = new (elements.get("fbm-card"))();
