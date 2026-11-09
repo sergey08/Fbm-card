@@ -36,6 +36,40 @@ id_tarjeta: mis_equipos
 
 No añadas manualmente otro recurso `fbm-card.js` si la integración ya ha registrado `/fbm_static/fbm-card.js`: dos versiones del mismo elemento personalizado pueden interferir en el navegador.
 
+## Dos tipos de tarjeta (DEV)
+
+**Buscador de equipos**: consulta y selecciona equipos en el servicio oficial FBM, con categoría y temporada. No crea una identidad por abrir la tarjeta.
+
+```yaml
+type: custom:fbm-card
+modo_experimental: true
+tipo_tarjeta: busqueda
+title: Buscar equipos FBM
+id_tarjeta: buscador_fbm
+```
+
+Después de elegir un equipo, usa **Copiar configuración de tarjeta fija**, crea otra tarjeta manual y pega el YAML generado. Así el equipo permanece en la configuración del dashboard, incluso desde otro navegador o dispositivo con permiso para ver ese panel.
+
+**Equipo fijo**: también se puede añadir una tarjeta vacía de este tipo; busca el equipo y pulsa «Fijar este equipo en la tarjeta». Si lo haces así, la selección se guarda solo en el navegador del usuario. Para persistencia en Home Assistant entre dispositivos, utiliza el YAML generado por el buscador:
+
+```yaml
+type: custom:fbm-card
+modo_experimental: true
+tipo_tarjeta: equipo
+title: Mi equipo
+id_tarjeta: mi_equipo_fijo
+equipo_fijo:
+  id: "ID_OFICIAL_DEL_EQUIPO"
+  nombre: "Nombre oficial"
+  club: "Club"
+  categoria: "Categoría"
+  temporada: "26/27"
+```
+
+Los campos del ejemplo son marcadores: **no funcionan hasta sustituirlos por los datos reales del equipo obtenidos en la búsqueda**. El botón de copia genera esos valores automáticamente y no incluye credenciales privadas.
+
+Al abrir la tarjeta fija, se comprueba el estado de la integración y se consulta la clasificación **si la sesión de invitado continúa vigente**. Tras un reinicio o caducidad, pulsa **Conectar** para recuperar la sesión existente; no vuelvas a crear ni registrar otra identidad. El calendario y los horarios siguen fuera del alcance v0.1.
+
 ## Seguridad y límites
 
 El registro se envía exclusivamente a los endpoints oficiales de Afición FBM; la identidad del dispositivo se guarda en almacenamiento privado de Home Assistant. La clave de sesión se mantiene en memoria; no se incluyen credenciales en mensajes, logs, URL o preferencias del navegador. La tarjeta no crea identidades ni se registra automáticamente. Las consultas se realizan cuando el usuario pulsa los botones y aplican caché de corta duración.
