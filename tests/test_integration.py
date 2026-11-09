@@ -26,6 +26,8 @@ module("homeassistant.components.lovelace")
 module("homeassistant.components.lovelace.const", DOMAIN="lovelace")
 module("homeassistant.core", HomeAssistant=object)
 module("homeassistant.config_entries", ConfigEntry=object)
+module("homeassistant.helpers")
+module("homeassistant.helpers.storage", Store=MagicMock())
 module("custom_components")
 module("custom_components.fbm").__path__ = [str(PKG)]
 
@@ -36,6 +38,23 @@ spec = importlib.util.spec_from_file_location(
 fbm = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = fbm
 spec.loader.exec_module(fbm)
+
+
+class IdentitySetupTests(unittest.TestCase):
+    def test_entry_creates_manager_without_loading_or_saving_identity(self):
+        hass = MagicMock()
+        hass.data = {}
+        entry = types.SimpleNamespace(entry_id='example')
+        store = MagicMock()
+        with patch.object(fbm, 'Store', return_value=store) as factory:
+            coro = fbm.async_setup_entry(hass, entry)
+            with self.assertRaises(StopIteration) as result:
+                coro.send(None)
+        self.assertTrue(result.exception.value)
+        factory.assert_called_once_with(hass, 1, 'fbm.identity.example', private=True, atomic_writes=True)
+        store.async_load.assert_not_called()
+        store.async_save.assert_not_called()
+        self.assertIn('identidad_independiente', hass.data['fbm']['example'])
 
 
 class ResourceTests(unittest.IsolatedAsyncioTestCase):

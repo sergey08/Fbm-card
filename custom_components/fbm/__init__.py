@@ -9,10 +9,11 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.storage import Store
 
 from .const import CARD_URL, DOMAIN
 from .query_cache import QueryCache
-from .query_cache import QueryCache
+from .independent_identity import IndependentIdentityStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,11 +54,17 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Preparar la integración sin afirmar que existe conexión a la API."""
     recurso_registrado = await _async_register_lovelace_resource(hass)
+    identity_storage = Store(hass, 1, f"{DOMAIN}.identity.{entry.entry_id}", private=True, atomic_writes=True)
+
+    async def identity_file_exists() -> bool:
+        return await hass.async_add_executor_job(Path(identity_storage.path).exists)
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "estado": "pendiente_validacion_api_oficial",
         "recurso_lovelace_registrado": recurso_registrado,
         "cache": QueryCache(),
         "cache_consultas": QueryCache(ttl_seconds=300, max_entries=128),
+        "identidad_independiente": IndependentIdentityStore(identity_storage, async_exists=identity_file_exists),
     }
     return True
 
