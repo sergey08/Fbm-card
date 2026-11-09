@@ -25,3 +25,10 @@ El conector Home Assistant ofrece `ha_get_state` para estado y atributos de enti
 5. Tarjetas lectoras del almacén y favoritos solo visuales; mantener búsqueda en tiempo real separada. Probar extremo a extremo con HA DEV.
 
 No dar por desplegado ni operativo nada de los puntos pendientes.
+
+## 09/11/2026 — Consulta oficial previa al seguimiento
+- Nuevo método `AficionFBMAdapter.team_group_identity(team_id)`: solicita una sola vez `fasesGrupos` al backend oficial de Afición FBM y reutiliza `current_phase_group`/`classification_selection` para comprobar pertenencia al grupo actual y tipo de fase. Devuelve identificadores oficiales de equipo, fase y grupo, y nombres, **sin datos de sesión**.
+- Se expone como `fbm/team/group_identity` en WebSocket para administradores, con `entry_id` y `equipo`. Es exclusivamente de lectura: no sigue grupos, no crea sensores ni modifica tarjetas. Este método no usa caché, para evitar antigüedad oculta.
+- `season_id: null` y `season_verified: false` son intencionados: la respuesta de fases comprobada no acredita la identidad de temporada. El texto de temporada en resultados de búsqueda no puede convertirse en un ID oficial por suposición.
+- Se añadieron pruebas del origen de los IDs, de permisos de administrador, validación del equipo y ausencia de caché silenciosa. La API real de Home Assistant y la sesión FBM siguen sin prueba E2E con este nuevo comando.
+- **Puerta de seguridad:** el coordinador de grupos y su SQLite permanecen aislados; sin ID oficial de temporada validado no debe habilitarse el seguimiento persistente en HA ni una sincronización programada. No modificar el esquema de grupos para adoptar el nombre de temporada como ID.
