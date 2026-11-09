@@ -60,7 +60,7 @@ class IdentitySetupTests(unittest.TestCase):
         self.assertEqual(factory.call_count, 2)
         factory.assert_any_call(hass, 1, 'fbm.identity.example', private=True, atomic_writes=True)
         factory.assert_any_call(hass, 1, 'fbm.recovery.example', private=True, atomic_writes=True)
-        store.async_load.assert_not_called()
+        store.async_load.assert_called_once()
         store.async_save.assert_not_called()
         self.assertIn('identidad_independiente', hass.data['fbm']['example'])
         self.assertIn('grupos_sqlite_path', hass.data['fbm']['example'])
