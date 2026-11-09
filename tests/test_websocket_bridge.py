@@ -45,13 +45,14 @@ class BridgeTests(unittest.TestCase):
         self.client = types.SimpleNamespace(async_register=AsyncMock(), async_recover_registration=AsyncMock(), async_search_teams=AsyncMock(return_value=[{'nombre': 'A'}]),
             async_team_phase_options=AsyncMock(return_value={'nombre_fase': 'Final', 'rondas': [{'id': 'r', 'nombre': 'Final'}]}),
             async_team_schedule=AsyncMock(return_value={'partidos': []}),
-            async_team_standings=AsyncMock(return_value={'clasificacion': []}))
+            async_team_standings=AsyncMock(return_value={'clasificacion': []}),
+            async_team_group_identity=AsyncMock(return_value={'group_id':'g','season_id':None,'season_verified':False}))
         self.hass = types.SimpleNamespace(data={'fbm': {'entry': {'cliente_independiente': self.client}}})
         self.connection = types.SimpleNamespace(user=types.SimpleNamespace(is_admin=True), send_result=MagicMock(), send_error=MagicMock())
 
     def test_admin_required_for_all_commands(self):
         self.connection.user.is_admin = False
-        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings):
+        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings, module.ws_group_identity):
             with self.subTest(command=command), self.assertRaises(PermissionError):
                 run_immediate(command(self.hass, self.connection, {'id': 1, 'entry_id': 'entry'}))
         self.client.async_register.assert_not_awaited()
@@ -92,6 +93,17 @@ class BridgeTests(unittest.TestCase):
         self.client.async_team_phase_options.assert_awaited_once_with('team')
         run_immediate(module.ws_schedule_round(self.hass, self.connection, {'id': 2, 'entry_id': 'entry', 'equipo': 'team', 'ronda': 'r', 'desde': '2026-11-01', 'hasta': '2026-12-31'}))
         self.client.async_team_schedule.assert_awaited_once_with('team', date(2026, 11, 1), date(2026, 12, 31), 'r')
+
+    def test_group_identity_is_read_only_and_requires_valid_team(self):
+        run_immediate(module.ws_group_identity(self.hass, self.connection,
+            {'id': 9, 'entry_id': 'entry', 'equipo': 'official-team-id'}))
+        self.client.async_team_group_identity.assert_awaited_once_with('official-team-id')
+        self.connection.send_result.assert_called_once_with(
+            9, {'group_id':'g','season_id':None,'season_verified':False})
+        run_immediate(module.ws_group_identity(self.hass, self.connection,
+            {'id': 10, 'entry_id': 'entry', 'equipo': '  '}))
+        self.connection.send_error.assert_called_once()
+        self.assertEqual(self.client.async_team_group_identity.await_count, 1)
 
     def test_standings_request_is_explicit_and_validated(self):
         run_immediate(module.ws_standings(self.hass, self.connection, {'id': 1, 'entry_id': 'entry', 'equipo': 'team'}))
