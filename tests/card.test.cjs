@@ -50,6 +50,41 @@ test("el campo de búsqueda conserva foco y texto cuando Home Assistant actualiz
   assert.equal(card._experimental, null);
 });
 
+test("tarjeta fija guarda equipo separado por tarjeta y recupera clasificación al abrir", async () => {
+  const { elements, sandbox } = loadCard();
+  const store = new Map();
+  sandbox.window.localStorage = {
+    getItem: key => store.get(key) ?? null,
+    setItem: (key, value) => store.set(key, value),
+    removeItem: key => store.delete(key),
+  };
+  const Card = elements.get("fbm-card");
+  const card = new Card();
+  card._config = {modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"equipo-a"};
+  card._hass = {user:{id:"usuario"},callWS:async msg => {
+    if (msg.type === "fbm/client/entries") return {entries:["entrada"]};
+    if (msg.type === "fbm/client/status") return {identidad_creada:true,candidato_guardado:true,sesion_vigente:true};
+    if (msg.type === "fbm/team/standings") return {clasificacion:[{equipo:"A",posicion:1}]};
+    throw Error("Petición inesperada");
+  }};
+  card._render = () => {};
+  const state = card._experimentalState();
+  const team = {id:"equipo-id",nombre:"A",club:"C",categoria:"Infantil",temporada:"26/27"};
+  state.entry = "entrada"; state.status = {sesion_vigente:true}; state.teams=[team];state.selected=team.id;
+  await card._experimentalAction("fix_team");
+  assert.equal(card._restoreExperimentalTeam("entrada").id,team.id);
+  assert.equal(state.standings[0].posicion,1);
+  const separate = new Card();
+  separate._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"equipo-b"};
+  separate._hass=card._hass;
+  assert.equal(separate._restoreExperimentalTeam("entrada"),null);
+  const loaded = new Card();
+  loaded._config=card._config;loaded._hass=card._hass;loaded._render=()=>{};
+  await loaded._initializeFixed();
+  assert.equal(loaded._experimentalState().selected,team.id);
+  assert.equal(loaded._experimentalState().standings[0].posicion,1);
+});
+
 test("modo experimental consulta estado y no registra automaticamente", async () => {
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();
