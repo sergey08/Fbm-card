@@ -1,43 +1,64 @@
-"""Normalizacion conservadora de horarios de equipos observados en FBM."""
+"""Normalize schedule from FBM Afición 5.0.42 DTO fields, conservatively.
+
+The APK's EquipoPartidoDto/ResultadosDto expose camelCase fields. Keep the
+older experimental PascalCase mapping for compatibility, without mixing them.
+"""
 from __future__ import annotations
 
 
 class TeamScheduleError(ValueError):
-    """La respuesta de horarios no tiene la forma requerida."""
+    """Official schedule payload has an unrecognized or unsafe shape."""
 
 
 def normalize_team_schedule(response: object) -> dict:
-    """Interpreta solo los estados y marcadores observados; conserva el original."""
     if not isinstance(response, dict) or response.get("error") != "":
         raise TeamScheduleError("Respuesta de horarios ambigua o con error")
     matches, current_round = response.get("partidos"), response.get("jornadaActual")
     if not isinstance(matches, list) or type(current_round) is not int:
         raise TeamScheduleError("Faltan partidos o jornada actual")
-    required = {"IdPartido": "id", "NombreEquipoLocal": "local", "NombreEquipoVisitante": "visitante"}
-    optional = {"Fecha": "fecha", "Hora": "hora", "FechaHoraUTC": "fecha_hora_utc",
-                "CampoJuego": "campo", "DireccionCampo": "direccion", "Estado": "estado_oficial"}
+
+    required_variants = (
+        {"idPartido": "id", "nombreEquipoLocal": "local", "nombreEquipoVisitante": "visitante"},
+        {"IdPartido": "id", "NombreEquipoLocal": "local", "NombreEquipoVisitante": "visitante"},
+    )
+    optional_variants = (
+        {"fecha": "fecha", "hora": "hora", "fechaHoraUTC": "fecha_hora_utc",
+         "campoJuego": "campo", "direccionCampo": "direccion", "estado": "estado_oficial"},
+        {"Fecha": "fecha", "Hora": "hora", "FechaHoraUTC": "fecha_hora_utc",
+         "CampoJuego": "campo", "DireccionCampo": "direccion", "Estado": "estado_oficial"},
+    )
     normalized = []
     for item in matches:
-        if not isinstance(item, dict) or any(not isinstance(item.get(k), str) or not item[k].strip() for k in required):
-            raise TeamScheduleError("Partido sin identificador o nombres")
+        if not isinstance(item, dict):
+            raise TeamScheduleError("Partido inválido")
+        valid_variants = [
+            idx for idx, required in enumerate(required_variants)
+            if all(type(item.get(k)) is str and item[k].strip() for k in required)
+        ]
+        if len(valid_variants) != 1:
+            raise TeamScheduleError("Partido sin identificador único o equipos")
+        idx = valid_variants[0]
+        required, optional = required_variants[idx], optional_variants[idx]
         record = {out: item[name] for name, out in required.items()}
         for name, out in optional.items():
             value = item.get(name)
-            if value is not None and not isinstance(value, str):
+            if value is not None and type(value) is not str:
                 raise TeamScheduleError("Campo de partido inesperado")
             record[out] = value
-        number = item.get("NumeroJornada")
+        number = item.get("numeroJornada" if idx == 0 else "NumeroJornada")
         if number is not None and type(number) is not int:
-            raise TeamScheduleError("Numero de jornada no valido")
+            raise TeamScheduleError("Número de jornada no válido")
         record["jornada"] = number
         state = record["estado_oficial"]
         record["estado"] = {"Terminado": "finished", "No comenzado": "scheduled"}.get(state, "unknown")
-        results = item.get("Resultados")
+        results = item.get("resultados" if idx == 0 else "Resultados")
         record["marcador"] = None
         if record["estado"] == "finished" and isinstance(results, dict):
-            local, away = results.get("ResultadoLocal"), results.get("ResultadoVisitante")
-            if (isinstance(local, str) and isinstance(away, str)
-                    and local.isascii() and away.isascii() and local.isdecimal() and away.isdecimal()):
+            local, away = (results.get("resultadoLocal"), results.get("resultadoVisitante")) if idx == 0 else (
+                results.get("ResultadoLocal"), results.get("ResultadoVisitante"))
+            if (type(local) is str and type(away) is str and
+                    local.isascii() and away.isascii() and
+                    local.isdecimal() and away.isdecimal()):
                 record["marcador"] = {"local": int(local), "visitante": int(away)}
         normalized.append(record)
     return {"jornada_actual": current_round, "partidos": normalized}
