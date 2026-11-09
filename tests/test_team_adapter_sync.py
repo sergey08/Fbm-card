@@ -31,6 +31,35 @@ def run_immediate(coro):
 
 
 class TeamAdapterSyncTests(unittest.TestCase):
+    def test_official_group_identity_does_not_invent_season(self):
+        identity = identity_module.GuestIdentity.from_response(
+            'key', 'device', datetime.now(timezone.utc))
+        phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g',
+                  'listaFasesGrupo': [{'IdFase': 'f', 'NombreFase': 'Fase',
+                    'TipoFase': 'LIGA', 'Grupos': [{'IdGrupo': 'g', 'NombreGrupo': 'Grupo 16'}],
+                    'Rondas': []}]}
+        with patch.object(adapter_module.asyncio, 'to_thread',
+                          new=AsyncMock(return_value=phases)) as transport:
+            result = run_immediate(
+                adapter_module.AficionFBMAdapter(identity).team_group_identity('team'))
+        transport.assert_awaited_once()
+        self.assertEqual(transport.await_args.args[1]['accion'], 'fasesGrupos')
+        self.assertEqual(result['group_id'], 'g')
+        self.assertIsNone(result['season_id'])
+        self.assertFalse(result['season_verified'])
+        self.assertEqual(result['source'], 'FBM')
+        self.assertNotIn('key', result)
+        self.assertNotIn('device', str(result))
+
+    def test_live_group_identity_not_silently_cached(self):
+        adapter = types.SimpleNamespace(session_is_usable=lambda: True,
+            team_group_identity=AsyncMock(return_value={'group_id': 'g', 'season_id': None}))
+        client = independent_module.IndependentClient(types.SimpleNamespace())
+        client._adapter = adapter
+        run_immediate(client.async_team_group_identity('team'))
+        run_immediate(client.async_team_group_identity('team'))
+        self.assertEqual(adapter.team_group_identity.await_count, 2)
+
     def test_standings_calls_phases_then_classification(self):
         identity = identity_module.GuestIdentity.from_response('key', 'device', datetime.now(timezone.utc))
         phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [
