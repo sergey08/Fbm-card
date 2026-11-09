@@ -21,6 +21,7 @@ from .team_schedule import normalize_team_schedule
 from .team_standings import normalize_standings
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
+from .season_evidence import inspect_season_evidence
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -122,7 +123,9 @@ class AficionFBMAdapter:
         )
         current = current_phase_group(response)
         selection = classification_selection(response)
+        evidence = inspect_season_evidence(response, current["id_fase"], current["id_grupo"])
         return {
+            **evidence,
             "team_id": team_id,
             "phase_id": current["id_fase"],
             "group_id": current["id_grupo"],
