@@ -122,7 +122,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
   }
 
   _experimentalPreferenceKey(entryId) {
@@ -364,6 +364,16 @@ class FBMCard extends HTMLElement {
           if (state.rounds.length) request.ronda = state.round;
           remoteAttempted = true;
           state.schedule = await this._hass.callWS(request);
+        } else if (action === "players") {
+          if (!state.selected) throw new Error("Elige un equipo.");
+          state.players = null; state.playersTeamId = ""; state.playersEntryId = "";
+          remoteAttempted = true;
+          const selectedTeam = state.selected;
+          const data = await this._hass.callWS({ type: "fbm/team/players", ...common, equipo: selectedTeam });
+          if (!Array.isArray(data.jugadores)) throw new Error("Plantilla FBM no válida.");
+          state.players = data.jugadores; state.playersTeamId = selectedTeam;
+          state.playersEntryId = state.entry;
+          state.message = data.jugadores.length ? "Plantilla consultada desde FBM." : "FBM devolvió una plantilla vacía para este equipo.";
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
           remoteAttempted = true;
@@ -373,7 +383,7 @@ class FBMCard extends HTMLElement {
         }
       }
     } catch (_) {
-      if (remoteAttempted && ["register", "recover_registration", "connect", "search", "phases", "schedule", "standings"].includes(action) && state.entry) {
+      if (remoteAttempted && ["register", "recover_registration", "connect", "search", "phases", "schedule", "standings", "players"].includes(action) && state.entry) {
         try { state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry }); }
         catch (_) {
           state.status = { ...state.status, sesion_vigente: false };
@@ -481,7 +491,27 @@ class FBMCard extends HTMLElement {
           }
         }
         if (state.tab === "jugadores") {
-          card.append(this._element("p", "Plantilla pendiente: aún no disponemos de un listado de jugadores verificado a través de FBM. No se muestran nombres ni datos personales no confirmados.", "muted"));
+          button("Consultar jugadores FBM", "players", connected && !!pinned?.id);
+          const roster = state.playersEntryId === state.entry && state.playersTeamId === pinned?.id
+            ? state.players : null;
+          if (!Array.isArray(roster)) {
+            card.append(this._element("p", "Consulta la plantilla bajo demanda. Solo se muestran los datos que facilite oficialmente FBM.", "muted"));
+          } else if (!roster.length) {
+            card.append(this._element("p", "FBM no ha devuelto jugadores para esta consulta.", "muted"));
+          } else {
+            for (const player of roster) {
+              if (!player || typeof player.nombre !== "string") continue;
+              const item = this._element("div", "", "fbm-player");
+              item.append(this._element("strong", player.nombre));
+              const detail = [];
+              if (Number.isInteger(player.partidos_jugados)) detail.push("PJ " + player.partidos_jugados);
+              if (Number.isInteger(player.puntos_totales)) detail.push("Puntos " + player.puntos_totales);
+              if (typeof player.puntos_por_partido === "number" && Number.isFinite(player.puntos_por_partido))
+                detail.push("Media " + player.puntos_por_partido);
+              if (detail.length) item.append(this._element("p", detail.join(" · "), "muted"));
+              card.append(item);
+            }
+          }
         }
         const changeTeam = this._element("button", "Cambiar equipo");
         changeTeam.type = "button";
