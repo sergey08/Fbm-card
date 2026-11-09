@@ -105,6 +105,32 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(await fbm.async_setup(self.hass, {}))
         self.hass.http.async_register_static_paths.assert_not_awaited()
 
+    async def test_missing_card_registers_no_websocket_commands(self):
+        self.hass.http.async_register_static_paths = AsyncMock()
+        from homeassistant.components import websocket_api
+        with patch.object(pathlib.Path, "is_file", return_value=False), patch.object(
+            websocket_api, "async_register_command"
+        ) as register:
+            self.assertFalse(await fbm.async_setup(self.hass, {}))
+        register.assert_not_called()
+
+    async def test_setup_registers_expected_websocket_commands(self):
+        self.hass.http.async_register_static_paths = AsyncMock()
+        from homeassistant.components import websocket_api
+        expected = {
+            "ws_entries", "ws_status", "ws_create", "ws_register",
+            "ws_recover", "ws_connect", "ws_search", "ws_schedule",
+            "ws_phases", "ws_schedule_round", "ws_standings",
+        }
+        with patch.object(websocket_api, "async_register_command") as register:
+            self.assertTrue(await fbm.async_setup(self.hass, {}))
+        self.assertEqual(register.call_count, len(expected))
+        self.assertEqual(
+            {call.args[1].__name__ for call in register.call_args_list},
+            expected,
+        )
+        self.assertTrue(all(call.args[0] is self.hass for call in register.call_args_list))
+
     async def test_card_static_path_is_served(self):
         self.hass.http.async_register_static_paths = AsyncMock()
         self.assertTrue(await fbm.async_setup(self.hass, {}))
