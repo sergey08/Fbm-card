@@ -464,3 +464,9 @@ El usuario ejecutó acceso, fases y `horariosJornadas` para el equipo selecciona
 El resumen compartido muestra que la respuesta `horariosJornadas` incluye los 30 partidos del grupo, no solo los del equipo consultado. Aunque se pidieron fechas entre el 1 de noviembre y el 31 de diciembre de 2026, el resultado incluye partidos de octubre de 2026 y enero de 2027; no se debe asumir que el servidor aplique ese filtro a esta operación. `Resultados` contiene `ResultadoLocal` y `ResultadoVisitante` como cadenas y `ResultadosPeriodo` como lista; aún no se conocen los formatos ni las convenciones para partidos pendientes.
 
 El resumen local indica que los datos pueden corresponder al grupo y ofrece `--equipo` para filtrar opcionalmente por coincidencia exacta de nombre de local o visitante, sin alterar el archivo. Se trata de una coincidencia textual, no de una validación por identificador; no garantiza desambiguación si hay equipos homónimos. `00:00:00` se muestra tal como se recibió: no se presupone si es una hora real o un marcador de hora pendiente.
+
+### Estados y marcadores observados
+
+El usuario mostró seis partidos de su equipo. Cuatro estaban etiquetados `Terminado` y tenían `ResultadoLocal` y `ResultadoVisitante` como cadenas numéricas; dos tenían `Estado` igual a `No comenzado` y ambos resultados como `-`. Es una muestra concreta, no una especificación exhaustiva para directo, suspendidos o aplazados.
+
+El normalizador reconoce solo esos dos estados literales y conserva `estado_oficial`; cualquier otro estado es `unknown`. Solo crea un marcador cuando el estado es `Terminado` y ambos resultados son cadenas decimales ASCII completas; en los demás casos lo deja ausente (`None`). No interpreta parciales ni resultados en directo. El filtrado del resumen sigue siendo textual y los horarios `00:00:00` no se interpretan como hora confirmada o pendiente.
