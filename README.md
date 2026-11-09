@@ -78,6 +78,18 @@ Los campos del ejemplo son marcadores: **no funcionan hasta sustituirlos por los
 
 Al abrir la tarjeta fija, se comprueba el estado de la integración y se consulta la clasificación **si la sesión de invitado continúa vigente**. Tras un reinicio o caducidad, pulsa **Conectar** para recuperar la sesión existente; no vuelvas a crear ni registrar otra identidad. El calendario y los horarios siguen fuera del alcance v0.1.
 
+## Pestañas de equipo — desarrollo posterior a v0.1
+
+Las tarjetas con `tipo_tarjeta: equipo` muestran una cabecera independiente con nombre, categoría, club y temporada, además de tres pestañas: **Partidos**, **Clasificación** y **Jugadores**.
+
+- **Clasificación:** sección ya validada con datos reales de FBM. Permanece como pestaña inicial y puede actualizarse expresamente.
+- **Partidos / Fases:** permite consultar las fases y rondas oficiales disponibles para el equipo desde la sesión invitada. Las consultas de calendario y los enfrentamientos por jornada todavía NO están validados; esta pestaña no muestra partidos inventados.
+- **Partidos / Jornadas:** interfaz preparada para mostrar encuentros de **todo el grupo**, no solo los del equipo fijado. Se mantiene un aviso de «pendiente» mientras la consulta oficial `horariosJornadas` falle.
+- **Jugadores:** pestaña preparada; todavía sin lista de jugadores porque la integración no dispone de un endpoint oficial de plantilla validado. Evitar recopilar información personal adicional o mostrar datos no confirmados, especialmente de menores.
+- **Escudo:** opcional `logo_equipo: https://...` solo con una URL HTTPS alojada en un dominio de FBM admitido por el cliente; en ausencia de un escudo oficial verificado se muestra un icono neutro.
+
+Estas pestañas son **experimentales**. No se ha publicado una versión estable que incluya partidas, plantillas o escudos automáticos y no se debe anunciar esas funciones como disponibles hasta comprobar la fuente de datos y su respuesta en Home Assistant.
+
 ## Seguridad y límites
 
 El registro se envía exclusivamente a los endpoints oficiales de Afición FBM; la identidad del dispositivo se guarda en almacenamiento privado de Home Assistant. La clave de sesión se mantiene en memoria; no se incluyen credenciales en mensajes, logs, URL o preferencias del navegador. La tarjeta no crea identidades ni se registra automáticamente. Las consultas se realizan cuando el usuario pulsa los botones y aplican caché de corta duración.
