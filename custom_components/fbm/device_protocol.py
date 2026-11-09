@@ -32,22 +32,24 @@ def access_fields(*, uid: str, token_push: str, id_dispositivo: str,
             "tipo_dispositivo": tipo_dispositivo, "version": version}
 
 
-def extract_identity_fields(response: object) -> tuple[str, str]:
-    """Extrae la identidad del DTO observado en el APK sin asumir éxito HTTP.
+def extract_identity_fields(response: object, *, allow_duplicate: bool = False) -> tuple[str, str]:
+    """Valida el contrato conservador del registro invitado experimental.
 
-    Los nombres JSON aún requieren validación en una respuesta real. Por eso
-    se rechazan respuestas ambiguas o incompletas, sin generar valores.
+    El esquema de exito no se ha corroborado con un alta real. No se
+    aceptan alias de campos ni valores de error ambiguos.
     """
     if not isinstance(response, dict):
-        raise ValueError("La respuesta del dispositivo no es un objeto")
-    if response.get("error") not in (None, "", False, 0):
-        raise ValueError("El servidor comunicó un error de dispositivo")
+        raise ValueError("La respuesta de registro no es un objeto")
+    allowed_errors = ("", "uuid ya registrado") if allow_duplicate else ("",)
+    error = response.get("error")
+    if not isinstance(error, str) or error not in allowed_errors:
+        raise ValueError("Registro de dispositivo no validado")
     key = response.get("key")
-    device_id = response.get("idDispositivo")
-    if not isinstance(key, str) or not key:
-        raise ValueError("No se ha recibido una clave de dispositivo válida")
-    if not isinstance(device_id, str) or not device_id:
-        raise ValueError("No se ha recibido un identificador de dispositivo válido")
+    device_id = response.get("id_dispositivo")
+    if not isinstance(key, str) or not key.strip():
+        raise ValueError("No se ha recibido una clave valida")
+    if not isinstance(device_id, str) or not device_id.strip():
+        raise ValueError("No se ha recibido un identificador valido")
     return key, device_id
 
 
