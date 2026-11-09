@@ -5,9 +5,16 @@ No network requests, personal fields, authentication data or raw error text.
 from __future__ import annotations
 
 _RESPONSE_KEYS = ("error", "partidos", "jornadas", "jornadaActual", "resultado", "listaJornadas")
-_ENTRY_KEYS = ("IdPartido", "NombreEquipoLocal", "NombreEquipoVisitante",
-               "Fecha", "Hora", "NumeroJornada", "Resultados", "idPartido",
-               "fecha", "idJornada", "partidos")
+_ENTRY_KEYS = (
+    # Exact field names identified in APK 5.0.42 EquipoPartidoDto.
+    "idPartido", "nombreEquipoLocal", "nombreEquipoVisitante", "fecha", "hora",
+    "numeroJornada", "resultados", "estado", "fechaHoraUTC", "campoJuego",
+    # Legacy experimental response shape.
+    "IdPartido", "NombreEquipoLocal", "NombreEquipoVisitante", "Fecha",
+    "Hora", "NumeroJornada", "Resultados", "Estado",
+    # Jornada/competition mode.
+    "idJornada", "partidos",
+)
 
 
 def summarize_schedule_shape(response: object) -> dict:
