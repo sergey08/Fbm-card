@@ -34,3 +34,17 @@ class ScheduleSummaryTests(unittest.TestCase):
             for data in ({'error': 'failed', 'partidos': []}, {'error': '', 'partidos': [{}]}):
                 path.write_text(json.dumps(data), encoding='utf-8')
                 self.assertEqual(module.main([str(path)]), 1)
+
+    def test_optional_filter_matches_either_side_and_preserves_group_count(self):
+        data = {'error': '', 'partidos': [
+            {'NombreEquipoLocal': 'Pinto', 'NombreEquipoVisitante': 'A'},
+            {'NombreEquipoLocal': 'B', 'NombreEquipoVisitante': 'PINTO'},
+            {'NombreEquipoLocal': 'C', 'NombreEquipoVisitante': 'D'}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path, team = Path(tmp) / 'schedule.json', Path(tmp) / 'team.json'
+            path.write_text(json.dumps(data), encoding='utf-8')
+            team.write_text(json.dumps({'Nombre': 'pinto'}), encoding='utf-8')
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(module.main([str(path), '--equipo', str(team)]), 0)
+            self.assertIn('2 de 3', output.getvalue())
+            self.assertNotIn('C - D', output.getvalue())
