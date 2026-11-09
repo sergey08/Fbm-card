@@ -129,3 +129,19 @@ Se examinó directamente el APK facilitado, `classes2.dex`, resolviendo métodos
 - Los identificadores adicionales no deben deducirse del nombre de categoría, año o ID de jugador. Aunque el DTO `JugadorDetalleResponseDto` tiene `idComponenteClub` e `idTemporadaActual`, **hay que comprobar en una respuesta oficial auténtica** su vinculación exacta a cada jugador/equipo antes de permitir descarga. Nunca usarlos para alterar el seguimiento de grupos.
 - Incorporados `player_protocol.player_stats_fields()` para construir únicamente las dos acciones permitidas y `player_statistics.py` para normalizar estadísticas globales y lista de partidos, preservando campos ausentes como `None`, convirtiendo solo números verificables y filtrando información adicional. Pruebas sintéticas y sin red en `tests/test_player_statistics.py`.
 - **No hay todavía llamadas a estadísticas reales ni botones de estadísticas en la tarjeta**, por no existir confirmación del conjunto de los cuatro IDs y disponibilidad en la categoría consultada. Este trabajo prepara el motor oficial único para tarjetas bajo demanda y sincronización opt-in; no activa ninguna de ellas automáticamente.
+
+
+## 09/11/2026 — Comprobación cruzada de los cuatro identificadores en la APK
+
+El APK 5.0.42 entregado se examinó **directamente** en `base.apk/classes2.dex`, leyendo los `field_ids` de `JugadorDetalleResponseDto`, `DetalleJugadorDto` y `EquipoDetalleDto`. Los campos relevantes realmente definidos por el modelo son:
+- `jugador.id` desde `DetalleJugadorDto.id`.
+- `equipo.id` desde `EquipoDetalleDto.id` del objeto `JugadorDetalleResponseDto.equipo`.
+- `idComponenteClub` y `idTemporadaActual` en la raíz de `JugadorDetalleResponseDto`.
+Este **vínculo de datos** es más fuerte que inferir la temporada desde una etiqueta textual. Su presencia en el DTO no confirma que el servidor entregue el objeto `equipo` para toda ficha/categoría.
+
+Implementación nueva (solo `dev`):
+- `player_context.py`: `verified_player_stats_context(raw, player_id, team_id)` exige respuesta de detalle sin error, jugador y equipo con IDs exactamente coincidentes y dos IDs de componente/temporada no vacíos. No devuelve nombres, imagen ni respuesta cruda, y no hace suposiciones.
+- `player_statistics_bridge.py`: ejecuta primero la ficha; **si no demuestra esa relación no solicita estadísticas**. Si la valida, construye los dos formularios de la APK (`datosGlobalesJugadorEquipo` y `datosMediasJugadorPartidos`), ambos normalizados sin inventar valores. Si falla la respuesta global, no hace la petición posterior.
+- El transporte autorizado de `/v2/jugador.ashx` ya acepta únicamente `detalleJugador` y las dos acciones estadísticas con su conjunto exacto de campos; el adaptador `AficionFBMAdapter.player_statistics` conserva el detalle bruto transitoriamente dentro del método, sin volcarlo en caché ni WebSocket. `IndependentClient.async_player_statistics` cachea exclusivamente resultado normalizado por **par jugador/equipo** y TTL de 120 segundos. Expuesto como comando administrador `fbm/player/stats` solo bajo petición explícita, no activado en tarjetas.
+- Tests independientes en `test_player_context.py` y `test_player_statistics_bridge.py`, más pruebas del adaptador y puente WS, verifican asociación y bloqueo de solicitudes ante IDs cruzados, ausentes o respuestas inválidas. No se ha desplegado en Home Assistant ni ejecutado tráfico contra FBM real.
+- Advertencia: la API devuelve estadísticas individuales potencialmente asociadas a menores. No se almacena histórico ni se sincroniza automáticamente; antes de habilitar visualización hay que comprobar respuestas y restricciones reales de la competición. Este paso **no valida todavía la consulta contra el servidor**; valida la lógica y el protocolo de APK con simulaciones.
