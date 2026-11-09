@@ -30,9 +30,11 @@ class TeamProtocolTests(unittest.TestCase):
         self.assertEqual(fields, {'accion': 'horariosJornadas', 'id_dispositivo': 'device', 'key': 'key',
                                   'id_equipo': 'team', 'id_fase': 'f', 'id_grupo': 'g', 'id_ronda': '',
                                   'fecha_inicial': '2026-11-01 00:00', 'fecha_final': '2026-12-31 23:59'})
-        self.phases['listaFasesGrupo'][0]['Rondas'] = [{'IdRonda': 'r'}]
-        with self.assertRaises(ValueError):
-            protocol.schedule_fields('device', 'key', 'team', self.phases, date(2026, 11, 1), date(2026, 12, 31))
+        self.phases['listaFasesGrupo'][0]['Rondas'] = [{'IdRonda': 'r', 'NombreRonda': 'Final'}]
+        still_group = protocol.schedule_fields(
+            'device', 'key', 'team', self.phases, date(2026, 11, 1), date(2026, 12, 31))
+        self.assertEqual(still_group['id_grupo'], 'g')
+        self.assertEqual(still_group['id_ronda'], '')
 
     def test_explicit_round_uses_round_id_and_empty_group(self):
         self.phases['listaFasesGrupo'][0]['Rondas'] = [{'IdRonda': 'r1', 'NombreRonda': 'Final'}, {'IdRonda': 'r2', 'NombreRonda': 'Semifinal'}]
