@@ -122,7 +122,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", playerDetail: null, playerDetailTeamId: "", playerDetailPlayerId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
   }
 
   _experimentalPreferenceKey(entryId) {
@@ -296,6 +296,32 @@ class FBMCard extends HTMLElement {
     const state = this._experimentalState();
     state.showGroup = !state.showGroup;
     this._render();
+  }
+
+  async _experimentalPlayerDetail(playerId) {
+    const state = this._experimentalState();
+    if (state.busy || !state.entry || !state.selected || !this._hass?.callWS ||
+        typeof playerId !== "string" || !playerId.trim()) return;
+    const teamId = state.selected, entryId = state.entry;
+    const roster = state.playersTeamId === teamId && state.playersEntryId === entryId
+      ? state.players : null;
+    if (!Array.isArray(roster) || !roster.some(player => player.id === playerId)) return;
+    state.busy = true; state.message = ""; state.playerDetail = null;
+    state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
+    this._render();
+    try {
+      const data = await this._hass.callWS({
+        type: "fbm/player/detail", entry_id: entryId, jugador: playerId
+      });
+      if (!data?.jugador || data.jugador.id !== playerId) throw new Error("Ficha no válida");
+      if (state.entry !== entryId || state.selected !== teamId) return;
+      state.playerDetail = data.jugador;
+      state.playerDetailTeamId = teamId;
+      state.playerDetailPlayerId = playerId;
+    } catch (_) {
+      if (state.entry === entryId && state.selected === teamId)
+        state.message = "No se pudo obtener la ficha de este jugador desde FBM.";
+    } finally { state.busy = false; this._render(); }
   }
 
   async _experimentalAction(action) {
@@ -503,6 +529,23 @@ class FBMCard extends HTMLElement {
               if (!player || typeof player.nombre !== "string") continue;
               const item = this._element("div", "", "fbm-player");
               item.append(this._element("strong", player.nombre));
+              const detailButton = this._element("button", "Ver ficha");
+              detailButton.type = "button"; detailButton.disabled = state.busy;
+              detailButton.addEventListener("click", () => this._experimentalPlayerDetail(player.id));
+              item.append(detailButton);
+              const opened = state.playerDetailTeamId === pinned?.id &&
+                state.playerDetailPlayerId === player.id ? state.playerDetail : null;
+              if (opened) {
+                const label = [];
+                if (opened.equipo) label.push(opened.equipo);
+                if (opened.temporada) label.push(opened.temporada);
+                if (opened.categoria) label.push(opened.categoria);
+                if (Number.isInteger(opened.partidos_jugados)) label.push("PJ " + opened.partidos_jugados);
+                if (Number.isInteger(opened.puntos_totales)) label.push("Puntos " + opened.puntos_totales);
+                if (typeof opened.puntos_por_partido === "number" && Number.isFinite(opened.puntos_por_partido))
+                  label.push("Puntos/partido " + opened.puntos_por_partido);
+                if (label.length) item.append(this._element("p", label.join(" · "), "muted"));
+              }
               const detail = [];
               if (Number.isInteger(player.partidos_jugados)) detail.push("PJ " + player.partidos_jugados);
               if (Number.isInteger(player.puntos_totales)) detail.push("Puntos " + player.puntos_totales);
