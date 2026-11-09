@@ -21,7 +21,8 @@ from .team_schedule import normalize_team_schedule
 from .team_standings import normalize_standings
 from .team_roster import normalize_team_roster
 from .player_protocol import players_fields, player_detail_fields
-from .player_detail import post_player_detail_form, normalize_player_detail
+from .player_detail import post_player_detail_form, post_player_statistics_form, normalize_player_detail
+from .player_statistics_bridge import PlayerStatisticsFetcher
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
@@ -184,6 +185,27 @@ class AficionFBMAdapter:
             post_player_detail_form, player_detail_fields(device_id, key, player_id)
         )
         return normalize_player_detail(response, player_id)
+
+    async def player_statistics(self, player_id: str, team_id: str) -> dict:
+        """Use the same APK-verified session, context and stats transport.
+
+        Raw player details remain private in this method and never enter
+        HA cache, WebSocket results or logs.
+        """
+        device_id, key = self._team_key()
+
+        async def raw_detail(target):
+            return await asyncio.to_thread(
+                post_player_detail_form,
+                player_detail_fields(device_id, key, target),
+            )
+
+        async def post_stats(fields):
+            return await asyncio.to_thread(post_player_statistics_form, fields)
+
+        return await PlayerStatisticsFetcher(raw_detail, post_stats).fetch(
+            player_id, team_id, device_id, key
+        )
 
     async def team_standings(self, team_id: str) -> dict:
         """Consulta la clasificacion del grupo actual del equipo elegido."""
