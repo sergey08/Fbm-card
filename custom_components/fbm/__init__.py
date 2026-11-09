@@ -14,6 +14,7 @@ from homeassistant.helpers.storage import Store
 from .const import CARD_URL, DOMAIN
 from .query_cache import QueryCache
 from .independent_identity import IndependentIdentityStore
+from .independent_client import IndependentClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,12 +60,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def identity_file_exists() -> bool:
         return await hass.async_add_executor_job(Path(identity_storage.path).exists)
 
+    identity_manager = IndependentIdentityStore(identity_storage, async_exists=identity_file_exists)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "estado": "pendiente_validacion_api_oficial",
         "recurso_lovelace_registrado": recurso_registrado,
         "cache": QueryCache(),
         "cache_consultas": QueryCache(ttl_seconds=300, max_entries=128),
-        "identidad_independiente": IndependentIdentityStore(identity_storage, async_exists=identity_file_exists),
+        "identidad_independiente": identity_manager,
+        "cliente_independiente": IndependentClient(identity_manager),
     }
     return True
 
@@ -73,5 +76,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Eliminar el estado de la entrada."""
     state = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if state is not None:
+        await state["cliente_independiente"].async_disconnect()
         state["cache_consultas"].clear()
     return True

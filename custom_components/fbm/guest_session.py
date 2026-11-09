@@ -6,7 +6,7 @@ validado, nunca de valores generados arbitrariamente por esta biblioteca.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from .device_protocol import (
     registration_fields, access_fields, post_device_form, extract_identity_fields,
@@ -17,11 +17,11 @@ from .guest_identity import GuestIdentity
 
 @dataclass(frozen=True)
 class DeviceProfile:
-    uid: str
+    uid: str = field(repr=False)
     plataforma: str
     tipo_dispositivo: str
     version: str
-    token_push: str = ""
+    token_push: str = field(default="", repr=False)
 
     @classmethod
     def from_android_phone(

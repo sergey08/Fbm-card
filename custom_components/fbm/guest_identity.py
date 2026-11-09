@@ -5,7 +5,7 @@ caducidad confirmada por el servidor.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 KEY_WINDOW_MS = 84_400_000
@@ -21,8 +21,8 @@ def utc_epoch_ms(now: datetime) -> int:
 @dataclass(frozen=True)
 class GuestIdentity:
     """Identidad obtenida legítimamente de una respuesta de dispositivo."""
-    key: str
-    device_id: str
+    key: str = field(repr=False)
+    device_id: str = field(repr=False)
     key_until_ms: int
 
     @classmethod
