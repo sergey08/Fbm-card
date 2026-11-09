@@ -75,6 +75,17 @@ async def _schedule(client, msg):
     return await client.async_team_schedule(team_id, date.fromisoformat(first), date.fromisoformat(last))
 
 
+async def _schedule_probe(client, msg):
+    """Read-only response-shape diagnostic using the same official API request."""
+    team_id, first, last = msg["equipo"], msg["desde"], msg["hasta"]
+    if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
+        raise ValueError("Equipo no valido")
+    if any(not isinstance(x, str) or len(x) != 10 for x in (first, last)):
+        raise ValueError("Fecha no valida")
+    return await client.async_team_schedule_probe(
+        team_id, date.fromisoformat(first), date.fromisoformat(last))
+
+
 async def _phases(client, msg):
     team_id = msg["equipo"]
     if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
@@ -167,6 +178,13 @@ async def ws_schedule(hass, connection, msg):
     await _dispatch(hass, connection, msg, _schedule)
 
 
+@websocket_api.websocket_command({"type": "fbm/team/schedule_probe", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("desde"): str, probatio.Required("hasta"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_schedule_probe(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _schedule_probe)
+
+
 @websocket_api.websocket_command({"type": "fbm/team/phases", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -196,7 +214,7 @@ async def ws_standings(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe):
         websocket_api.async_register_command(hass, command)
 
 
