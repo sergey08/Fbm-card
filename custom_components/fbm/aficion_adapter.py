@@ -22,6 +22,7 @@ from .team_standings import normalize_standings
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
+from .schedule_probe import summarize_schedule_shape
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -137,16 +138,28 @@ class AficionFBMAdapter:
             "source": "FBM",
         }
 
-    async def team_schedule(self, team_id: str, start: date, end: date, round_id: str | None = None) -> dict:
-        """Consulta fases y horarios bajo demanda; no registra ni renueva sesiones."""
+    async def _team_schedule_response(self, team_id: str, start: date, end: date,
+                                      round_id: str | None = None) -> dict:
+        """One shared official request path for normal view and DEV probe."""
         if type(start) is not date or type(end) is not date or start > end or (end - start).days > 366:
             raise ValueError("Rango de fechas no valido")
         device_id, key = self._team_key()
         phase_response = await asyncio.to_thread(post_team_form, phases_fields(device_id, key, team_id))
         device_id, key = self._team_key()
         fields = schedule_fields(device_id, key, team_id, phase_response, start, end, round_id)
-        response = await asyncio.to_thread(post_team_form, fields)
+        return await asyncio.to_thread(post_team_form, fields)
+
+    async def team_schedule(self, team_id: str, start: date, end: date,
+                            round_id: str | None = None) -> dict:
+        """Normalize the official schedule response for on-demand cards."""
+        response = await self._team_schedule_response(team_id, start, end, round_id)
         return normalize_team_schedule(response)
+
+    async def team_schedule_probe(self, team_id: str, start: date, end: date,
+                                  round_id: str | None = None) -> dict:
+        """Diagnostic: output only response structure, not teams, players or secrets."""
+        response = await self._team_schedule_response(team_id, start, end, round_id)
+        return summarize_schedule_shape(response)
 
     async def team_standings(self, team_id: str) -> dict:
         """Consulta la clasificacion del grupo actual del equipo elegido."""
