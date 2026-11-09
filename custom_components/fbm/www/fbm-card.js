@@ -236,7 +236,7 @@ class FBMCard extends HTMLElement {
   _renderExperimental(card) {
     const state = this._experimentalState();
     card.append(this._element("h2", this._config.title || "🏀 FBM Card"));
-    card.append(this._element("p", "Conexión experimental. Disponible para administradores; aún no validada en Home Assistant.", "muted"));
+    card.append(this._element("p", "Consulta equipos y clasificaciones oficiales de la Federación de Baloncesto de Madrid.", "muted"));
     const button = (label, action, enabled = true) => {
       const el = this._element("button", label); el.type = "button"; el.disabled = state.busy || !enabled;
       el.addEventListener("click", () => this._experimentalAction(action)); card.append(el);
@@ -253,14 +253,14 @@ class FBMCard extends HTMLElement {
       const sessionText = connected ? "vigente en la última comprobación local" : (state.status.sesion_en_memoria ? "necesita reconexión" : "sin conectar");
       card.append(this._element("p", `Identidad: ${state.status.identidad_creada ? "creada" : "pendiente"} · Dispositivo: ${state.status.candidato_guardado ? "guardado" : "pendiente"} · Sesión: ${sessionText}`, "muted"));
       if (state.status.registro_pendiente) card.append(this._element("p", "Hay un registro pendiente o incierto. No se reintentará hasta que se recupere de forma segura.", "muted"));
-      button("Crear identidad local", "create", !state.status.identidad_creada);
-      input("Versión del perfil Android experimental", "release");
-      button("Registrar dispositivo en FBM", "register", state.status.identidad_creada && !state.status.candidato_guardado && !state.status.registro_pendiente);
+      if (!state.status.identidad_creada) button("Crear identidad local", "create", true);
+      if (!connected && (state.status.candidato_guardado || state.status.identidad_creada)) input("Versión del perfil Android", "release");
+      if (state.status.identidad_creada && !state.status.candidato_guardado && !state.status.registro_pendiente) button("Registrar dispositivo en FBM", "register");
       if (state.status.registro_pendiente) {
         card.append(this._element("p", "Recuperar envía una nueva solicitud de registro con la misma identidad.", "muted"));
         button("Recuperar registro pendiente", "recover_registration");
       }
-      button("Conectar", "connect", state.status.candidato_guardado);
+      if (!connected) button("Conectar", "connect", state.status.candidato_guardado);
       input("Buscar equipo", "query");
       button("Buscar", "search", connected);
       if (state.teams.length) {
@@ -282,8 +282,8 @@ class FBMCard extends HTMLElement {
         });
         label.append(select); card.append(label);
         button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
-        button("Consultar fase y rondas", "phases", !!state.selected && connected);
-        if (Array.isArray(state.rounds)) {
+        if (this._config.mostrar_horarios === true) button("Consultar fase y rondas", "phases", !!state.selected && connected);
+        if (this._config.mostrar_horarios === true && Array.isArray(state.rounds)) {
           card.append(this._element("p", "Fase: " + state.phaseName, "muted"));
           if (state.rounds.length) {
             const roundLabel = this._element("label", "Ronda: ");
@@ -357,7 +357,14 @@ class FBMCard extends HTMLElement {
       .teams{min-width:0;overflow-wrap:anywhere}
       .score{white-space:nowrap;font-weight:700}
       .standings{width:100%;border-collapse:collapse;font-size:.9rem}
-      .standings th,.standings td{text-align:left;padding:6px;border-bottom:1px solid var(--divider-color,#ddd)}
+      ha-card>button{display:block;margin:12px 0;padding:10px 16px;border:1px solid var(--divider-color,#ddd);border-radius:10px;background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);cursor:pointer;font:inherit;font-weight:600}
+      ha-card>button:disabled{opacity:.48;cursor:not-allowed}
+      ha-card>label{display:flex;flex-direction:column;gap:6px;margin:14px 0;font-size:.9rem;font-weight:600}
+      ha-card>label input,ha-card>label select{width:100%;min-width:0;box-sizing:border-box;min-height:42px;padding:8px 10px;border:1px solid var(--divider-color,#bbb);border-radius:9px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);font:inherit}
+      ha-card>p.muted{margin:8px 0 14px}
+      .standings{display:block;overflow-x:auto}
+      .standings th,.standings td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--divider-color,#ddd)}
+      .standings tbody tr:nth-child(even){background:var(--secondary-background-color,transparent)}
       .standings td.num,.standings th.num{text-align:right}
     `;
     const card = document.createElement("ha-card");
