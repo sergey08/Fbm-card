@@ -33,17 +33,20 @@ def phase_options(response: object) -> dict:
 
 
 def schedule_selection(response: object, round_id: str | None = None) -> dict:
-    """Selecciona grupo actual o una ronda elegida explicitamente."""
+    """Choose FBM's current group unless an actual round is selected.
+
+    In the APK's team horariosJornadas request both id_grupo and id_ronda
+    exist. An available list of rounds is NOT evidence that the user chose
+    a round: for group fixtures, send id_grupo and leave id_ronda empty.
+    """
     options = phase_options(response)
-    if options["rondas"]:
+    if round_id is not None:
         if not isinstance(round_id, str) or not round_id.strip():
-            raise TeamPhasesError("Selecciona una ronda")
+            raise TeamPhasesError("Ronda inválida")
         matches = [r for r in options["rondas"] if r["id"] == round_id]
         if len(matches) != 1:
             raise TeamPhasesError("Ronda no disponible")
         return {"id_fase": options["id_fase"], "id_grupo": "", "id_ronda": round_id}
-    if round_id is not None:
-        raise TeamPhasesError("La fase no tiene rondas")
     current = current_phase_group(response)
     return {"id_fase": current["id_fase"], "id_grupo": current["id_grupo"], "id_ronda": ""}
 
