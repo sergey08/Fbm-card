@@ -78,6 +78,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "grupos_sqlite_path": hass.config.path(f"fbm_groups_{entry.entry_id}.sqlite"),
         "grupos_store_factory": FollowedGroups,
     }
+    # Existing-device access only; no registration or identity replacement.
+    restored = await client.async_restore()
+    _LOGGER.info("FBM saved guest session restored: %s", restored)
     return True
 
 
