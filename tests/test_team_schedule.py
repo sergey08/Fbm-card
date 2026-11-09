@@ -70,6 +70,27 @@ class TeamScheduleTests(unittest.TestCase):
         with self.assertRaises(module.TeamScheduleError):
             module.normalize_team_schedule(payload)
 
+    def test_category_dto_has_no_current_matchday(self):
+        response = {"error": "", "partidos": [{
+            "idPartido": "id", "nombreEquipoLocal": "Local",
+            "nombreEquipoVisitante": "Visitante", "estado": "No comenzado",
+            "numeroJornada": 5}]}
+        parsed = module.normalize_category_schedule(response)
+        self.assertIsNone(parsed["jornada_actual"])
+        self.assertEqual(parsed["partidos"][0]["jornada"], 5)
+        self.assertEqual(parsed["partidos"][0]["estado"], "scheduled")
+
+    def test_category_dto_does_not_require_team_jornada_actual(self):
+        self.assertEqual(module.normalize_category_schedule(
+            {"error": "", "partidos": []}),
+            {"jornada_actual": None, "partidos": []})
+        with self.assertRaises(module.TeamScheduleError):
+            module.normalize_team_schedule({"error": "", "partidos": []})
+        for invalid in ({"error": ""}, {"error": "bad", "partidos": []},
+                        {"error": "", "partidos": "bad"}):
+            with self.subTest(invalid=invalid), self.assertRaises(module.TeamScheduleError):
+                module.normalize_category_schedule(invalid)
+
     def test_empty_and_invalid_responses(self):
         self.assertEqual(module.normalize_team_schedule({'error': '', 'jornadaActual': 0, 'partidos': []})['partidos'], [])
         for response in ({'error': 'failed', 'jornadaActual': 0, 'partidos': []},
