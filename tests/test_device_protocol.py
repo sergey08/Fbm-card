@@ -28,14 +28,34 @@ class DeviceProtocolTests(unittest.TestCase):
 
     def test_extract_identity_from_response(self):
         self.assertEqual(module.extract_identity_fields(
-            {"key": "k", "idDispositivo": "d", "error": None}), ("k", "d"))
+            {"key": "k", "id_dispositivo": "d", "error": ""}), ("k", "d"))
 
     def test_reject_incomplete_or_error_response(self):
-        for response in (None, {}, {"key": "k"},
-                         {"key": "k", "idDispositivo": "d", "error": "fallo"}):
-            with self.subTest(response=response):
-                with self.assertRaises(ValueError):
-                    module.extract_identity_fields(response)
+        for response in (
+            None, {}, {"key": "k"}, {"key": "k", "id_dispositivo": "d"},
+            {"key": "k", "idDispositivo": "d", "error": ""},
+            {"key": "k", "id_dispositivo": "d", "error": None},
+            {"key": "k", "id_dispositivo": "d", "error": False},
+            {"key": "k", "id_dispositivo": "d", "error": "fallo"},
+            {"key": " ", "id_dispositivo": "d", "error": ""},
+            {"key": "k", "id_dispositivo": " ", "error": ""},
+            {"key": "k", "id_dispositivo": 123, "error": ""},
+        ):
+            with self.subTest(response=response), self.assertRaises(ValueError):
+                module.extract_identity_fields(response)
+
+    def test_duplicate_is_only_accepted_during_explicit_recovery(self):
+        response = {"error": "uuid ya registrado", "key": "k",
+                    "id_dispositivo": "d"}
+        with self.assertRaises(ValueError):
+            module.extract_identity_fields(response)
+        self.assertEqual(
+            module.extract_identity_fields(response, allow_duplicate=True),
+            ("k", "d"))
+        with self.assertRaises(ValueError):
+            module.extract_identity_fields(
+                {"error": "uuid ya registrado", "key": "", "id_dispositivo": "d"},
+                allow_duplicate=True)
 
     def test_access_response_requires_verified_shape(self):
         self.assertEqual(module.extract_access_identity_fields(
