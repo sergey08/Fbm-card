@@ -199,6 +199,16 @@ class IndependentClient:
             ttl=120,
         )
 
+    async def async_player_statistics(self, player_id: str, team_id: str) -> dict:
+        """Explicit read of a player of a verified team; no automatic sync."""
+        self._validate_team_id(player_id)
+        self._validate_team_id(team_id)
+        return await self._cached_query(
+            ("estadisticas_jugador", player_id, team_id),
+            lambda adapter: adapter.player_statistics(player_id, team_id),
+            ttl=120,
+        )
+
     async def async_team_standings(self, team_id: str) -> dict:
         self._validate_team_id(team_id)
         return await self._cached_query(("clasificacion", team_id), lambda adapter: adapter.team_standings(team_id), ttl=120)
