@@ -2,10 +2,20 @@
 class FBMCard extends HTMLElement {
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Configuración inválida");
-    if (this._config && (this._config.modo_experimental !== config.modo_experimental || this._config.id_tarjeta !== config.id_tarjeta)) this._experimental = null;
+    const priorTeam = this._config?.equipo_fijo?.id;
+    const newTeam = config.equipo_fijo?.id;
+    const changed = !!this._config && (this._config.modo_experimental !== config.modo_experimental ||
+      this._config.id_tarjeta !== config.id_tarjeta || this._config.tipo_tarjeta !== config.tipo_tarjeta || priorTeam !== newTeam);
+    if (changed) { this._experimental = null; this._fixedInit = false; }
     if (config.tipo_tarjeta && !["busqueda", "equipo"].includes(config.tipo_tarjeta)) throw new Error("Tipo de tarjeta inválido");
+    if (config.tipo_tarjeta === "equipo" && !config.equipo_fijo && !config.id_tarjeta) {
+      throw new Error("Cada tarjeta de equipo necesita un id_tarjeta distinto para guardar su elección.");
+    }
     this._config = { ...config };
     this._render();
+    if (this._hass && config.modo_experimental === true && config.tipo_tarjeta === "equipo" && (!this._fixedInit || changed)) {
+      Promise.resolve().then(() => this._initializeFixed());
+    }
   }
   set hass(hass) {
     const hadHass = !!this._hass;
@@ -118,7 +128,9 @@ class FBMCard extends HTMLElement {
   _experimentalPreferenceKey(entryId) {
     const user = this._hass?.user?.id;
     if (typeof user !== "string" || !user || typeof entryId !== "string" || !entryId) return null;
-    return "fbm-card:experimental-equipo:v1:" + JSON.stringify([user, String(this._config?.id_tarjeta || "predeterminada"), entryId]);
+    const cardId = this._config?.id_tarjeta;
+    if (this._config?.tipo_tarjeta === "equipo" && (typeof cardId !== "string" || !cardId.trim())) return null;
+    return "fbm-card:experimental-equipo:v1:" + JSON.stringify([user, String(cardId || "predeterminada"), entryId]);
   }
 
   _experimentalTeamIsValid(team) {
@@ -240,7 +252,7 @@ class FBMCard extends HTMLElement {
     return [
       "type: custom:fbm-card", "title: " + quote(team.nombre),
       "modo_experimental: true", "tipo_tarjeta: equipo",
-      "id_tarjeta: " + quote("fbm-fijo-" + team.id),
+      "id_tarjeta: " + quote("fbm-fijo-" + team.id + "-" + Math.random().toString(36).slice(2, 10)),
       "equipo_fijo:",
       ...["id", "nombre", "club", "categoria", "temporada"].map(field => "  " + field + ": " + quote(team[field]))
     ].join("\n");
