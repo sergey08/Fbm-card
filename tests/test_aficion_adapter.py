@@ -90,7 +90,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         profile = DeviceProfile(uid="u", plataforma="p",
                                 tipo_dispositivo="t", version="5.0.42")
         with patch("fbm_adapter_test_pkg.guest_session.post_device_form",
-                   return_value={"key": "k", "idDispositivo": "d"}) as register:
+                   return_value={"error": "", "key": "k", "id_dispositivo": "d"}) as register:
             adapter = await AficionFBMAdapter.register_with_profile(profile)
         self.assertEqual(register.call_args.args[0]["accion"], "registrar")
         with patch("fbm_adapter_test_pkg.aficion_adapter._post_search",
