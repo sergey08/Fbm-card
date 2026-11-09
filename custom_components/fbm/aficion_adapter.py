@@ -20,7 +20,7 @@ from .team_protocol import phases_fields, schedule_fields, standings_fields, pos
 from .team_schedule import normalize_team_schedule
 from .team_standings import normalize_standings
 from .device_protocol import open_request
-from .team_phases import phase_options
+from .team_phases import phase_options, classification_selection, current_phase_group
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -113,6 +113,26 @@ class AficionFBMAdapter:
         device_id, key = self._team_key()
         response = await asyncio.to_thread(post_team_form, phases_fields(device_id, key, team_id))
         return phase_options(response)
+
+    async def team_group_identity(self, team_id: str) -> dict:
+        """Resolve phase/group IDs from FBM, without inferring season identifiers."""
+        device_id, key = self._team_key()
+        response = await asyncio.to_thread(
+            post_team_form, phases_fields(device_id, key, team_id)
+        )
+        current = current_phase_group(response)
+        selection = classification_selection(response)
+        return {
+            "team_id": team_id,
+            "phase_id": current["id_fase"],
+            "group_id": current["id_grupo"],
+            "group_name": current["nombre_grupo"],
+            "phase_name": current["nombre_fase"],
+            "phase_type": selection["tipo_fase"],
+            "season_id": None,
+            "season_verified": False,
+            "source": "FBM",
+        }
 
     async def team_schedule(self, team_id: str, start: date, end: date, round_id: str | None = None) -> dict:
         """Consulta fases y horarios bajo demanda; no registra ni renueva sesiones."""
