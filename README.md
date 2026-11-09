@@ -85,7 +85,7 @@ FBM Card es universal: **no estará limitada a Pintobasket**. Cada persona debe 
 
 ## Selector de varios equipos (implementado parcialmente en DEV)
 
-En el modo basado en entidades, la tarjeta permite configurar una lista de equipos y alternar entre ellos. La última selección se guarda **en el navegador/dispositivo**, con una clave que incluye el identificador del usuario de Home Assistant y `id_tarjeta`. No hay sincronización entre dispositivos. El modo experimental incorpora búsqueda FBM, pero aún no comparte estas preferencias ni se ha validado en HA. Sin identidad de usuario no se guarda la preferencia.
+En el modo basado en entidades, la tarjeta permite configurar una lista de equipos y alternar entre ellos. La última selección se guarda **en el navegador/dispositivo**, con una clave que incluye el identificador del usuario de Home Assistant y `id_tarjeta`. No hay sincronización entre dispositivos. El modo experimental guarda por separado la selección deportiva, también por usuario, tarjeta y entrada de integración; se recupera al comprobar el estado, sin iniciar consultas a FBM. No guarda la sesión ni comparte la preferencia con el modo basado en entidades, y sigue sin validarse en HA. Sin identidad de usuario o almacenamiento disponible no se guarda la preferencia.
 
 ```yaml
 type: custom:fbm-card

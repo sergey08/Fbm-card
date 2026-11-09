@@ -51,6 +51,64 @@ test("modo experimental consulta estado y no registra automaticamente", async ()
   assert.equal(card._experimentalState().status.identidad_creada, false);
 });
 
+test("selección experimental se separa por usuario, tarjeta e integración y omite secretos", () => {
+  const { elements, sandbox } = loadCard();
+  const memory = new Map();
+  sandbox.window.localStorage = { getItem: key => memory.get(key) ?? null,
+    setItem: (key, value) => memory.set(key, value), removeItem: key => memory.delete(key) };
+  const card = new (elements.get("fbm-card"))();
+  card._config = { id_tarjeta: "card-a" }; card._hass = { user: { id: "user-a" } };
+  const team = { id: "sport-id", nombre: "Equipo", club: "Club", categoria: "Cat", temporada: "26/27", key: "secret" };
+  card._saveExperimentalTeam("entry-a", team);
+  const key = card._experimentalPreferenceKey("entry-a");
+  assert.doesNotMatch(memory.get(key), /secret|"key"/);
+  assert.equal(card._restoreExperimentalTeam("entry-a").id, "sport-id");
+  assert.equal(card._restoreExperimentalTeam("entry-b"), null);
+  card._hass = { user: { id: "user-b" } };
+  assert.equal(card._restoreExperimentalTeam("entry-a"), null);
+  card._hass = { user: { id: "user-a" } }; card._config.id_tarjeta = "card-b";
+  assert.equal(card._restoreExperimentalTeam("entry-a"), null);
+  card._config.id_tarjeta = "card-a"; card._clearExperimentalTeam("entry-a");
+  assert.equal(card._restoreExperimentalTeam("entry-a"), null);
+});
+
+test("restaurar selección no inicia búsquedas ni conexiones FBM", async () => {
+  const { elements, sandbox } = loadCard();
+  const memory = new Map();
+  sandbox.window.localStorage = { getItem: key => memory.get(key) ?? null, setItem: (key, value) => memory.set(key, value) };
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true }; card._render = () => {};
+  const calls = [];
+  card._hass = { user: { id: "user" }, callWS: async msg => {
+    calls.push(msg.type);
+    if (msg.type === "fbm/client/entries") return { entries: ["entry"] };
+    if (msg.type === "fbm/client/status") return { identidad_creada: true, candidato_guardado: true, sesion_en_memoria: false };
+    throw new Error("unexpected network request");
+  } };
+  card._saveExperimentalTeam("entry", { id: "a", nombre: "Equipo", club: "Club", categoria: "Cat", temporada: "26/27" });
+  await card._experimentalAction("status");
+  assert.equal(card._experimentalState().selected, "a");
+  assert.deepEqual(calls, ["fbm/client/entries", "fbm/client/status"]);
+});
+
+test("cambio de usuario descarta el estado experimental en memoria", () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))(); card._render = () => {};
+  card.hass = { user: { id: "user-a" } };
+  card._experimentalState().selected = "private-selection";
+  card.hass = { user: { id: "user-b" } };
+  assert.equal(card._experimentalState().selected, "");
+});
+
+test("selecciones corruptas o sin usuario no se restauran", () => {
+  const { elements, sandbox } = loadCard();
+  sandbox.window.localStorage = { getItem: () => '{"id":"x"}', setItem: () => { throw new Error("blocked"); } };
+  const card = new (elements.get("fbm-card"))(); card._config = {}; card._hass = { user: { id: "user" } };
+  assert.equal(card._restoreExperimentalTeam("entry"), null);
+  card._hass = {};
+  assert.equal(card._experimentalPreferenceKey("entry"), null);
+});
+
 test("modo experimental busca y consulta solo el equipo seleccionado", async () => {
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();

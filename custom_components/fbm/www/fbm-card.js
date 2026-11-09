@@ -2,10 +2,14 @@
 class FBMCard extends HTMLElement {
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Configuración inválida");
+    if (this._config && (this._config.modo_experimental !== config.modo_experimental || this._config.id_tarjeta !== config.id_tarjeta)) this._experimental = null;
     this._config = { ...config };
     this._render();
   }
-  set hass(hass) { this._hass = hass; this._render(); }
+  set hass(hass) {
+    if (this._hass && this._hass.user?.id !== hass?.user?.id) this._experimental = null;
+    this._hass = hass; this._render();
+  }
   getCardSize() { return 5; }
   static getStubConfig() { return { title: "FBM Card", equipos: [] }; }
 
@@ -100,6 +104,41 @@ class FBMCard extends HTMLElement {
       selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, showGroup: false, message: "", busy: false };
   }
 
+  _experimentalPreferenceKey(entryId) {
+    const user = this._hass?.user?.id;
+    if (typeof user !== "string" || !user || typeof entryId !== "string" || !entryId) return null;
+    return "fbm-card:experimental-equipo:v1:" + JSON.stringify([user, String(this._config?.id_tarjeta || "predeterminada"), entryId]);
+  }
+
+  _experimentalTeamIsValid(team) {
+    return !!team && ["id", "nombre", "club", "categoria", "temporada"].every(key =>
+      typeof team[key] === "string" && team[key].trim() && team[key].length <= 512);
+  }
+
+  _saveExperimentalTeam(entryId, team) {
+    const key = this._experimentalPreferenceKey(entryId);
+    if (!key || !this._experimentalTeamIsValid(team)) return;
+    const data = {};
+    for (const field of ["id", "nombre", "club", "categoria", "temporada"]) data[field] = team[field];
+    try { window.localStorage?.setItem(key, JSON.stringify(data)); } catch (_) { /* almacenamiento deshabilitado */ }
+  }
+
+  _clearExperimentalTeam(entryId) {
+    const key = this._experimentalPreferenceKey(entryId);
+    if (!key) return;
+    try { window.localStorage?.removeItem(key); } catch (_) { /* almacenamiento deshabilitado */ }
+  }
+
+  _restoreExperimentalTeam(entryId) {
+    const key = this._experimentalPreferenceKey(entryId);
+    if (!key) return null;
+    try {
+      const team = JSON.parse(window.localStorage?.getItem(key) || "null");
+      if (!this._experimentalTeamIsValid(team)) return null;
+      return { id: team.id, nombre: team.nombre, club: team.club, categoria: team.categoria, temporada: team.temporada };
+    } catch (_) { return null; }
+  }
+
   _experimentalMatches() {
     const state = this._experimentalState();
     const matches = Array.isArray(state.schedule?.partidos) ? state.schedule.partidos : [];
@@ -125,8 +164,16 @@ class FBMCard extends HTMLElement {
       if (action === "status") {
         const data = await this._hass.callWS({ type: "fbm/client/entries" });
         if (!Array.isArray(data.entries) || data.entries.length !== 1) throw new Error("No hay una única integración FBM disponible.");
+        if (state.entry && state.entry !== data.entries[0]) {
+          state.teams = []; state.selected = ""; state.rounds = null; state.round = "";
+          state.schedule = null; state.standings = null; state.showGroup = false;
+        }
         state.entry = data.entries[0];
         state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry });
+        if (!state.selected && !state.teams.length) {
+          const saved = this._restoreExperimentalTeam(state.entry);
+          if (saved) { state.teams = [saved]; state.selected = saved.id; }
+        }
       } else {
         if (!state.entry) throw new Error("Comprueba primero el estado de la integración.");
         const common = { entry_id: state.entry };
@@ -213,7 +260,13 @@ class FBMCard extends HTMLElement {
           option.value = team.id; select.append(option);
         }
         select.value = state.selected;
-        select.addEventListener("change", event => { state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false; this._render(); });
+        select.addEventListener("change", event => {
+          state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
+          const selectedTeam = state.teams.find(team => team.id === state.selected);
+          if (selectedTeam) this._saveExperimentalTeam(state.entry, selectedTeam);
+          else if (!state.selected) this._clearExperimentalTeam(state.entry);
+          this._render();
+        });
         label.append(select); card.append(label);
         button("Consultar clasificación del grupo actual", "standings", !!state.selected && state.status.sesion_en_memoria);
         button("Consultar fase y rondas", "phases", !!state.selected && state.status.sesion_en_memoria);
