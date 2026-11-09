@@ -19,6 +19,8 @@ from .team_search import normalize_team_results
 from .team_protocol import phases_fields, schedule_fields, standings_fields, post_team_form
 from .team_schedule import normalize_team_schedule
 from .team_standings import normalize_standings
+from .team_roster import normalize_team_roster
+from .player_protocol import players_fields
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
@@ -160,6 +162,19 @@ class AficionFBMAdapter:
         """Diagnostic: output only response structure, not teams, players or secrets."""
         response = await self._team_schedule_response(team_id, start, end, round_id)
         return summarize_schedule_shape(response)
+
+    async def team_roster(self, team_id: str) -> dict:
+        """APK LH5/j;->g: POST jugadores to /v2/equipo.ashx.
+
+        This reuses the exact team transport and existing guest session.
+        Only a verified normalized roster is returned; no raw response,
+        photos, session key, or implicit following.
+        """
+        device_id, key = self._team_key()
+        response = await asyncio.to_thread(
+            post_team_form, players_fields(device_id, key, team_id)
+        )
+        return normalize_team_roster(response)
 
     async def team_standings(self, team_id: str) -> dict:
         """Consulta la clasificacion del grupo actual del equipo elegido."""
