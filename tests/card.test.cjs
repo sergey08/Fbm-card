@@ -142,6 +142,22 @@ test("la tarjeta conserva fecha, hora y marcador tal como se recibieron", () => 
   assert.equal(row.children[1].textContent, "32–57");
 });
 
+test("la clasificación se solicita solo al pulsar y conserva los datos del servidor", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true }; card._render = () => {};
+  const calls = [];
+  card._hass = { callWS: async msg => { calls.push(msg); return { clasificacion: [
+    { id: "id", equipo: "Equipo", posicion: 2, jugados: 4, ganados: 3, perdidos: 1, puntos: 7 }
+  ] }; } };
+  const state = card._experimentalState(); state.entry = "entry"; state.selected = "team";
+  assert.equal(calls.length, 0);
+  await card._experimentalAction("standings");
+  assert.equal(calls[0].type, "fbm/team/standings");
+  assert.equal(calls[0].equipo, "team");
+  assert.equal(state.standings[0].puntos, 7);
+});
+
 test("error de registro avisa de posible procesamiento sin reintentar", async () => {
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();

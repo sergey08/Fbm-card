@@ -82,6 +82,13 @@ async def _phases(client, msg):
     return await client.async_team_phase_options(team_id)
 
 
+async def _standings(client, msg):
+    team_id = msg["equipo"]
+    if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
+        raise ValueError("Equipo no valido")
+    return await client.async_team_standings(team_id)
+
+
 async def _schedule_round(client, msg):
     team_id, round_id, first, last = msg["equipo"], msg["ronda"], msg["desde"], msg["hasta"]
     if any(not isinstance(x, str) or not x.strip() or len(x) > 512 for x in (team_id, round_id)):
@@ -166,6 +173,13 @@ async def ws_schedule_round(hass, connection, msg):
     await _dispatch(hass, connection, msg, _schedule_round)
 
 
+@websocket_api.websocket_command({"type": "fbm/team/standings", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_standings(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _standings)
+
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings):
         websocket_api.async_register_command(hass, command)

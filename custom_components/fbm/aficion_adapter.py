@@ -16,8 +16,9 @@ from typing import Any
 from .guest_identity import GuestIdentity
 from .guest_session import DeviceProfile, register_guest, access_guest
 from .team_search import normalize_team_results
-from .team_protocol import phases_fields, schedule_fields, post_team_form
+from .team_protocol import phases_fields, schedule_fields, standings_fields, post_team_form
 from .team_schedule import normalize_team_schedule
+from .team_standings import normalize_standings
 from .device_protocol import open_request
 from .team_phases import phase_options
 
@@ -117,6 +118,15 @@ class AficionFBMAdapter:
         fields = schedule_fields(device_id, key, team_id, phase_response, start, end, round_id)
         response = await asyncio.to_thread(post_team_form, fields)
         return normalize_team_schedule(response)
+
+    async def team_standings(self, team_id: str) -> dict:
+        """Consulta la clasificacion del grupo actual del equipo elegido."""
+        device_id, key = self._team_key()
+        phases = await asyncio.to_thread(post_team_form, phases_fields(device_id, key, team_id))
+        device_id, key = self._team_key()
+        fields = standings_fields(device_id, key, phases)
+        response = await asyncio.to_thread(post_team_form, fields)
+        return normalize_standings(response)
 
     async def query(self, kind: str, identifiers: dict) -> dict[str, Any]:
         """Conserva el bloqueo del contrato general hasta mapear sus consultas."""

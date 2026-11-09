@@ -23,7 +23,7 @@ protocol = sys.modules[package.__name__ + '.team_protocol']
 class TeamProtocolTests(unittest.TestCase):
     def setUp(self):
         self.phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [
-            {'IdFase': 'f', 'NombreFase': 'Phase', 'Grupos': [{'IdGrupo': 'g', 'NombreGrupo': 'Group'}], 'Rondas': []}]}
+            {'IdFase': 'f', 'NombreFase': 'Phase', 'TipoFase': 'LIGA', 'Grupos': [{'IdGrupo': 'g', 'NombreGrupo': 'Group'}], 'Rondas': []}]}
 
     def test_form_for_current_unique_phase(self):
         fields = protocol.schedule_fields('device', 'key', 'team', self.phases, date(2026, 11, 1), date(2026, 12, 31))
@@ -63,6 +63,13 @@ class TeamProtocolTests(unittest.TestCase):
     def test_invalid_dates_rejected(self):
         with self.assertRaises(ValueError):
             protocol.schedule_fields('d', 'k', 't', self.phases, date(2027, 1, 1), date(2026, 1, 1))
+
+    def test_standings_form_uses_current_group_and_phase_type(self):
+        fields = protocol.standings_fields('d', 'k', self.phases)
+        self.assertEqual(fields, {'accion': 'clasificacion', 'id_dispositivo': 'd', 'key': 'k',
+                                  'id_grupo': 'g', 'tipo_fase': 'LIGA'})
+        self.phases['listaFasesGrupo'][0]['TipoFase'] = ''
+        with self.assertRaises(ValueError): protocol.standings_fields('d', 'k', self.phases)
 
     def test_schedule_transport_requires_exactly_one_group_or_round(self):
         self.phases['listaFasesGrupo'][0]['Rondas'] = [{'IdRonda': 'r', 'NombreRonda': 'Final'}]

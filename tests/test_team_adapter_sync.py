@@ -31,6 +31,25 @@ def run_immediate(coro):
 
 
 class TeamAdapterSyncTests(unittest.TestCase):
+    def test_standings_calls_phases_then_classification(self):
+        identity = identity_module.GuestIdentity.from_response('key', 'device', datetime.now(timezone.utc))
+        phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [
+            {'IdFase': 'f', 'NombreFase': 'Phase', 'TipoFase': 'LIGA', 'Grupos': [{'IdGrupo': 'g', 'NombreGrupo': 'Group'}], 'Rondas': []}]}
+        standings = {'error': '', 'clasificacion': [{'IdEquipo': 'team', 'NombreEquipo': 'A',
+            'Posicion': 1, 'PartidosJugados': 4, 'PartidosGanados': 3, 'PartidosPerdidos': 1, 'Puntos': 7}]}
+        with patch.object(adapter_module.asyncio, 'to_thread', new=AsyncMock(side_effect=[phases, standings])) as transport:
+            result = run_immediate(adapter_module.AficionFBMAdapter(identity).team_standings('team'))
+        self.assertEqual(transport.await_count, 2)
+        self.assertEqual(transport.await_args_list[0].args[1]['accion'], 'fasesGrupos')
+        self.assertEqual(transport.await_args_list[1].args[1]['accion'], 'clasificacion')
+        self.assertEqual(result['clasificacion'][0]['equipo'], 'A')
+
+    def test_standings_rejects_bad_phases_before_second_request(self):
+        identity = identity_module.GuestIdentity.from_response('key', 'device', datetime.now(timezone.utc))
+        with patch.object(adapter_module.asyncio, 'to_thread', new=AsyncMock(return_value={'error': 'bad'})) as transport:
+            with self.assertRaises(ValueError):
+                run_immediate(adapter_module.AficionFBMAdapter(identity).team_standings('team'))
+        self.assertEqual(transport.await_count, 1)
     def test_client_connection_is_explicit_and_does_not_expose_identity(self):
         identity = local_identity_module.IndependentIdentity('0123456789abcdef', 'private-device')
         store = types.SimpleNamespace(async_load=AsyncMock(return_value=identity), async_create=AsyncMock())

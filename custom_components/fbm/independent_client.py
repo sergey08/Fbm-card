@@ -111,3 +111,9 @@ class IndependentClient:
         if round_id is None:
             return await adapter.team_schedule(team_id, start, end)
         return await adapter.team_schedule(team_id, start, end, round_id)
+
+    async def async_team_standings(self, team_id: str) -> dict:
+        adapter = self._adapter
+        if adapter is None:
+            raise FBMAccessNotValidated("Se requiere una conexion explicita")
+        return await adapter.team_standings(team_id)

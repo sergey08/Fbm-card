@@ -97,7 +97,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, showGroup: false, message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, showGroup: false, message: "", busy: false };
   }
 
   _experimentalMatches() {
@@ -143,7 +143,7 @@ class FBMCard extends HTMLElement {
           if (!state.query.trim()) throw new Error("Escribe el nombre de un equipo.");
           const data = await this._hass.callWS({ type: "fbm/team/search", ...common, texto: state.query.trim(), skip: 0 });
           state.teams = Array.isArray(data.equipos) ? data.equipos : [];
-          state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null; state.showGroup = false;
+          state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
           state.message = state.teams.length ? "Elige un equipo, categoría y temporada." : "No se han encontrado equipos.";
         } else if (action === "phases") {
           if (!state.selected) throw new Error("Elige un equipo.");
@@ -157,6 +157,11 @@ class FBMCard extends HTMLElement {
             equipo: state.selected, desde: state.start, hasta: state.end };
           if (state.rounds.length) request.ronda = state.round;
           state.schedule = await this._hass.callWS(request);
+        } else if (action === "standings") {
+          if (!state.selected) throw new Error("Elige un equipo.");
+          const data = await this._hass.callWS({ type: "fbm/team/standings", ...common, equipo: state.selected });
+          if (!Array.isArray(data.clasificacion)) throw new Error("Clasificación no válida.");
+          state.standings = data.clasificacion;
         }
       }
     } catch (_) {
@@ -208,8 +213,9 @@ class FBMCard extends HTMLElement {
           option.value = team.id; select.append(option);
         }
         select.value = state.selected;
-        select.addEventListener("change", event => { state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.showGroup = false; this._render(); });
+        select.addEventListener("change", event => { state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false; this._render(); });
         label.append(select); card.append(label);
+        button("Consultar clasificación del grupo actual", "standings", !!state.selected && state.status.sesion_en_memoria);
         button("Consultar fase y rondas", "phases", !!state.selected && state.status.sesion_en_memoria);
         if (Array.isArray(state.rounds)) {
           card.append(this._element("p", "Fase: " + state.phaseName, "muted"));
@@ -228,6 +234,23 @@ class FBMCard extends HTMLElement {
         }
         input("Desde", "start", "date"); input("Hasta", "end", "date");
         button("Consultar horarios", "schedule", !!state.selected && state.status.sesion_en_memoria && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
+      }
+      if (Array.isArray(state.standings)) {
+        card.append(this._element("h3", "Clasificación del grupo actual"));
+        if (!state.standings.length) card.append(this._element("p", "No hay clasificación disponible.", "muted"));
+        else {
+          const table = document.createElement("table"); table.className = "standings";
+          const head = document.createElement("tr");
+          for (const title of ["Pos.", "Equipo", "PJ", "G", "P", "Pts"]) head.append(this._element("th", title));
+          const thead = document.createElement("thead"); thead.append(head); table.append(thead);
+          const body = document.createElement("tbody");
+          for (const team of state.standings) {
+            const row = document.createElement("tr");
+            for (const field of ["posicion", "equipo", "jugados", "ganados", "perdidos", "puntos"]) row.append(this._element("td", team[field] ?? "—"));
+            body.append(row);
+          }
+          table.append(body); card.append(table);
+        }
       }
       if (state.schedule && Array.isArray(state.schedule.partidos)) {
         const visible = this._experimentalMatches();

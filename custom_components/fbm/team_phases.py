@@ -74,3 +74,14 @@ def current_phase_group(response: object) -> dict:
         raise TeamPhasesError("Faltan nombres de fase o grupo")
     return {"id_fase": phase_id, "nombre_fase": name, "id_grupo": group_id,
             "nombre_grupo": group_name, "rondas": list(rounds)}
+
+
+def classification_selection(response: object) -> dict[str, str]:
+    """Recupera el grupo actual y el tipo de fase sin deducirlos."""
+    selected = current_phase_group(response)
+    phase = next(p for p in response["listaFasesGrupo"]
+                 if isinstance(p, dict) and p.get("IdFase") == selected["id_fase"])
+    phase_type = phase.get("TipoFase")
+    if not isinstance(phase_type, str) or not phase_type.strip():
+        raise TeamPhasesError("Falta el tipo de fase")
+    return {"id_grupo": selected["id_grupo"], "tipo_fase": phase_type}

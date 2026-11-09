@@ -7,7 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .team_phases import schedule_selection
+from .team_phases import classification_selection, schedule_selection
 from .device_protocol import open_request
 
 TEAM_URL = "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx"
@@ -33,9 +33,18 @@ def schedule_fields(device_id: str, key: str, team_id: str, phases: object,
     return base
 
 
+def standings_fields(device_id: str, key: str, phases: object) -> dict[str, str]:
+    if any(not isinstance(x, str) or not x.strip() for x in (device_id, key)):
+        raise ValueError("Falta sesion de dispositivo")
+    selected = classification_selection(phases)
+    return {"accion": "clasificacion", "id_dispositivo": device_id, "key": key,
+            "id_grupo": selected["id_grupo"], "tipo_fase": selected["tipo_fase"]}
+
+
 def post_team_form(fields: dict[str, str]) -> dict:
     """POST explicito, de tamaño limitado, sin registrar respuesta ni credenciales."""
     allowed = {"fasesGrupos": {"accion", "id_dispositivo", "key", "id_equipo"},
+               "clasificacion": {"accion", "id_dispositivo", "key", "id_grupo", "tipo_fase"},
                "horariosJornadas": {"accion", "id_dispositivo", "key", "id_equipo",
                                     "id_fase", "id_grupo", "id_ronda", "fecha_inicial", "fecha_final"}}
     action = fields.get("accion") if isinstance(fields, dict) else None
