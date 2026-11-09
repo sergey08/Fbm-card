@@ -43,7 +43,8 @@ def standings_fields(device_id: str, key: str, phases: object) -> dict[str, str]
 
 def post_team_form(fields: dict[str, str]) -> dict:
     """POST explicito, de tamaño limitado, sin registrar respuesta ni credenciales."""
-    allowed = {"fasesGrupos": {"accion", "id_dispositivo", "key", "id_equipo"},
+    allowed = {"jugadores": {"accion", "id_dispositivo", "key", "id_equipo"},
+               "fasesGrupos": {"accion", "id_dispositivo", "key", "id_equipo"},
                "clasificacion": {"accion", "id_dispositivo", "key", "id_grupo", "tipo_fase"},
                "horariosJornadas": {"accion", "id_dispositivo", "key", "id_equipo",
                                     "id_fase", "id_grupo", "id_ronda", "fecha_inicial", "fecha_final"}}
