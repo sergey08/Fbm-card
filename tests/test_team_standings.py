@@ -10,6 +10,15 @@ spec.loader.exec_module(module)
 
 
 class TeamStandingsTests(unittest.TestCase):
+    def test_optional_apk_crest_does_not_affect_standings(self):
+        row = {'IdEquipo': 'opaque', 'NombreEquipo': 'A', 'Posicion': 1, 'PartidosJugados': 1,
+               'PartidosGanados': 1, 'PartidosPerdidos': 0, 'Puntos': 2}
+        for value, expected in [(' token ', 'token'), ('', None), (None, None), (False, None), ('x' * 1025, None)]:
+            with self.subTest(value=value):
+                actual = module.normalize_standings({'error': '', 'clasificacion': [{**row, 'Escudo': value}]})['clasificacion'][0]
+                self.assertEqual(actual.get('escudo'), expected)
+                self.assertEqual(actual['puntos'], 2)
+
     def test_preserves_order_and_values_without_recalculation(self):
         rows = [
             {'IdEquipo': 'opaque-b', 'NombreEquipo': 'B', 'Posicion': 2, 'PartidosJugados': 3, 'PartidosGanados': 1, 'PartidosPerdidos': 2, 'Puntos': 4},
@@ -28,3 +37,5 @@ class TeamStandingsTests(unittest.TestCase):
         for response in invalid:
             with self.subTest(response=response), self.assertRaises(module.TeamStandingsError):
                 module.normalize_standings(response)
+
+

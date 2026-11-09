@@ -26,5 +26,11 @@ def normalize_standings(response: object) -> dict:
             raise TeamStandingsError("Valores numericos de clasificacion invalidos")
         row = {"id": team_id, "equipo": name}
         row.update({target: item[source] for source, target in numbers.items()})
+        # El campo es opcional; su formato real aún requiere verificación.
+        crest = item.get("Escudo")
+        if isinstance(crest, str) and crest.strip() and len(crest) <= 1024:
+            row["escudo"] = crest.strip()
         normalized.append(row)
     return {"clasificacion": normalized}
+
+

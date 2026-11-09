@@ -10,6 +10,13 @@ spec.loader.exec_module(module)
 
 
 class TeamSearchTests(unittest.TestCase):
+    def test_optional_apk_crest_is_preserved_without_assuming_format(self):
+        base = {'Id': 'opaque', 'Nombre': 'Equipo', 'Club': 'Club', 'Categoria': 'Cat', 'Temporada': '26/27'}
+        for value, expected in [(' imagen-opaca ', 'imagen-opaca'), ('', None), (None, None), (42, None), ('x' * 1025, None)]:
+            with self.subTest(value=value):
+                team = module.normalize_team_results({'error': '', 'equipos': [{**base, 'Escudo': value}]})[0]
+                self.assertEqual(team.get('escudo'), expected)
+
     def test_distinguishes_same_name_by_season_and_category(self):
         teams = [
             {'Id': 'opaque-A', 'Nombre': 'Club Negro', 'Club': 'Club', 'Categoria': 'Alevin', 'Temporada': '26/27'},
@@ -27,3 +34,5 @@ class TeamSearchTests(unittest.TestCase):
                          {'error': '', 'equipos': {}}, {'error': '', 'equipos': [{'Id': 'x'}]}):
             with self.subTest(response=response), self.assertRaises(module.TeamSearchError):
                 module.normalize_team_results(response)
+
+

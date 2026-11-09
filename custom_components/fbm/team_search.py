@@ -25,5 +25,13 @@ def normalize_team_results(response: object) -> list[dict[str, str]]:
         if any(not isinstance(team.get(name), str) or not team[name].strip()
                for name in fields):
             raise TeamSearchError("Equipo sin identificador o datos de seleccion")
-        results.append({target: team[source] for source, target in fields.items()})
+        result = {target: team[source] for source, target in fields.items()}
+        # Campo observado en el modelo APK. Se conserva para investigación;
+        # no se interpreta como URL ni se utiliza hasta validar el contrato real.
+        crest = team.get("Escudo")
+        if isinstance(crest, str) and crest.strip() and len(crest) <= 1024:
+            result["escudo"] = crest.strip()
+        results.append(result)
     return results
+
+
