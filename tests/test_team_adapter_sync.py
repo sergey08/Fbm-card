@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1] / 'custom_components/fbm'
 package = types.ModuleType('fbm_team_adapter_sync_test')
 package.__path__ = [str(ROOT)]
 sys.modules[package.__name__] = package
-for name in ('device_protocol', 'guest_identity', 'guest_session', 'team_search', 'team_phases', 'season_evidence', 'schedule_probe', 'team_protocol', 'team_schedule', 'aficion_adapter', 'independent_identity', 'independent_client'):
+for name in ('device_protocol', 'guest_identity', 'guest_session', 'team_search', 'team_phases', 'season_evidence', 'schedule_probe', 'player_protocol', 'team_roster', 'team_protocol', 'team_schedule', 'aficion_adapter', 'independent_identity', 'independent_client'):
     spec = importlib.util.spec_from_file_location(package.__name__ + '.' + name, ROOT / (name + '.py'))
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
@@ -59,6 +59,24 @@ class TeamAdapterSyncTests(unittest.TestCase):
         run_immediate(client.async_team_group_identity('team'))
         run_immediate(client.async_team_group_identity('team'))
         self.assertEqual(adapter.team_group_identity.await_count, 2)
+
+    def test_roster_uses_verified_team_endpoint_and_normalizer(self):
+        identity = identity_module.GuestIdentity.from_response(
+            'key', 'device', datetime.now(timezone.utc))
+        raw = {'error': '', 'misJugadores': [
+            {'id': 'p1', 'nombre': 'Jugador de prueba',
+             'partidosJugados': 2, 'puntosTotales': 11}]}
+        with patch.object(adapter_module.asyncio, 'to_thread',
+                          new=AsyncMock(return_value=raw)) as transport:
+            result = run_immediate(
+                adapter_module.AficionFBMAdapter(identity).team_roster('team'))
+        transport.assert_awaited_once()
+        fields = transport.await_args.args[1]
+        self.assertEqual(fields['accion'], 'jugadores')
+        self.assertEqual(fields['id_equipo'], 'team')
+        self.assertEqual(result['jugadores'][0]['puntos_totales'], 11)
+        self.assertNotIn('key', str(result))
+        self.assertNotIn('misJugadores', result)
 
     def test_standings_calls_phases_then_classification(self):
         identity = identity_module.GuestIdentity.from_response('key', 'device', datetime.now(timezone.utc))
