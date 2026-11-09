@@ -1,10 +1,10 @@
-name: Validación DEV
+name: Validación FBM
 on:
   workflow_dispatch:
   push:
-    branches: [dev]
+    branches: [main]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
 permissions:
   contents: read
 jobs:
@@ -73,7 +73,7 @@ jobs:
           required = (source / "manifest.json", source / "__init__.py",
                       source / "www/fbm-card.js")
           assert all(item.is_file() for item in required), "Paquete FBM incompleto"
-          out = Path("dist/fbm-card-dev-install.zip")
+          out = Path("dist/fbm-card-install.zip")
           out.parent.mkdir(parents=True, exist_ok=True)
           with ZipFile(out, "w", ZIP_DEFLATED) as archive:
               for item in sorted(source.rglob("*")):
@@ -84,12 +84,12 @@ jobs:
               assert all(item.as_posix() in names for item in required)
               assert not any(name.startswith("/") or ".." in Path(name).parts
                              for name in names), "Ruta insegura en paquete"
-          print(f"Paquete DEV listo: {out} (sin secretos ni datos locales)")
+          print(f"Paquete FBM listo: {out} (sin secretos ni datos locales)")
           PY
-      - name: Guardar paquete DEV para instalación aislada
+      - name: Guardar paquete FBM para instalación aislada
         uses: actions/upload-artifact@v4
         with:
-          name: fbm-card-dev-${{ github.sha }}
+          name: fbm-card-${{ github.sha }}
           path: dist/fbm-card-dev-install.zip
           retention-days: 7
           if-no-files-found: error
