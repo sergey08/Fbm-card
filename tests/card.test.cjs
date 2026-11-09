@@ -50,6 +50,23 @@ test("el campo de búsqueda conserva foco y texto cuando Home Assistant actualiz
   assert.equal(card._experimental, null);
 });
 
+test("buscador genera configuración portable de equipo fijo sin credenciales", () => {
+  const {elements} = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = {tipo_tarjeta:"busqueda",modo_experimental:true};
+  const team = {id:"deporte123",nombre:"Pintobasket",club:"Club",categoria:"Alevín",temporada:"26/27"};
+  const yaml=card._fixedCardYaml(team);
+  assert.match(yaml,/tipo_tarjeta: equipo/);
+  assert.match(yaml,/equipo_fijo:/);
+  assert.match(yaml,/Pintobasket/);
+  assert.doesNotMatch(yaml,/api.key|dispositivo|uid/i);
+  const fixed = new (elements.get("fbm-card"))();
+  fixed._config={tipo_tarjeta:"equipo",modo_experimental:true,equipo_fijo:team};
+  fixed._hass={user:{id:"otro-usuario"}};
+  assert.equal(fixed._restoreExperimentalTeam("entrada").id,team.id);
+  assert.equal(fixed._restoreExperimentalTeam("entrada").categoria,"Alevín");
+});
+
 test("tarjeta fija guarda equipo separado por tarjeta y recupera clasificación al abrir", async () => {
   const { elements, sandbox } = loadCard();
   const store = new Map();
