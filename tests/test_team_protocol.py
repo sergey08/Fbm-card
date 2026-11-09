@@ -62,6 +62,22 @@ class TeamProtocolTests(unittest.TestCase):
                 protocol.post_team_form({**fields, 'unexpected': 'x'})
             urlopen.assert_not_called()
 
+    def test_players_post_uses_same_verified_team_endpoint(self):
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read(self, n): return b'{"error":"","misJugadores":[]}'
+        form = {'accion':'jugadores', 'id_dispositivo':'device',
+                'key':'session', 'id_equipo':'team'}
+        with patch.object(protocol, 'open_request', return_value=Response()) as transport:
+            result = protocol.post_team_form(form)
+        request = transport.call_args.args[0]
+        self.assertEqual(request.full_url, protocol.TEAM_URL)
+        self.assertEqual(request.get_method(), 'POST')
+        self.assertEqual(result['misJugadores'], [])
+        self.assertEqual({k:v[0] for k,v in parse_qs(request.data.decode()).items()}, form)
+
     def test_invalid_dates_rejected(self):
         with self.assertRaises(ValueError):
             protocol.schedule_fields('d', 'k', 't', self.phases, date(2027, 1, 1), date(2026, 1, 1))
