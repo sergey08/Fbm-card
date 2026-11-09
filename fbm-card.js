@@ -270,6 +270,16 @@ class FBMCard extends HTMLElement {
     return "";
   }
 
+  _verifiedClubLogo(club) {
+    if (typeof club !== "string") return "";
+    const name = club.trim().replace(/\s+/g, " ").toUpperCase();
+    const logos = {
+      "PINTOBASKET E.C.B.": "https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg",
+      "VILLA DE VALDEMORO C.B.": "https://fbmtv.fbm.es/imagenes/equipos/escudo-6892.jpg"
+    };
+    return Object.prototype.hasOwnProperty.call(logos, name) ? logos[name] : "";
+  }
+
   _experimentalMatches() {
     const state = this._experimentalState();
     const matches = Array.isArray(state.schedule?.partidos) ? state.schedule.partidos : [];
@@ -425,11 +435,12 @@ class FBMCard extends HTMLElement {
       }
       if (fixed && pinned && !editing) {
         const header = this._element("div", "", "team-header");
-        const logo = this._officialLogoUrl(this._config.logo_equipo);
+        const logo = this._officialLogoUrl(this._config.logo_equipo) || this._verifiedClubLogo(pinned.club);
         if (logo) {
           const img = document.createElement("img");
           img.src = logo; img.alt = "Escudo oficial de " + pinned.nombre;
           img.className = "team-logo"; img.loading = "lazy";
+          img.addEventListener("error", () => img.replaceWith(this._element("span", "🏀", "team-logo-placeholder")), { once: true });
           header.append(img);
         } else header.append(this._element("span", "🏀", "team-logo-placeholder"));
         header.append(this._element("h3", pinned.nombre));
@@ -756,3 +767,5 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === "fbm-card")) {
   window.customCards.push({ type: "fbm-card", name: "FBM Card", description: "Calendario y clasificación FBM (en desarrollo)" });
 }
+
+

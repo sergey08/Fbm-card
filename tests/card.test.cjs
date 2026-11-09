@@ -220,6 +220,39 @@ test("escudos solo de dominios oficiales HTTPS", () => {
   assert.equal(card._officialLogoUrl("https://fbm.es/escudo.png"),"https://fbm.es/escudo.png");
 });
 
+test("escudos de clubes verificados no se asignan por coincidencia parcial", () => {
+  const {elements}=loadCard();
+  const card=new (elements.get("fbm-card"))();
+  assert.equal(card._verifiedClubLogo("  Pintobasket E.C.B. "), "https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg");
+  assert.equal(card._verifiedClubLogo("VILLA DE VALDEMORO C.B."), "https://fbmtv.fbm.es/imagenes/equipos/escudo-6892.jpg");
+  assert.equal(card._verifiedClubLogo("OTRO PINTOBASKET E.C.B."), "");
+  assert.equal(card._verifiedClubLogo("VILLA DE VALDEMORO"), "");
+  assert.equal(card._verifiedClubLogo(null), "");
+});
+
+test("un escudo inaccesible recupera el símbolo neutro", () => {
+  const {elements,sandbox}=loadCard(); sandbox.URL=URL;
+  class Elem {
+    constructor(tag){this.tag=tag;this.children=[];this.listeners={};this.textContent="";}
+    append(...items){this.children.push(...items);}
+    addEventListener(type,fn){this.listeners[type]=fn;}
+    setAttribute(key,value){this[key]=value;}
+    replaceWith(item){this.replacement=item;}
+  }
+  sandbox.document={createElement:tag=>new Elem(tag)};
+  const card=new (elements.get("fbm-card"))();
+  card._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"a"};
+  card._hass={user:{id:"u"},callWS:async()=>({})};
+  const state=card._experimentalState(); state.entry="entry"; state.status={sesion_vigente:true};
+  const team={id:"a",nombre:"Equipo",club:"PINTOBASKET E.C.B.",categoria:"Cat",temporada:"26/27"};
+  state.teams=[team]; state.selected="a"; card._restoreExperimentalTeam=()=>team;
+  const root=new Elem("card"); card._renderExperimental(root);
+  const flatten=el=>[el,...(el.children||[]).flatMap(flatten)];
+  const img=flatten(root).find(el=>el.tag==="img");
+  assert.equal(img.src,"https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg");
+  img.listeners.error(); assert.equal(img.replacement.textContent,"🏀");
+});
+
 test("tarjeta fija guarda equipo separado por tarjeta y recupera clasificación al abrir", async () => {
   const { elements, sandbox } = loadCard();
   const store = new Map();
@@ -704,3 +737,5 @@ test("no ofrece sensores FBM no disponibles", () => {
   } };
   assert.equal(card._teams().length, 0);
 });
+
+
