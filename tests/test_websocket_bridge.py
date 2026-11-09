@@ -45,6 +45,7 @@ class BridgeTests(unittest.TestCase):
         self.client = types.SimpleNamespace(async_register=AsyncMock(), async_recover_registration=AsyncMock(), async_search_teams=AsyncMock(return_value=[{'nombre': 'A'}]),
             async_team_phase_options=AsyncMock(return_value={'nombre_fase': 'Final', 'rondas': [{'id': 'r', 'nombre': 'Final'}]}),
             async_team_schedule=AsyncMock(return_value={'partidos': []}),
+            async_team_schedule_probe=AsyncMock(return_value={'shape':'object','recognized':['partidos'],'entry_fields':[],'counts':{'partidos':0},'has_error':False}),
             async_team_standings=AsyncMock(return_value={'clasificacion': []}),
             async_team_group_identity=AsyncMock(return_value={'group_id':'g','season_id':None,'season_verified':False}))
         self.hass = types.SimpleNamespace(data={'fbm': {'entry': {'cliente_independiente': self.client}}})
@@ -52,7 +53,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_admin_required_for_all_commands(self):
         self.connection.user.is_admin = False
-        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings, module.ws_group_identity):
+        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings, module.ws_group_identity, module.ws_schedule_probe):
             with self.subTest(command=command), self.assertRaises(PermissionError):
                 run_immediate(command(self.hass, self.connection, {'id': 1, 'entry_id': 'entry'}))
         self.client.async_register.assert_not_awaited()
