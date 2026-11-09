@@ -30,7 +30,7 @@ class GuestSessionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_register_returns_identity(self):
         with patch("fbm_session_test_pkg.guest_session.post_device_form",
-                   return_value={"key": "k", "idDispositivo": "d"}) as post:
+                   return_value={"error": "", "key": "k", "id_dispositivo": "d"}) as post:
             identity = await register_guest(self.profile)
         self.assertEqual(identity.key, "k")
         self.assertEqual(identity.device_id, "d")
