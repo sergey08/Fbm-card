@@ -141,6 +141,8 @@ class FBMCard extends HTMLElement {
   }
 
   _restoreExperimentalTeam(entryId) {
+    const configured = this._config?.tipo_tarjeta === "equipo" ? this._config?.equipo_fijo : null;
+    if (configured && this._experimentalTeamIsValid(configured)) return configured;
     const key = this._experimentalPreferenceKey(entryId);
     if (!key) return null;
     try {
