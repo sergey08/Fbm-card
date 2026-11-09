@@ -1,0 +1,498 @@
+# Protocolo de dispositivo observado en Afición FBM 5.0.42
+
+Fecha: 08/11/2026. Fuente exclusiva: APK aportado por el usuario, `classes2.dex` de `base.apk`. Análisis estático sin solicitudes de red ni uso de credenciales.
+
+## Evidencia directa en bytecode
+
+Se han seguido los métodos de inicialización `LZ3/B;->invokeSuspend` y `LZ3/D;->invokeSuspend`, a través de `Ld4/c;->b` y `Ld4/c;->a`, hasta `Lc4/c;->b` y `Lc4/c;->a`, respectivamente.
+
+| Método DEX | Operación literal | Campos de formulario observados | DTO de respuesta |
+|---|---|---|---|
+| `Lc4/c;->b` (code offset 2701660) | `registrar` | `accion`, `uid`, `plataforma`, `tipo_dispositivo`, `version` | `GuardarDispositivoResponseDto` |
+| `Lc4/c;->a` (code offset 2700956) | `acceso` | `accion`, `uid`, `token_push`, `id_dispositivo`, `plataforma`, `tipo_dispositivo`, `version` | `IniciarSesionDispositivoResponseDto` |
+
+Ambos métodos construyen `HttpRequestBuilder`, seleccionan `HttpMethod.Post`, establecen `Content-Type: application/x-www-form-urlencoded`, construyen `FormDataContent` y procesan la respuesta con Ktor. Los offsets son desplazamientos del DEX extraído, no direcciones web.
+
+## Interpretación limitada
+- La aplicación incluye un flujo de registro y posterior acceso de dispositivo. Esto es **evidencia de un protocolo implementado**, no de que cualquier cliente externo pueda usarlo sin autorización.
+- **No se ha verificado todavía la URL efectiva** de estas dos llamadas ni el origen, formato o validez de `uid` e `id_dispositivo`.
+- La existencia de `token_push` no demuestra que sea opcional ni permite inventar un valor.
+- No generar identificadores, tokens o claves, ni reutilizar secretos de una instalación ajena.
+- No se han realizado peticiones reales a la API.
+
+## Próximo análisis
+1. Resolver el valor de URL suministrado a `HttpRequestKt.url` para ambos métodos y contrastarlo con `dispositivo.ashx` / `autenticar.ashx`.
+2. Seguir el origen de `uid`, `id_dispositivo` y el flujo de almacenamiento local, sin extraer valores privados.
+3. Inspeccionar los campos de ambos DTO y comprobar si la respuesta contiene identificadores reutilizados en las consultas deportivas.
+4. Validar las condiciones de acceso y efectuar una prueba autorizada desde un entorno con conectividad.
+
+Rama `dev`; `main` y Home Assistant sin modificar.
+
+## Comprobación adicional del APK original
+
+Se ha reabierto directamente `/mnt/data/fbm_analysis/base.apk` y leído `classes2.dex` como tabla de cadenas DEX. Se confirman las siguientes referencias (índices de cadena, no offsets de instrucciones):
+
+- `39654`: `https://appaficionfbm.gesdeportiva.es/dispositivo.ashx`.
+- `39651`: `https://appaficionfbm.gesdeportiva.es/autenticar.ashx`.
+- `18566`: clase `GuardarDispositivoResponseDto`.
+- `18567`: clase `IniciarSesionDispositivoResponseDto`.
+- `12270` y `12852`: cadenas `toString` de esos DTO, ambas comienzan por `duracionIntersticia=`.
+
+**Importante:** la presencia de `dispositivo.ashx` junto a las operaciones `registrar` y `acceso` no basta para demostrar que ambas se envíen a esa URL. Es necesario seguir el argumento de `HttpRequestKt.url` y su origen. No se han enviado peticiones, ni leído tokens, ni reconstruido claves.
+
+## Cadena de inicialización corroborada por trazas de ejecución estática
+
+La inspección del flujo `LZ3/B;->invokeSuspend` muestra, en este orden de código, la versión literal `5.0.42`, la llamada `Ld4/c;->b`, una comparación con `correcto` y, más adelante, referencias a `key`, `dispositivoId` y al texto de error `UID no válido`. En `LZ3/D;->invokeSuspend` aparece la lectura de `idDispositivoDbFBM`, la versión `5.0.42`, la llamada `Ld4/c;->a`, la comparación con `correcto` y las referencias `key` y `dispositivoId`.
+
+**Deducción, aún no contrato probado:** el flujo parece distinguir entre alta de dispositivo y acceso de un dispositivo previamente almacenado; en ambos casos se procesaría una respuesta que puede alimentar `key` y `dispositivoId`. La mera proximidad de instrucciones no demuestra asignación de campos, obligatoriedad de parámetros ni su procedencia.
+
+**Bloqueo concreto:** falta desensamblar con seguimiento de registros el valor pasado a `HttpRequestKt.url` en `Lc4/c;->a/b` y los accesos al DTO. No sustituir esa comprobación por solicitudes inventadas.
+
+## Validación negativa del mapeo directo de URL (08/11/2026)
+
+Se ejecutó de nuevo sobre `classes2.dex` la comprobación que exige que una instrucción `const-string` de URL esté seguida inmediatamente por `sput-object` del mismo registro. Para `dispositivo.ashx` y `autenticar.ashx`, **el resultado fue una lista vacía**. Esto significa exclusivamente que **no se ha demostrado una asignación estática directa con ese patrón**; no que las rutas no se utilicen. El patrón sí había encontrado cinco asignaciones para `v2/busqueda.ashx`, por lo que es una comprobación útil, aunque incompleta.
+
+La búsqueda de referencias dentro de instrucciones reconocidas por el inventario parcial `method_owners.json` tampoco devuelve coincidencias para las dos rutas de dispositivo. Se debe ampliar el rastreo a `const-string/jumbo`, otras clases DEX, construcción dinámica y propagación de registros. **No se atribuye ninguna URL a las operaciones `registrar` o `acceso` sin esa prueba**.
+
+## URL de registro y acceso resuelta por seguimiento de registros (08/11/2026)
+
+**Confirmado en instrucciones DEX alineadas**, no por proximidad de cadenas:
+
+1. `Lc4/c;-><init>` (código desde offset decimal `2702352`) ejecuta `const-string v1, "https://appaficionfbm.gesdeportiva.es/dispositivo.ashx"` en `2702362`, seguido de `iput-object v1, v0, Lc4/c;->b:Ljava/lang/String;` en `2702366`. El campo `a` es el cliente HTTP Ktor.
+2. En `Lc4/c;->a` (`acceso`), en `2701116` se lee `iget-object v5, v1, Lc4/c;->b:Ljava/lang/String;`; en `2701148`, `HttpRequestKt.url` recibe `v9` (request builder) y `v5` (URL).
+3. En `Lc4/c;->b` (`registrar`), en `2701818` se lee el **mismo campo** `Lc4/c;->b` a `v5`; en `2701850`, `HttpRequestKt.url` recibe igualmente `v9` y `v5`.
+4. Ambos métodos fijan `POST` y construyen `application/x-www-form-urlencoded` (documentado anteriormente).
+
+**Conclusión confirmada:** `registrar` y `acceso` de la versión APK 5.0.42 se envían a `https://appaficionfbm.gesdeportiva.es/dispositivo.ashx`. Esto corrige la limitación del apartado anterior: la URL no se asigna a un campo estático mediante `sput-object`, sino al campo **de instancia** mediante `iput-object` en el constructor.
+
+**Pendiente:** origen exacto de `uid`, semántica de `token_push`, campos de respuesta y verificación de acceso autorizado. No se ha realizado tráfico de red ni extraído claves.
+
+## Identificación adicional de DTO y campos (análisis directo del DEX)
+
+La lectura de la tabla de cadenas de `classes2.dex` en el APK original identifica los tipos completos:
+
+- `Lcom/indalweb/appaficion/app/app_data/data/dto/GuardarDispositivoResponseDto;` (índice DEX de cadena 18566).
+- `Lcom/indalweb/appaficion/app/app_data/data/dto/IniciarSesionDispositivoResponseDto;` (índice 18567).
+- El nombre de campo serializable `duracionIntersticia` (índice 34668), con acceso `getDuracionIntersticia` (índice 36698).
+- El literal de almacenamiento local `idDispositivoDbFBM` (índice 39714), el nombre de formulario `token_push` (48249) y `uid` (48516).
+
+**Precaución:** los índices de cadenas no prueban por sí solos que un campo esté presente en una respuesta concreta. Para determinar los nombres JSON de `key`, `dispositivoId` y demás atributos hay que resolver las anotaciones de serialización de cada DTO y las lecturas de sus propiedades; el `toString` de una clase no constituye un contrato JSON. No se han recuperado valores de dispositivo ni tokens.
+
+## Campos reales de las dos clases DTO (lectura directa de field_ids)
+
+Se ha leído `classes2.dex` desde el `base.apk` original, interpretando las tablas `string_ids`, `type_ids` y `field_ids` según el formato DEX, filtrando por los tipos `GuardarDispositivoResponseDto` e `IniciarSesionDispositivoResponseDto`. **No se trata de mera coincidencia de cadenas**.
+
+Ambas clases declaran, entre otros, estos campos de instancia con el mismo tipo:
+
+| Campo | Tipo DEX | Interpretación prudente |
+|---|---|---|
+| `key` | `Ljava/lang/String;` | Candidato a clave devuelta por el servicio; contenido desconocido |
+| `idDispositivo` | `Ljava/lang/String;` | Candidato a identificador devuelto; contenido desconocido |
+| `resultado` | `Ljava/lang/String;` | Estado textual, semántica no confirmada |
+| `error` | `Ljava/lang/String;` | Error textual, semántica no confirmada |
+| `perfil` | `Lcom/indalweb/appaficion/app/app_data/data/dto/PerfilDto;` | Objeto de perfil, contenido desconocido |
+| `email` | `Ljava/lang/String;` | Campo opcional/no confirmada su presencia |
+| `emailVerificado` | `Z` | Booleano |
+| `duracionIntersticia` | `I` | Entero |
+| `tiempoReseteoIntersticial` | `J` | Entero largo |
+
+También se identifican campos de configuración `mostrarPublicidad`, `mostrarJugadaJugadaVersionGratis`, `mostrarJugadaJugadaVersionPago`, `noticiasXmlActivo`, `noticiasXmlUrl`, `requiereVersionMinimaAndroid` y `versionActualAndroid`.
+
+**Conclusión:** las dos clases de respuesta **declaran** `key` e `idDispositivo`. Falta demostrar mediante las anotaciones del serializador o una respuesta HTTP autorizada el nombre exacto en JSON, su obligatoriedad y la vinculación con las consultas deportivas. No se han obtenido claves reales ni datos de usuario.
+
+## Origen de argumentos: campos DEX anteriores a las llamadas (08/11/2026)
+
+Se han decodificado los índices de campo de instrucciones `iget-object` / `iput-object` reales inmediatamente anteriores a las invocaciones de las corrutinas de registro y acceso. Los offsets son absolutos en `classes2.dex`:
+
+| Método | Offset | Opcode | Campo DEX tipado |
+|---|---:|---|---|
+| `LZ3/B;->invokeSuspend` (registro) | 2638692 | `iget-object` | `LN4/v;->b:Ljava/lang/String;` |
+| registro | 2638712 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| registro | 2638720 | `iget-object` | `LN4/v;->c:LN4/a0;` |
+| registro | 2638724 | `iget-object` | `LN4/a0;->e:Ljava/lang/String;` |
+| registro | 2638744 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| registro | 2638752 | `iget-object` | `LN4/v;->a:LN4/i1;` |
+| registro | 2638756 | `iget-object` | `LN4/i1;->e:Ljava/lang/String;` |
+| registro | 2638770 | `iget-object` | `LZ3/H;->e:Ld4/c;` |
+| `LZ3/D;->invokeSuspend` (acceso) | 2640310 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| acceso | 2640342 | `iget-object` | `LZ3/a;->p:LN4/v;` |
+| acceso | 2640350 | `iget-object` | `LN4/v;->a:LN4/i1;` |
+| acceso | 2640354 | `iget-object` | `LN4/i1;->e:Ljava/lang/String;` |
+| acceso | 2640370 | `iget-object` | `LZ3/H;->e:Ld4/c;` |
+| acceso | 2640374 | `iget-object` | `LN4/v;->b:Ljava/lang/String;` |
+
+**Hallazgo:** ambos caminos leen `LN4/v;->b` y `LN4/i1;->e`, mientras el registro también lee `LN4/a0;->e`. Esto identifica clases y campos concretos que hay que seguir hasta sus constructores o escrituras. **No asignar aún los nombres `uid`, `token_push` ni `id_dispositivo` a esos campos sin decodificar la propagación de registros y el orden de argumentos del `invoke-range`**. La inspección ha sido estática, sin red ni secretos.
+
+## Rastreo de uso posterior de la identidad invitada (08/11/2026)
+
+Se ha revisado el inventario de accesos a los campos estáticos `Ll7/I;->a:Ljava/lang/String;` (field_id `23338`) y `Ll7/I;->b:Ljava/lang/String;` (field_id `23339`), elaborado al recorrer los `code_item` de `classes2.dex`.
+
+**Evidencia adicional:** en el método `LH5/j;->a` (method_id `2524`) aparecen lecturas `sget-object` de ambos campos (offsets DEX `1708102` y `1708192`), y se repiten en otras ramas de la misma rutina. La presencia de **dos campos estáticos compartidos** en una rutina de consultas es una pista concreta para conectar la inicialización con las peticiones posteriores.
+
+El rastreo de escrituras contiene llamadas a `LZ3/b;->z` con literales `key` y `dispositivoId` (por ejemplo offsets `1784504`–`1784512`, `2209894`–`2209902`), que sugieren lectura de propiedades del resultado. **Todavía no está demostrado** que esas propiedades se asignen a `Ll7/I;->a/b` ni qué campo representa cada una: se necesita seguir registros y la asignación `sput-object` correspondiente.
+
+El barrido automático contabilizó `45403` métodos y `26` errores de decodificación de payload; por tanto el inventario no es exhaustivo y no debe presentarse como prueba de ausencia de otros accesos. Ninguna petición HTTP ni dato privado se ha obtenido en esta comprobación.
+
+**Próximo paso técnico:** desensamblar completamente `LH5/j;->a` y las escrituras sobre `Ll7/I;->a/b`, asociar registros de `key` / `dispositivoId` con los campos de formulario de búsqueda y crear un test de contrato sin valores reales antes de probar el acceso.
+
+## Escrituras directas de identidad tras registro y acceso — 08/11/2026
+
+Nueva comprobación del inventario `guest_field_writes.json` y los contextos de instrucciones de `guest_write_context.json`, generados desde el APK original:
+
+| Flujo | Método | Escritura campo `Ll7/I;->a` | Escritura campo `Ll7/I;->b` |
+|---|---|---:|---:|
+| Registro | `LZ3/B;->invokeSuspend` | `sput-object` offset 2639244, registro v2 | `sput-object` offset 2639312, registro v1 |
+| Acceso | `LZ3/D;->invokeSuspend` | `sput-object` offset 2640510, registro v3 | `sput-object` offset 2640578, registro v2 |
+
+En el contexto de ambas rutas aparecen lecturas de propiedades `key` y `dispositivoId` mediante `Lkotlin/jvm/internal/k;->f` y una invocación `Lv8/o;->C0` inmediatamente antes de la primera escritura. En el inventario anterior, `LH5/j;->a` lee los dos campos estáticos.
+
+**Conclusión limitada:** el APK escribe los dos campos compartidos tras los flujos de registro y acceso, y los consulta posteriormente. Para afirmar que `a=key` y `b=idDispositivo` (o viceversa) hace falta seguir el registro de retorno de cada acceso al DTO hasta cada `sput-object`, incluyendo `move-result-object` y conversiones. No inferir el orden por proximidad de literales. Ninguna petición HTTP realizada.
+
+## Correspondencia verificada de registros a campos compartidos (08/11/2026)
+
+Se decodificaron los operandos reales `22c` (`iget-object`) y `21c` (`sput-object`) en `classes2.dex` extraído del APK aportado. Se usó la tabla `field_ids` para resolver los índices, no coincidencias de texto.
+
+| Flujo | Lectura DTO | Campo leído | Escritura estática | Campo escrito |
+|---|---|---|---|---|
+| Registro `LZ3/B` | 2639204 `iget-object v2,v1` | `Lf4/a;->w:Ljava/lang/String;` | 2639244 `sput-object v2` | `Ll7/I;->a` |
+| Registro `LZ3/B` | 2639218 `iget-object v1,v1` | `Lf4/a;->v:Ljava/lang/String;` | 2639312 `sput-object v1` | `Ll7/I;->b` |
+| Acceso `LZ3/D` | 2640470 `iget-object v3,v2` | `Lf4/a;->w:Ljava/lang/String;` | 2640510 `sput-object v3` | `Ll7/I;->a` |
+| Acceso `LZ3/D` | 2640484 `iget-object v2,v2` | `Lf4/a;->v:Ljava/lang/String;` | 2640578 `sput-object v2` | `Ll7/I;->b` |
+
+Entre lectura y escritura hay comprobaciones de nulidad `Lkotlin/jvm/internal/k;->f` y validaciones `Lv8/o;->C0`; no se aprecia sobrescritura de los registros correspondientes en los tramos analizados. Los literales `key` y `dispositivoId` se utilizan en ese mismo orden en dichas comprobaciones, de modo que la interpretación más fundada es **`Ll7/I;->a = key`** y **`Ll7/I;->b = dispositivoId`**. La correspondencia `w/v` → `key/dispositivoId` aún debe contrastarse con los metadatos de serialización del DTO, para no confundir nombres internos ofuscados con nombres JSON.
+
+**Confirmado sin red:** los flujos de registro y acceso almacenan los mismos dos campos de respuesta en los mismos dos campos estáticos. **Pendiente:** confirmar nombres JSON, cómo se transmiten en `LH5/j;->a` y validar acceso autorizado.
+
+## Contraste con las tres operaciones de búsqueda (análisis local de código DEX)
+
+Se ha contrastado el resultado de identidad con `verified_post_literals.json` y `post_append_sequence.json`, que inspeccionan instrucciones `const-string` alineadas y las invocaciones a `StringValuesBuilder.append` entre la creación del POST y el contenido del formulario.
+
+| Operación literal en el APK | Método DEX | Offset literal de operación | Parámetros literales observados | Número de llamadas `append` |
+|---|---|---:|---|---:|
+| `buscarClub` | `Lb5/e;->a` | 2688830 | `accion`, `id_dispositivo`, `key`, `texto`, `skip` | 5 |
+| `buscarCategoria` | `Lk5/m;->b` | 4832406 | `accion`, `id_dispositivo`, `key`, `texto`, `skip` | 5 |
+| `buscarEquipo` | `Lx5/k;->h` | 5682166 | `accion`, `id_dispositivo`, `key`, `texto`, `skip` | 5 |
+
+Las tres rutinas configuran POST con `application/x-www-form-urlencoded`. La coincidencia de nombres de campos es evidencia de un contrato de formulario compartido; la correspondencia exacta de los **valores** debe comprobarse siguiendo los registros hasta cada `append` (el análisis actual solo asocia el literal anterior más próximo).
+
+**Implicación práctica:** el primer cliente funcional debe probar `buscarEquipo` (además de `buscarClub` y `buscarCategoria`) usando una identidad invitada obtenida legítimamente, sin inventar ni registrar claves en los logs. El diagnóstico anterior sin `id_dispositivo` y `key` no era una prueba completa del contrato observado en la APK.
+
+## Hallazgo: la búsqueda procesa la clave con una operación temporal (08/11/2026)
+
+Inspección directa del archivo `/mnt/data/fbm_analysis/post_register_trace.json`, contrastado con el desensamblado de `Ly8/o;->a`:
+
+- En `Lb5/e;->a` (`buscarClub`), después del literal de formulario `key` (offset DEX `2688864`), se obtiene `java.time.Clock.systemUTC()` (2688882), se invoca `Clock.instant()` (2688890), se construye `Ly8/o` con ese `Instant` (2688908) y se llama a `Ly8/o;->a` (2688914). La operación de `append` de `key` se encuentra en 2688950.
+- La secuencia contiene además una comparación y una selección de registros entre la llamada a `Ly8/o;->a` y el `append`. **No se ha demostrado aún qué valor concreto se añade**; la lógica es condicional.
+- El código de `Ly8/o;->a` hace referencia a campos de instancia, `java.time.Instant`, una comparación y constantes. Es necesario decodificarlo por completo antes de atribuirle una fórmula o describirlo como firma, caducidad o cifrado.
+
+**Implicación:** no es correcto suponer que basta con insertar sin más el `key` devuelto en el formulario de búsqueda. Hay lógica temporal/condicional en su preparación. No se han calculado ni extraído claves, ni realizado peticiones de red. Para el cliente, mantener separadas la identidad de dispositivo y la preparación del parámetro `key` hasta tener el contrato confirmado.
+
+## Corrección técnica: `Ly8/o;->a` no genera una clave (08/11/2026)
+
+Se ha vuelto a desensamblar **el método completo** `Ly8/o;->a` a partir del `code_item` original (`classes2.dex`, bytes `5744720`–`5744768`). El resultado permite corregir la interpretación provisional de la sección «Hallazgo: la búsqueda procesa la clave con una operación temporal»:
+
+- `5744720`: `iget-object` lee `Ly8/o;->e:Ljava/time/Instant;`.
+- `5744724`: `invoke-virtual java.time.Instant.toEpochMilli()`.
+- `5744730`: `move-result-wide` del resultado numérico.
+- La ruta de excepción comprueba `Instant.isAfter(Instant.EPOCH)` (`5744734`–`5744746`) y retorna `Long.MAX_VALUE` o `Long.MIN_VALUE` según corresponda (`5744750` y `5744762`).
+
+**Conclusión comprobada:** `Ly8/o;->a` es un conversor de `Instant` a milisegundos Unix con tratamiento de desbordamiento. **No es un método de firma, cifrado ni derivación de `key`.** Que se invoque mientras se construye el formulario de búsqueda **no prueba que su resultado sea el valor de `key`**; hay que seguir la selección condicional y los registros hasta `StringValuesBuilder.append`. No implementar una transformación de clave basándose en esa proximidad.
+
+La comprobación estática no realizó solicitudes HTTP ni accedió a credenciales.
+
+## Resuelto: valor de `key` en `buscarClub` condicionado por caducidad (DEX)
+
+La inspección de los opcodes y registros del método `Lb5/e;->a` aclara la secuencia que se había interpretado provisionalmente como posible transformación de clave:
+
+- `2688844`: `sget-object v12, Ll7/I;->b:Ljava/lang/String;` prepara `id_dispositivo`; si es nulo, el flujo utiliza la cadena vacía (2688848–2688858).
+- `2688864`: literal `key`.
+- `2688914`–`2688920`: conversión de la hora UTC actual a milisegundos (`Ly8/o;->a`, `move-result-wide v14`).
+- `2688922`: `sget-wide v16, Ll7/I;->c:J`, un umbral temporal compartido.
+- `2688926`: `cmp-long v12, v14, v16`, compara hora actual con umbral.
+- `2688930`: `if-gez v12` salta la lectura de clave cuando `ahora >= umbral`.
+- `2688934`: en la rama `ahora < umbral`, `sget-object v12, Ll7/I;->a:Ljava/lang/String;`.
+- `2688942`–`2688950`: comprobación de nulidad y `StringValuesBuilder.append(..., "key", ...)` con valor seleccionado; la rama sin clave conserva el valor vacío previamente inicializado.
+
+**Conclusión:** en esta operación la clave no se cifra ni se deriva del reloj. Se **usa la clave almacenada solo mientras el umbral temporal no ha vencido**, y se envía un valor vacío si falta o ha caducado. El significado preciso y origen de `Ll7/I;->c` (expiración de sesión u otro plazo) todavía debe seguirse hasta sus escrituras; no etiquetarlo como caducidad de autenticación confirmada. Este análisis es estático y no contiene claves reales.
+
+**Siguiente paso:** localizar todas las escrituras de `Ll7/I;->c` y vincularlas con el procesamiento de respuestas; comprobar que `buscarEquipo` y `buscarCategoria` siguen la misma condición antes de implementar una política de renovación. No se han realizado peticiones HTTP.
+
+## Origen del umbral temporal: escrituras en registro y acceso (08/11/2026)
+
+Una nueva exploración de todos los `code_item` de `classes2.dex`, buscando las instrucciones DEX `sput-wide` (`0x68`) dirigidas a `Ll7/I;->c:J` (field ID 23340), ha localizado las escrituras en los mismos flujos que reciben y guardan la identidad invitada:
+
+| Flujo | Escritura `sput-wide` | Instrucciones anteriores |
+|---|---:|---|
+| Registro de dispositivo, `LZ3/B;->invokeSuspend` | 2639296 | `Ly8/o;->a` (2639280), `move-result-wide` (2639286), `const-wide/32` (2639288), operación de dos registros (2639294) |
+| Acceso de dispositivo, `LZ3/D;->invokeSuspend` | 2640562 | `Ly8/o;->a` (2640546), `move-result-wide` (2640552), `const-wide/32` (2640554), operación de dos registros (2640560) |
+
+Se confirma que el campo temporal compartido se actualiza tanto tras registro como tras acceso, en los mismos métodos que almacenan `key` e `idDispositivo`. **No se confirma todavía el cálculo ni la duración exacta**: hace falta seguir los registros de la operación y descartar errores de alineación en el desensamblado parcial antes de implementar el vencimiento.
+
+**Estado de pruebas externas:** el flujo de GitHub Actions incluye DNS, HTTPS y diagnóstico `buscarEquipo` con los cinco campos observados, pero una consulta de ejecuciones asociadas al commit previo no devolvió resultados; no hay prueba de conectividad satisfactoria confirmada. Ningún cambio se ha aplicado a Home Assistant.
+
+## Cálculo exacto del umbral temporal en el APK (08/11/2026)
+
+Inspección directa de los bytes de `classes2.dex` confirma **la misma fórmula en registro y acceso**:
+
+| Flujo | Instrucciones DEX | Significado |
+|---|---|---|
+| Registro `LZ3/B;->invokeSuspend` | `2639286: 0b 02` | `move-result-wide v2`: milisegundos Unix devueltos por `Ly8/o;->a` |
+| | `2639288: 17 04 80 d7 07 05` | `const-wide/32 v4, 0x0507d780` = **84.400.000 ms** |
+| | `2639294: bb 42` | `add-long/2addr v2, v4` |
+| | `2639296: 68 02 2c 5b` | `sput-wide v2, Ll7/I;->c:J` |
+| Acceso `LZ3/D;->invokeSuspend` | `2640552: 0b 03` | `move-result-wide v3` |
+| | `2640554: 17 05 80 d7 07 05` | `const-wide/32 v5, 0x0507d780` = **84.400.000 ms** |
+| | `2640560: bb 53` | `add-long/2addr v3, v5` |
+| | `2640562: 68 03 2c 5b` | `sput-wide v3, Ll7/I;->c:J` |
+
+**Fórmula comprobada:** `Ll7/I.c = Instant.now().toEpochMilli() + 84_400_000`, aproximadamente **23 h 26 min 40 s**. Esta duración no es exactamente 24 horas; no redondearla ni sustituirla por 86.400.000 ms. La comprobación en `buscarClub` utiliza la clave almacenada mientras `ahora < Ll7/I.c`.
+
+**Límite de la evidencia:** se conoce el umbral local utilizado para decidir si enviar `key`; no se ha probado que sea la caducidad efectiva de una sesión en el servidor ni cómo se renueva. No se han hecho solicitudes de registro ni cambios en Home Assistant.
+
+## Versión enviada durante el registro (verificación DEX)
+
+En `LZ3/B;->invokeSuspend`, offset `2638774`, se carga literalmente `5.0.42` mediante `const-string`. En `2638788` se invoca `Ld4/c;->b` con cuatro argumentos `String` y la continuación de corrutina; esta es la ruta que construye el formulario `registrar` en `dispositivo.ashx`. El valor `5.0.42` se encuentra en la preparación inmediata de la llamada y corresponde a la versión de la APK analizada.
+
+**Precaución:** la evidencia confirma la constante de versión de esta compilación, no que sea un valor permanente ni que pueda utilizarse como sustituto de UID, plataforma o tipo de dispositivo. Sigue pendiente rastrear el origen de esos campos hasta sus productores y validar la petición con el servidor.
+
+## Trazado de procedencia de argumentos del registro (DEX, 8-11-2026)
+
+Se ha seguido la preparación de la llamada `LZ3/B;->invokeSuspend` → `Ld4/c;->b` (offset `2638788`), sin asumir valores por sus nombres ofuscados:
+
+- En `2638692`, se lee `LN4/v;->b` desde un valor de `MutableStateFlow`; se prepara como argumento de la llamada.
+- En `2638720` y `2638724`, se sigue `LN4/v;->c` → `LN4/a0;->e`; se prepara como otro argumento.
+- En `2638752` y `2638756`, se sigue `LN4/v;->a` → `LN4/i1;->e`; se prepara como otro argumento.
+- En `2638774`, se carga la constante `5.0.42`; en `2638788`, se ejecuta el `invoke-*/range` de `Ld4/c;->b`.
+
+**Conclusión limitada:** los tres valores variables proceden del estado interno de la aplicación (`MutableStateFlow` y sus modelos), no de tres constantes inmediatas en la llamada. La asignación inequívoca de cada cadena a `uid`, `plataforma` y `tipo_dispositivo` exige seguir los registros hasta la construcción del formulario en `Ld4/c;->b` y rastrear quién rellena esos modelos. No se deben usar `LN4/v`, `LN4/a0` o `LN4/i1` como nombres semánticos de campos.
+
+## Verificación de registros en llamada `registrar` (DEX)
+
+Se ha comprobado el tramo de bytes de `classes2.dex` inmediatamente anterior al `invoke-range` de `Ld4/c;->b`:
+
+| Offset DEX | Bytes | Interpretación |
+| --- | --- | --- |
+| 2638774 | `1a 05 5c 21` | `const-string v5, "5.0.42"` |
+| 2638778 | `07 32` | `move-object v2, v3` |
+| 2638780 | `07 43` | `move-object v3, v4` |
+| 2638782 | `07 54` | `move-object v4, v5` |
+| 2638784 | `08 05 2d 00` | `move-object/from16 v5, v45` (continuación) |
+| 2638788 | `74 06 cc 6a 00 00` | `invoke-virtual/range {v0..v5}, Ld4/c;->b` |
+
+La firma de `Ld4/c;->b` tiene **cuatro cadenas y una continuación**. En una invocación de instancia `v0` es el receptor, `v1..v4` son las cuatro cadenas y `v5` es la continuación. Por tanto, **la versión `5.0.42` es inequívocamente el cuarto parámetro de cadena (`v4`)**. Las otras tres cadenas son `v1`, `v2` y `v3`, cuyo origen exacto sigue pendiente de seguir hacia atrás. Esta comprobación evita confundir el orden de parámetros de registro.
+
+## Asociación inequívoca entre argumentos y campos HTTP (DEX)
+
+La función `Lc4/c;->b` construye el formulario de `registrar` con estas instrucciones:
+
+| Offset | Instrucción DEX | Campo HTTP | Valor en registro |
+| --- | --- | --- | --- |
+| 2701898–2701904 | `const-string "uid"; move-object v12,v14; append` | `uid` | `v14` |
+| 2701910–2701916 | `const-string "plataforma"; move-object v12,v15; append` | `plataforma` | `v15` |
+| 2701922–2701930 | `const-string "tipo_dispositivo"; move-object/from16 v12,v16; append` | `tipo_dispositivo` | `v16` |
+| 2701936–2701944 | `const-string "version"; move-object/from16 v12,v17; append` | `version` | `v17` |
+
+Por la disposición de los registros de parámetros de `Lc4/c;->b`, los cuatro argumentos de cadena del llamador corresponden, **en orden**, a `uid`, `plataforma`, `tipo_dispositivo` y `version`. Esto resuelve la correspondencia posicional, pero **no** el origen ni los valores concretos de las primeras tres cadenas. Para resolverlos hay que rastrear los productores de los valores de `StateFlow` que llegan a `LZ3/B;->invokeSuspend`; no se deben sustituir por cadenas genéricas ni por un UUID aleatorio sin evidencia.
+
+## Candidatos a generación del UID: inventario de cadenas DEX (8-11-2026)
+
+Se inspeccionó directamente la tabla `string_ids` de `classes2.dex` de la APK 5.0.42. Contiene las cadenas `randomUUID` (índice 45221), `randomUUID().toString()` (45222), `android_id` (31811), `firebaseInstallations` (35494), `dispositivoRegistradoDbFBM` (34560) e `idDispositivoDbFBM` (39714).
+
+**Importante:** la presencia de esas cadenas **no demuestra** que ninguna sea la fuente del `uid` enviado a `dispositivo.ashx`. Firebase y Android ID pueden pertenecer a bibliotecas incluidas en la APK; `idDispositivoDbFBM` puede ser un identificador recibido del servidor y no el UID local. La siguiente comprobación es buscar las referencias de código a estas cadenas y rastrear los valores hasta `LN4/v` y `LZ3/B;->invokeSuspend`. No usar UUID aleatorios ni Android ID sin ese enlace.
+
+## Referencias directas a candidatos de UID en classes2.dex (análisis local)
+
+Se ha buscado la instrucción DEX `const-string` (`0x1a`) para los índices de cadenas identificados previamente. Este barrido es **de candidatos**: cada coincidencia debe comprobarse contra los límites reales de instrucciones de un método.
+
+| Cadena | Índice `string_ids` | Offsets candidatos |
+| --- | ---: | --- |
+| `android_id` | 31811 | 2641778, 2715090, 3206456, 3215480, 3225914, 3862812 |
+| `randomUUID().toString()` | 45222 | 5339440 |
+| `dispositivoRegistradoDbFBM` | 34560 | 2642502, 2643134 |
+| `idDispositivoDbFBM` | 39714 | 2640026, 2642476, 2643176, 2659668 |
+| `randomUUID` | 45221 | ninguna referencia directa `const-string` encontrada |
+| `firebaseInstallations` | 35494 | ninguna referencia directa `const-string` encontrada |
+
+**Pista prioritaria:** `android_id` aparece en `2641778`, próximo al bloque de inicialización de dispositivo, y los nombres de persistencia `dispositivoRegistradoDbFBM` e `idDispositivoDbFBM` aparecen en `2642xxx`. La proximidad por sí sola no demuestra flujo de datos ni permite afirmar que `uid = ANDROID_ID`. Debemos desensamblar el método propietario del offset `2641778` y seguir el resultado de `Settings.Secure.getString` (si existe) hasta el argumento `uid` de `Ld4/c;->b`. **No enviar todavía solicitudes con un identificador supuesto.**
+
+## Descarte de falsos positivos de UID por método propietario (8-11-2026)
+
+Se ha cruzado cada offset candidato con los `code_item` de **45.403 métodos** de `classes2.dex`, usando la tabla de clases y las posiciones reales de código. Esto permite distinguir código de FBM de bibliotecas externas:
+
+| Referencia | Método propietario | Interpretación |
+| --- | --- | --- |
+| `android_id` @2641778 | `LZ3/H;->A` | **Código de inicialización FBM; candidato prioritario** |
+| `android_id` @2715090 | `com/google/android/gms/internal/consent_sdk/C;->a` | Biblioteca Google Consent, no prueba UID FBM |
+| `android_id` @3206456, 3215480, 3225914 | `com/google/android/gms/measurement/internal/zzav` | Biblioteca Google Analytics, no prueba UID FBM |
+| `android_id` @3862812 | `com/qonversion/android/sdk/internal/EnvironmentProvider;->getDeviceId` | SDK Qonversion, no prueba UID FBM |
+| `randomUUID().toString()` @5339440 | `okhttp3/MultipartBody$Builder;-><init>` | **Descartado como evidencia de UID FBM:** identificador interno de multipart |
+| `dispositivoRegistradoDbFBM`, `idDispositivoDbFBM` @2642476–2643176 | `LZ3/H;->e` y `LZ3/H;->m` | Persistencia propia FBM; relevante para ciclo de vida |
+| `idDispositivoDbFBM` @2640026 | `LZ3/D;->invokeSuspend` | Acceso de dispositivo |
+| `idDispositivoDbFBM` @2659668 | `LZ3/u;->invokeSuspend` | Otra lectura propia de FBM |
+
+**Resultado:** cinco de las seis referencias a `android_id` son de bibliotecas externas; la única candidata de código FBM es `LZ3/H;->A`. El candidato `randomUUID().toString()` pertenece a OkHttp y no debe usarse para generar UID. El siguiente paso es analizar las instrucciones de `LZ3/H;->A` y los lugares que consumen su valor. Este análisis de pertenencia a método **no demuestra aún** que `android_id` sea el UID del formulario de registro.
+
+## UID confirmado mediante flujo de datos DEX (8-11-2026)
+
+Se desensamblaron instrucciones **alineadas** de los métodos `LZ3/H;->A`, `LN4/v;-><init>` y `LZ3/B;->invokeSuspend` del APK 5.0.42:
+
+1. `LZ3/H;->A` en offset `2641778` carga `"android_id"`; en `2641782` invoca `Landroid/provider/Settings$Secure;->getString` con `ContentResolver` y esa cadena. El resultado se conserva en `v2`.
+2. En `2641888` se invoca `LN4/v;-><init>` con receptor `v0` y tres argumentos `v1`, `v2`, `v3`.
+3. El constructor `LN4/v;-><init>` escribe esos argumentos en los campos `a`, `b` y `c`, respectivamente (offsets `1917526`, `1917530`, `1917534`). **Por tanto, `LN4/v;->b` contiene el Android ID leído.**
+4. En el registro `LZ3/B;->invokeSuspend`, offset `2638692`, se lee `LN4/v;->b`. La llamada de registro `Ld4/c;->b` en `2638788` utiliza ese valor como primer argumento de cadena, que la construcción del formulario mapea a `uid`.
+
+**Conclusión:** para la APK Android 5.0.42, el `uid` de registro procede de `Settings.Secure.ANDROID_ID`. No es un UUID aleatorio ni el `idDispositivo` que devuelve el servidor. Es un identificador del dispositivo/entorno Android, y no debe inventarse ni reutilizarse entre usuarios. El código HA no puede obtener automáticamente el Android ID de un teléfono: necesitaría un método legítimo de provisión o un mecanismo de registro alternativo contrastado.
+
+Otros dos parámetros: `LZ3/H;->A` construye una cadena con `"Android "` y `Build.VERSION.RELEASE` para el objeto `LN4/a0`, y selecciona un valor de `LN4/i1` para tipo de dispositivo. En `LZ3/B;->invokeSuspend` se leen respectivamente `LN4/v;->c -> LN4/a0;->e` (segundo argumento, `plataforma`) y `LN4/v;->a -> LN4/i1;->e` (tercero, `tipo_dispositivo`). El valor concreto de `LN4/i1;->e` requiere revisar la inicialización del enum.
+
+## Tipo de dispositivo y plataforma: valores confirmados (DEX 5.0.42)
+
+Se ha desensamblado el inicializador del enum `LN4/i1;-><clinit>` (offset 1911840) y el método de identificación `LZ3/H;->A` (offset 2641712):
+
+- Enum `PHONE` → cadena de formulario **`mobile`**, inicializado en offsets 1911844–1911860.
+- Enum `TABLET` → cadena **`tablet`**, inicializado en 1911868–1911884.
+- Enum `OTRO` → cadena **`otro`**, inicializado en 1911892–1911908.
+- `LZ3/H;->A` lee `Resources.getConfiguration().screenLayout` y compara una máscara con `0x258` (offsets 2641732–2641748). Según la rama, selecciona `TABLET` (2641752) o `PHONE` (2641758). Para la ruta de teléfono, el valor enviado en `tipo_dispositivo` es por tanto **`mobile`**.
+- En 2641804 carga **`Android `** y lo concatena con `Build.VERSION.RELEASE`; esta cadena alimenta el objeto de plataforma y posteriormente el segundo argumento `plataforma` del registro. Por ejemplo, la forma es `Android <versión del sistema>`, no el literal `Android` aislado.
+
+**Campos del registro para la ruta teléfono Android de la APK 5.0.42:**
+`uid = Settings.Secure.ANDROID_ID` del entorno Android;
+`plataforma = "Android " + Build.VERSION.RELEASE`;
+`tipo_dispositivo = "mobile"`;
+`version = "5.0.42"`.
+
+Estos son valores del protocolo Android observado, **no credenciales de acceso**. Sigue pendiente validar el registro real y establecer una provisión legítima del Android ID desde un dispositivo autorizado, sin inventarlo ni registrar uno ajeno.
+
+## Identidad independiente experimental (08/11/2026)
+
+El diagnóstico permite crear un UID aleatorio propio de 16 dígitos hexadecimales y guardarlo en un archivo local. No es el ANDROID_ID de la aplicación ni se afirma que el servidor acepte este formato. La plataforma Android y la versión 5.0.42 son los valores observados en la APK, usados aquí como perfil experimental, no una descripción del equipo que ejecuta el script. La aceptación de clientes independientes y los nombres JSON de respuesta siguen sin validar.
+
+Desde la raíz del repositorio en PowerShell, usando una ruta privada fuera del repositorio:
+
+```powershell
+py -3.13 .\scripts\probar_registro_invitado.py --android-release 16
+py -3.13 .\scripts\probar_registro_invitado.py --android-release 16 --identidad "$env:LOCALAPPDATA\fbm-identidad.json" --crear-identidad
+# Solo cuando se desee probar un registro real:
+py -3.13 .\scripts\probar_registro_invitado.py --android-release 16 --identidad "$env:LOCALAPPDATA\fbm-identidad.json" --enviar
+```
+
+El primer comando no escribe ni conecta. El segundo crea el archivo sin sobrescribirlo ni conectar. El tercero realiza un POST de registro: conserva el archivo para mantener la identidad y no lo compartas ni lo subas a Git. El archivo contiene un identificador, no una clave recibida del servicio; los permisos y copias de seguridad dependen del sistema. Una respuesta con ambos campos esperados no valida búsquedas ni acceso posterior. El diagnóstico no guarda la sesión; repetir el envío puede crear o modificar un registro remoto. No se ha realizado ninguna prueba real en este cambio. En caso de rechazo o respuesta inesperada no se muestran cuerpos ni identificadores.
+
+### Resultado de la primera prueba independiente
+
+El usuario ejecutó la creación local de identidad y después un envío explícito. El diagnóstico devolvió «Registro no validado», pero la versión utilizada agrupaba errores de identidad, transporte y formato; no permite determinar la causa ni si el servidor procesó la solicitud. No se conocen el estado HTTP ni la respuesta. La versión posterior distingue estado HTTP, fallo de conexión, JSON inválido o no objeto, y presencia válida de los dos campos previstos, sin imprimir valores ni cuerpo. Las pruebas automatizadas de estas clasificaciones usan respuestas simuladas; no demuestran aceptación del servidor. Repetir el registro es una petición nueva que podría crear o modificar un registro remoto.
+
+### Segunda prueba independiente
+
+En una segunda solicitud explícita, el usuario observó una respuesta JSON con `key` de texto no vacía, sin `idDispositivo` de texto no vacío y con un valor en `error` distinto de los valores que el diagnóstico consideraba vacíos. Esto no demuestra un error real: el significado y el tipo de `error` siguen sin verificarse. El diagnóstico posterior informa únicamente de presencia y tipo de campos concretos candidatos, sin mostrar sus valores. Aún no hay sesión validada ni prueba de búsqueda.
+
+### Respuesta observada y marcador de error
+
+En la siguiente solicitud explícita se observaron `key` e `id_dispositivo` como textos no vacíos; `idDispositivo` y `dispositivoId` estaban ausentes. El campo `error` era texto no vacío. La respuesta no se guardó, por lo que no es posible recuperar su valor. El diagnóstico reconoce ahora un conjunto limitado de marcadores literales comunes de `error` sin atribuirles significado; cualquier otro contenido permanece oculto. La presencia de estos campos o de un marcador no demuestra que la sesión sea válida. El extractor de producción permanece conservador hasta conocer el contrato.
+
+### Revisión local del campo error
+
+Ante el marcador `otro_valor_oculto`, el diagnóstico permite opcionalmente `--guardar-error RUTA` junto con `--enviar`. Escribe exclusivamente el campo `error` en un archivo JSON nuevo, sin mostrar su contenido; no sobrescribe archivos y comprueba antes del envío si la ruta existe. El contenido puede contener datos sensibles, por lo que debe revisarse localmente y mantenerse fuera de Git. En Windows, los permisos dependen de la carpeta y de sus ACL. El envío vuelve a registrar el dispositivo y puede tener efectos remotos; no se ha ejecutado una nueva solicitud en este cambio. Esta opción no valida ni guarda la sesión.
+
+### Acceso experimental a partir de la respuesta
+
+El usuario examinó el campo `error` y comunicó `uuid ya registrado`. Esto indica que el servidor reconoce el UID, pero no confirma que el `id_dispositivo` devuelto sea utilizable ni que se haya iniciado sesión. Las respuestas anteriores no guardaron ese identificador.
+
+El diagnóstico ofrece `--candidato RUTA --enviar` para guardar únicamente el `id_dispositivo` candidato y una huella del UID local en un archivo nuevo; no guarda la clave. Una ejecución separada con `--candidato RUTA --acceder` envía explícitamente `accion=acceso` con ese identificador, el mismo UID, el perfil Android declarado y `token_push` vacío. Rechaza otra identidad, no muestra valores y no considera el acceso validado automáticamente. El archivo contiene información sensible; mantenerlo privado y fuera de Git. En Windows sus permisos dependen de las ACL de la carpeta. Una nueva solicitud de registro puede modificar el estado remoto y la llamada de acceso es otra petición. No se han ejecutado en este cambio; falta contrastar el significado de la respuesta real.
+
+### Prueba de búsqueda experimental
+
+El candidato guardado no era ninguno de `0`, `-1`, `null` o `none`; esto no valida su identidad. La opción `--buscar-equipo TEXTO` requiere el UID y candidato locales y autoriza dos POST: acceso y, si devuelve `error` exactamente vacío y una clave no vacía, una búsqueda `buscarEquipo` con el candidato y esa clave. Se cancela si el identificador de respuesta no está vacío y difiere del candidato. La ausencia de error no está documentada como éxito; se usa únicamente como condición conservadora para el experimento. No se almacena la clave, no se muestran valores de respuesta y solo se informa de los tipos de campos conocidos. Las pruebas son simuladas; no se ha realizado esta prueba real ni se afirma que el servicio acepte la sesión o devuelva resultados válidos.
+
+### Respuesta real de búsqueda
+
+El usuario ejecutó una búsqueda de `Pinto`: el servicio devolvió JSON con `error` vacío, `resultado` de texto no vacío y `equipos` como lista. No se registró el número de elementos ni su contenido, por lo que no se sabe si hubo coincidencias. El usuario precisó que busca «Grupo Egido Pintobasket negro». El diagnóstico informa ahora del número de elementos de `equipos`, sin afirmar que sean coincidencias válidas ni mostrar sus datos. La sesión y el contrato siguen pendientes de validación.
+
+### Búsqueda del equipo concreto
+
+La consulta real «Grupo Egido Pintobasket negro» devolvió una lista `equipos` con 12 elementos y `error` vacío. La estructura y el contenido de los elementos no se mostraron ni conservaron, por lo que no se ha identificado el equipo. La opción explícita `--guardar-equipos RUTA`, junto con `--buscar-equipo`, permite guardar únicamente esa lista en un archivo nuevo para revisión local. Puede contener campos sensibles o inesperados: revisar antes de compartir y mantener fuera de Git. No guarda el resto de la respuesta ni la sesión. Requiere nuevas solicitudes de acceso y búsqueda.
+
+### Selección genérica de equipos
+
+La búsqueda real devolvió doce equipos con el mismo nombre en varias categorías y temporadas. El usuario seleccionó alevín masculino de segundo año, temporada 2026/27: categoría `Alv Mas 2ºaño LIGA MARCO ALDANY - PLATA`, con `IdEquipoNotificacion` 837041. Este valor no se ha validado como identificador para otras consultas; `Id` es un campo distinto y debe conservarse opaco.
+
+El adaptador incorpora una normalización genérica de resultados: conserva `Id`, nombre, club, categoría y temporada para que se pueda elegir sin suponer que el nombre identifica un único equipo. No selecciona automáticamente ni incorpora valores de un equipo concreto. Se rechazan respuestas ambiguas o incompletas. Esta normalización no conecta por sí sola el catálogo a Home Assistant ni valida la sesión, los endpoints de partidos o las estadísticas. La presentación de caracteres con tildes en la salida compartida estaba corrupta; no se ha determinado si se produjo en la fuente o al visualizar el archivo.
+
+### Selección local y límite de consulta de partidos
+
+Se ha añadido `scripts/seleccionar_equipo.py` para listar cualquier archivo de resultados `equipos` y guardar un único resultado elegido, conservando su `Id` opaco, nombre, club, categoría y temporada. No realiza peticiones, no guarda credenciales y no sobrescribe archivos. La identificación del equipo elegido no confirma cómo deben transmitirse sus identificadores en futuras consultas.
+
+La documentación disponible menciona `v2/equipo.ashx` y `id_equipo`, pero no demuestra la operación, el método ni los parámetros para recuperar partidos. Tampoco se dispone aquí de los artefactos DEX originales referenciados en análisis previos. Una búsqueda pública de esas cadenas no ha aportado documentación. No se ha inventado ni enviado una solicitud de partidos; para avanzar hace falta recuperar la evidencia original o documentación verificable del contrato.
+
+### Recuperación y verificación de operaciones de equipo
+
+El usuario volvió a proporcionar el ZIP de Afición FBM 5.0.42. De `base.apk/classes2.dex` se calculó SHA-256 `705267ff6111bbf98a4e87fb83db96ba90178164ae7d7fa347c205191b8c6ff1`. El verificador `scripts/verificar_protocolo_equipos.py` comprueba sin red esa huella y los offsets siguientes; no incluye ni distribuye el APK.
+
+En `Lx5/k;` el constructor carga la URL `https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx` (5684274) y la asigna al campo 0x67c0. Los métodos `d`, `e`, `f` y `g` leen ese campo y llaman a `HttpRequestKt.url`. Los literales del formulario observados son:
+
+- `d`: `accion=fasesGrupos`, `id_dispositivo`, `key`, `id_equipo`.
+- `e`: `accion=horariosFecha`, `id_dispositivo`, `key`, `id_equipo`, `id_fase`, `id_grupo`, `id_ronda`, `fecha_inicial`, `fecha_final`.
+- `f`: `accion=horariosJornadas` y los mismos nombres de campos de `e`.
+- `g`: `accion=detalleEquipo`, `id_dispositivo`, `key`, `id_equipo`.
+
+Los métodos construyen formularios URL-encoded. Estos hallazgos no verifican la respuesta real ni el origen exacto de cada argumento en la interfaz. El diagnóstico incorpora una prueba explícita `--fases --equipo RUTA`, que usa el `Id` opaco del equipo seleccionado como candidato para `id_equipo`; requiere acceso explícito, no hace registro y muestra solo tipos de campos conocidos. La equivalencia entre el `Id` de búsqueda y el argumento de fases es una hipótesis pendiente de prueba. No se ha hecho ninguna petición real en este cambio.
+
+### Primera respuesta de fases
+
+La prueba real `fasesGrupos` del usuario devolvió JSON con `error` vacío y `resultado` como texto no vacío; las claves `fases` y `grupos` estaban ausentes. El diagnóstico anterior no conservó la respuesta, por lo que no se conocen sus restantes campos ni se puede confirmar que el Id o la operación hayan producido fases válidas. La opción explícita `--guardar-fases` permite guardar la respuesta completa en un archivo local nuevo para examinar su estructura; puede contener datos privados y debe revisarse antes de compartir. La prueba requiere repetir acceso y consulta. No se ha hecho en este cambio.
+
+### Fase y grupo actuales: observación real
+
+La respuesta guardada contiene `listaFasesGrupo` con una fase; `faseActual` coincide con `IdFase`, y `grupoActual` coincide con un único `IdGrupo` de esa fase. En el equipo de prueba los nombres son «PRIMERA FASE» y «GRUPO 16»; hay 15 grupos y ninguna ronda. Esto es evidencia de una respuesta concreta, no una garantía para todos los equipos.
+
+`team_phases.current_phase_group` selecciona de forma genérica usando coincidencias exactas y únicas, y rechaza valores ausentes o ambiguos. Conserva identificadores sin modificarlos y no deduce una ronda. Para horarios, el APK muestra los campos `id_ronda`, `fecha_inicial` y `fecha_final`, pero aún no se han verificado sus valores cuando no hay rondas ni el formato/rango de las fechas. No se ha enviado ninguna solicitud de horarios.
+
+### Ronda vacía y fechas para horarios
+
+En el APK 5.0.42, `LA5/g0;->g` prepara una llamada a `LA5/g0;->j`: el argumento situado en la posición posteriormente asociada a `id_ronda` se carga con cadena vacía en el offset 1376762. En ese camino, el inicio y fin se formatean mediante `LV4/a;->f`: año-mes-día y respectivamente `00:00` y `23:59`. La aplicación tiene otros caminos; este hallazgo no demuestra que una ronda vacía sea válida para cualquier competición.
+
+El diagnóstico permite `--horarios --desde AAAA-MM-DD --hasta AAAA-MM-DD --equipo RUTA --candidato RUTA`. Efectúa acceso, fases y, solo si hay una fase/grupo actuales únicos y la lista `Rondas` está vacía, una consulta `horariosJornadas` con esos valores. Rechaza rondas presentes, fechas inválidas y rangos mayores de 366 días. El archivo opcional `--guardar-horarios` contiene la respuesta completa, que puede incluir datos sensibles. Los valores de esta consulta y su respuesta siguen sin validación real; no se ha hecho tráfico en este cambio.
+
+### Primera consulta real de horarios
+
+El usuario ejecutó acceso, fases y `horariosJornadas` para el equipo seleccionado y el periodo 01/11/2026–31/12/2026. La respuesta guardada contiene `error` vacío, `jornadaActual` 4 y 30 objetos en `partidos`. Esto demuestra que esa petición devolvió una lista con 30 elementos, no que cada partido, marcador o fecha haya sido contrastado. Entre los campos observados están `IdPartido`, `NombreEquipoLocal`, `NombreEquipoVisitante`, `Fecha`, `Hora`, `FechaHoraUTC`, `NumeroJornada`, `Estado` y `Resultados` (objeto).
+
+`team_schedule.normalize_team_schedule` normaliza campos genéricos de identificación, equipos, fecha, lugar y jornada sin inferir estados ni interpretar `Resultados`. Conserva identificadores opacos y el estado original. No conecta todavía este resultado a Home Assistant. El significado de `Resultados`, la zona horaria de los campos y el alcance de los 30 elementos siguen pendientes de comprobar.
+
+### Alcance de los horarios y estructura de resultados
+
+El resumen compartido muestra que la respuesta `horariosJornadas` incluye los 30 partidos del grupo, no solo los del equipo consultado. Aunque se pidieron fechas entre el 1 de noviembre y el 31 de diciembre de 2026, el resultado incluye partidos de octubre de 2026 y enero de 2027; no se debe asumir que el servidor aplique ese filtro a esta operación. `Resultados` contiene `ResultadoLocal` y `ResultadoVisitante` como cadenas y `ResultadosPeriodo` como lista; aún no se conocen los formatos ni las convenciones para partidos pendientes.
+
+El resumen local indica que los datos pueden corresponder al grupo y ofrece `--equipo` para filtrar opcionalmente por coincidencia exacta de nombre de local o visitante, sin alterar el archivo. Se trata de una coincidencia textual, no de una validación por identificador; no garantiza desambiguación si hay equipos homónimos. `00:00:00` se muestra tal como se recibió: no se presupone si es una hora real o un marcador de hora pendiente.
+
+### Estados y marcadores observados
+
+El usuario mostró seis partidos de su equipo. Cuatro estaban etiquetados `Terminado` y tenían `ResultadoLocal` y `ResultadoVisitante` como cadenas numéricas; dos tenían `Estado` igual a `No comenzado` y ambos resultados como `-`. Es una muestra concreta, no una especificación exhaustiva para directo, suspendidos o aplazados.
+
+El normalizador reconoce solo esos dos estados literales y conserva `estado_oficial`; cualquier otro estado es `unknown`. Solo crea un marcador cuando el estado es `Terminado` y ambos resultados son cadenas decimales ASCII completas; en los demás casos lo deja ausente (`None`). No interpreta parciales ni resultados en directo. El filtrado del resumen sigue siendo textual y los horarios `00:00:00` no se interpretan como hora confirmada o pendiente.
+
+### Cliente bajo demanda: acceso, fases y horarios
+
+Se ha conectado el contrato observado al adaptador: `access_guest` interpreta únicamente una respuesta con `error` vacío, `key` no vacía e `id_dispositivo` vacío o igual al identificador conocido; conserva ese identificador y rechaza campos ausentes o incompatibles. Esto permite reproducir el acceso de prueba, pero no certifica por sí solo la sesión ni cambia el registro automático.
+
+`AficionFBMAdapter.team_schedule` exige una identidad inyectada con clave vigente y recibe identificador opaco y fechas del equipo elegido. Consulta fases y después `horariosJornadas`, normaliza resultados y nunca registra dispositivos ni renueva la clave automáticamente. Rechaza fechas inválidas antes de cualquier petición y rechaza fases ambiguas o con rondas antes de consultar horarios. Los resultados son del grupo completo según la observación real y la API puede ignorar el rango de fechas; el adaptador no los filtra ni promete calendario individual. La configuración y tarjeta de HA aún no están conectadas a este método; no se ha ejecutado contra HA ni la API desde estas pruebas.
+
+Las pruebas sin red cubren formularios, respuesta de acceso, errores, selección, marcadores y una orquestación con llamadas simuladas. En este entorno, la suite que usa `IsolatedAsyncioTestCase` se queda bloqueada al iniciar; la prueba de orquestación aislada sin bucle ha pasado, pero no sustituye a ejecutar la suite asíncrona completa en un entorno compatible.
+
+### Selección experimental de rondas
+
+En el DEX de la APK 5.0.42 se observan en el serializador `Lv5/T;` los nombres JSON `IdRonda` y `NombreRonda` (offsets 5627734 y 5627746). En `LA5/T;->invokeSuspend`, la llamada a `LA5/g0;->j` en 1368974 coloca el grupo como cadena vacía (1368966) y pasa otro valor en la posición de ronda. En la ruta de grupo `LA5/g0;->g`, por el contrario, se envía la ronda vacía. El verificador reproduce las comprobaciones de literales y huella; la interpretación de registros se ha hecho mediante inspección estática.
+
+El cliente ofrece las rondas de la fase actual y requiere elegir una explícitamente cuando existen. Para consultar por ronda envía su ID y un grupo vacío; si no hay rondas utiliza el grupo actual y ronda vacía. Rechaza identificadores desconocidos o duplicados y no elige por posición. Hay pruebas simuladas para ambos caminos, pero no se ha contrastado con una competición real que tenga rondas; pueden existir otros tipos de fase y comportamientos no cubiertos. El diagnóstico independiente de Windows mantiene su restricción a fases sin rondas.
+
+### Contrato candidato de clasificación por grupo
+
+En `Lx5/k;->c` de `classes2.dex` de la APK 5.0.42 se ha verificado la lectura del campo de URL de `v2/equipo.ashx` (5678102), su paso a `HttpRequestKt.url` (5678134) y los literales del formulario `accion=clasificacion`, `id_dispositivo`, `key`, `id_grupo` y `tipo_fase` (5678168–5678312). El serializador del DTO de respuesta incluye `clasificacion`, y el DTO de cada equipo contiene nombres como `IdEquipo`, `Posicion`, `PartidosJugados`, `PartidosGanados`, `PartidosPerdidos`, `Puntos` y `NombreEquipo`. Son nombres observados en el APK, no una respuesta real verificada.
+
+La llamada desde el estado del detalle lee el identificador del grupo y el tipo de fase. El diagnóstico `--clasificacion` solicita acceso, fases y una clasificación utilizando la fase/grupo actuales únicos y `TipoFase` como candidatos. Exige que estos datos estén presentes y no realiza consultas al cargarse. `--guardar-clasificacion` permite guardar la respuesta completa en un archivo nuevo, que puede contener datos de sesión y debe revisarse localmente. Las pruebas son simuladas; no se ha solicitado una clasificación real en este cambio. El diagnóstico no alimenta aún la tarjeta ni valida las clasificaciones de fases o rondas distintas.
+
+### Respuesta real de clasificación y cliente
+
+El usuario ejecutó el diagnóstico de clasificación para el grupo actual: la respuesta tuvo `error` vacío y una lista `clasificacion` de seis filas. En la primera fila se observaron `IdEquipo` y `NombreEquipo` como cadenas y `Posicion`, `PartidosJugados`, `PartidosGanados`, `PartidosPerdidos` y `Puntos` como enteros; no se compartieron sus valores ni se ha contrastado la tabla con otra fuente.
+
+El adaptador incorpora una consulta explícita para la clasificación del grupo actual, con fase y grupo obtenidos de `fasesGrupos` y `TipoFase` sin deducir. La normalización conserva el orden y los valores tal como los entrega FBM, sin recalcular posiciones ni puntos, y rechaza estructuras incompatibles. `fbm/team/standings` queda limitado a administradores; la tarjeta experimental lo solicita únicamente mediante el botón de clasificación. Esta operación consulta el grupo actual, no una ronda elegida, y no se ha probado mediante la tarjeta ni una instalación real de Home Assistant.

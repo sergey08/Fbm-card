@@ -1,0 +1,16 @@
+{
+  "domain": "fbm",
+  "name": "Federación de Baloncesto de Madrid",
+  "version": "0.1.0b1",
+  "documentation": "https://github.com/sergey08/Fbm-card",
+  "issue_tracker": "https://github.com/sergey08/Fbm-card/issues",
+  "codeowners": [],
+  "config_flow": true,
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "integration_type": "service",
+  "dependencies": [
+    "http",
+    "lovelace"
+  ]
+}

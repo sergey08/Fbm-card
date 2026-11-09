@@ -1,0 +1,1 @@
+La tarjeta `fbm-card.js` se empaquetará aquí en la integración. El recurso previsto es `/fbm_static/fbm-card.js`. La integración sirve el archivo pero el registro automático en Lovelace aún está pendiente de implementar y probar. No usar datos externos a FBM.

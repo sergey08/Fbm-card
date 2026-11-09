@@ -1,0 +1,7 @@
+# Escudos Afición FBM — candidato DEV
+
+El análisis de `classes2.dex` de Afición FBM 5.0.42 muestra que el modelo `EquipoBuscadoDto` recibe `Escudo`, su mapeo lo conserva en el objeto de dominio y la interfaz pasa ese campo a la función que añade el valor a `https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=`. El DTO de clasificación también contiene `Escudo`. El candidato conserva ese campo en búsquedas y clasificación, construye la URL en el dominio oficial codificando el valor como parámetro, y usa un símbolo neutro si falta o falla la imagen.
+
+Una selección nueva puede conservar el campo en el almacenamiento de la tarjeta. Para selecciones existentes se utiliza el campo de la clasificación solo si el identificador de la fila coincide exactamente con el de la tarjeta. Si no coincide o falta, no se asigna otro escudo. Se conserva `logo_equipo` explícito como prioridad.
+
+Las pruebas automatizadas usan valores simulados. Falta comprobar una respuesta real, que los identificadores de clasificación y tarjeta coincidan, la disponibilidad del endpoint en Home Assistant y la visualización para varios clubes. El backend instalado en HA anterior descarta `Escudo`: frontend y backend de esta versión requieren instalación conjunta; no actualizar solo el JavaScript. El prototipo de catálogo de FBM TV se ha retirado. No se han alterado identidad ni configuración de equipos.
