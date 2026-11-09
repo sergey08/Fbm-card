@@ -97,11 +97,16 @@ test("error de registro avisa de posible procesamiento sin reintentar", async ()
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();
   card._config = { modo_experimental: true }; card._render = () => {};
-  let calls = 0;
-  card._hass = { callWS: async () => { calls++; throw new Error("private"); } };
+  const calls = [];
+  card._hass = { callWS: async msg => {
+    calls.push(msg.type);
+    if (msg.type === "fbm/client/status") return { identidad_creada: true, candidato_guardado: false, registro_pendiente: true };
+    throw new Error("private");
+  } };
   const state = card._experimentalState(); state.entry = "entry";
   await card._experimentalAction("register");
-  assert.equal(calls, 1);
+  assert.deepEqual(calls, ["fbm/client/register", "fbm/client/status"]);
+  assert.equal(state.status.registro_pendiente, true);
   assert.match(state.message, /podría haberlo procesado/);
   assert.doesNotMatch(state.message, /private/);
 });
@@ -127,6 +132,44 @@ test("tarjeta experimental no hace peticiones al mostrarse y requiere pulsar est
   const checkButton = card.shadowRoot.items[1].children.find(el => el.textContent === "Comprobar estado");
   await checkButton.listeners.click();
   assert.deepEqual(calls, ["fbm/client/entries", "fbm/client/status"]);
+});
+
+test("registro pendiente bloquea alta normal y exige recuperación explícita", async () => {
+  const { elements, sandbox } = loadCard();
+  class Element {
+    constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; this.textContent = ""; }
+    append(...children) { this.children.push(...children); }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    setAttribute() {}
+  }
+  sandbox.document = { createElement: tag => new Element(tag) };
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true }; card._render = () => {};
+  const calls = [];
+  card._hass = { callWS: async msg => {
+    calls.push(msg.type);
+    return msg.type === "fbm/client/status" ? { identidad_creada: true, candidato_guardado: true, registro_pendiente: false } : {};
+  } };
+  const state = card._experimentalState();
+  state.entry = "entry"; state.status = { identidad_creada: true, candidato_guardado: false, registro_pendiente: true, sesion_en_memoria: false };
+  const parent = new Element("card"); card._renderExperimental(parent);
+  const register = parent.children.find(el => el.textContent === "Registrar dispositivo en FBM");
+  const recover = parent.children.find(el => el.textContent === "Recuperar registro pendiente");
+  assert.equal(register.disabled, true);
+  assert.equal(calls.length, 0);
+  await recover.listeners.click();
+  assert.deepEqual(calls, ["fbm/client/recover_registration", "fbm/client/status"]);
+});
+
+test("si falla la comprobación posterior se bloquea el registro en la tarjeta", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true }; card._render = () => {};
+  card._hass = { callWS: async () => { throw new Error("failure"); } };
+  const state = card._experimentalState();
+  state.entry = "entry"; state.status = { identidad_creada: true, candidato_guardado: false };
+  await card._experimentalAction("register");
+  assert.equal(state.status.registro_pendiente, true);
 });
 
 test("sin entidad muestra estado pendiente", () => {

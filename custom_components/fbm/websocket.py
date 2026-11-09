@@ -49,6 +49,11 @@ async def _register(client, msg):
     return {"candidato_guardado": True}
 
 
+async def _recover(client, msg):
+    await client.async_recover_registration(_release(msg))
+    return {"candidato_guardado": True}
+
+
 async def _connect(client, msg):
     await client.async_connect(_release(msg))
     return {"sesion_en_memoria": True}
@@ -119,6 +124,13 @@ async def ws_register(hass, connection, msg):
     await _dispatch(hass, connection, msg, _register)
 
 
+@websocket_api.websocket_command({"type": "fbm/client/recover_registration", probatio.Required("entry_id"): str, probatio.Required("android_release"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_recover(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _recover)
+
+
 @websocket_api.websocket_command({"type": "fbm/client/connect", probatio.Required("entry_id"): str, probatio.Required("android_release"): str})
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -155,5 +167,5 @@ async def ws_schedule_round(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round):
         websocket_api.async_register_command(hass, command)

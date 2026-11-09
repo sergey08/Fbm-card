@@ -62,7 +62,7 @@ class TeamAdapterSyncTests(unittest.TestCase):
 
     def test_registration_requires_explicit_call_and_refuses_ambiguous_response(self):
         identity = local_identity_module.IndependentIdentity('0123456789abcdef')
-        store = types.SimpleNamespace(async_load=AsyncMock(return_value=identity), async_bind_candidate=AsyncMock())
+        store = types.SimpleNamespace(async_begin_registration=AsyncMock(return_value=identity), async_bind_candidate=AsyncMock())
         client = independent_module.IndependentClient(store)
         path = package.__name__ + '.independent_client.asyncio.to_thread'
         with patch(path, new=AsyncMock(return_value={'error': 'uuid ya registrado', 'key': 'k', 'id_dispositivo': 'd'})) as post:
@@ -76,13 +76,74 @@ class TeamAdapterSyncTests(unittest.TestCase):
             store.async_bind_candidate.assert_awaited_once_with(identity.uid, 'd')
 
     def test_register_refuses_an_existing_candidate_without_network(self):
-        identity = local_identity_module.IndependentIdentity('0123456789abcdef', 'existing')
-        client = independent_module.IndependentClient(types.SimpleNamespace(async_load=AsyncMock(return_value=identity)))
+        store = types.SimpleNamespace(async_begin_registration=AsyncMock(side_effect=local_identity_module.IdentityError('pending')))
+        client = independent_module.IndependentClient(store)
         path = package.__name__ + '.independent_client.asyncio.to_thread'
         with patch(path, new=AsyncMock()) as post:
             with self.assertRaises(local_identity_module.IdentityError):
                 run_immediate(client.async_register('16'))
             post.assert_not_awaited()
+
+    def test_uncertain_registration_persists_and_blocks_retry_after_restart(self):
+        class MemoryStore:
+            def __init__(self): self.data = None
+            async def async_load(self): return self.data
+            async def async_save(self, data): self.data = dict(data)
+        backend = MemoryStore()
+        manager = local_identity_module.IndependentIdentityStore(backend)
+        client = independent_module.IndependentClient(manager)
+        run_immediate(client.async_create_identity())
+        uid = backend.data['uid']
+        path = package.__name__ + '.independent_client.asyncio.to_thread'
+        with patch(path, new=AsyncMock(side_effect=RuntimeError('timeout'))) as post:
+            with self.assertRaises(RuntimeError): run_immediate(client.async_register('16'))
+            post.assert_awaited_once()
+        self.assertEqual(backend.data['registration_state'], 'pending')
+        self.assertEqual(backend.data['uid'], uid)
+        restarted = independent_module.IndependentClient(local_identity_module.IndependentIdentityStore(backend))
+        status = run_immediate(restarted.async_status())
+        self.assertTrue(status['registro_pendiente'])
+        self.assertNotIn(uid, str(status))
+        with patch(path, new=AsyncMock()) as post:
+            with self.assertRaises(local_identity_module.IdentityError): run_immediate(restarted.async_register('16'))
+            post.assert_not_awaited()
+        with patch(path, new=AsyncMock(return_value={'error': 'uuid ya registrado', 'key': 'key', 'id_dispositivo': 'candidate'})) as post:
+            run_immediate(restarted.async_recover_registration('16'))
+            post.assert_awaited_once()
+        self.assertEqual(backend.data['uid'], uid)
+        self.assertEqual(backend.data['registration_state'], 'complete')
+        self.assertEqual(backend.data['candidate_device_id'], 'candidate')
+        with patch(path, new=AsyncMock()) as post:
+            with self.assertRaises(local_identity_module.IdentityError): run_immediate(restarted.async_recover_registration('16'))
+            post.assert_not_awaited()
+
+    def test_failed_pending_save_prevents_registration_request(self):
+        class FailingStore:
+            async def async_load(self):
+                return {'format': 2, 'uid': '0123456789abcdef', 'candidate_device_id': None, 'registration_state': 'not_started'}
+            async def async_save(self, data): raise OSError('storage failed')
+        client = independent_module.IndependentClient(local_identity_module.IndependentIdentityStore(FailingStore()))
+        path = package.__name__ + '.independent_client.asyncio.to_thread'
+        with patch(path, new=AsyncMock()) as post:
+            with self.assertRaises(OSError): run_immediate(client.async_register('16'))
+            post.assert_not_awaited()
+
+    def test_successful_registration_is_marked_pending_before_post(self):
+        class MemoryStore:
+            def __init__(self): self.data = None
+            async def async_load(self): return self.data
+            async def async_save(self, data): self.data = dict(data)
+        backend = MemoryStore()
+        client = independent_module.IndependentClient(local_identity_module.IndependentIdentityStore(backend))
+        run_immediate(client.async_create_identity())
+        async def post(*args):
+            self.assertEqual(backend.data['registration_state'], 'pending')
+            return {'error': '', 'key': 'key', 'id_dispositivo': 'candidate'}
+        with patch(package.__name__ + '.independent_client.asyncio.to_thread', new=post):
+            run_immediate(client.async_register('16'))
+        self.assertEqual(backend.data['registration_state'], 'complete')
+        self.assertEqual(backend.data['candidate_device_id'], 'candidate')
+        self.assertNotIn('key', backend.data)
 
     def test_two_explicit_mocked_calls_return_normalized_schedule(self):
         identity = identity_module.GuestIdentity.from_response('key', 'device', datetime.now(timezone.utc))

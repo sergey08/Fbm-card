@@ -15,17 +15,26 @@ class IdentityError(ValueError):
 class IndependentIdentity:
     uid: str = field(repr=False)
     candidate_device_id: str | None = field(default=None, repr=False)
+    registration_state: str = "not_started"
 
 
 def _decode(data: object) -> IndependentIdentity:
-    if not isinstance(data, dict) or set(data) != {"format", "uid", "candidate_device_id"}:
+    if not isinstance(data, dict):
+        raise IdentityError("Estructura de identidad no valida")
+    version = data.get("format")
+    if type(version) is not int or version not in (1, 2):
+        raise IdentityError("Version de identidad no valida")
+    expected = {"format", "uid", "candidate_device_id"} | ({"registration_state"} if version == 2 else set())
+    if set(data) != expected:
         raise IdentityError("Estructura de identidad no valida")
     uid, device_id = data["uid"], data["candidate_device_id"]
-    if (type(data["format"]) is not int or data["format"] != 1 or not isinstance(uid, str)
-            or not re.fullmatch(r"[0-9a-f]{16}", uid)
+    state = data["registration_state"] if version == 2 else ("complete" if device_id is not None else "pending")
+    if (not isinstance(uid, str) or not re.fullmatch(r"[0-9a-f]{16}", uid)
+            or state not in ("not_started", "pending", "complete")
+            or (state == "complete") != (device_id is not None)
             or (device_id is not None and (not isinstance(device_id, str) or not device_id.strip()))):
         raise IdentityError("Identidad almacenada no valida")
-    return IndependentIdentity(uid, device_id)
+    return IndependentIdentity(uid, device_id, state)
 
 
 class IndependentIdentityStore:
@@ -63,8 +72,22 @@ class IndependentIdentityStore:
             if self._ambiguous_storage or await self._load_checked() is not None:
                 raise IdentityError("Ya existe una identidad; no se reemplazara")
             identity = IndependentIdentity(uid=secrets.token_hex(8))
-            await self._store.async_save({"format": 1, "uid": identity.uid, "candidate_device_id": None})
+            await self._store.async_save({"format": 2, "uid": identity.uid, "candidate_device_id": None,
+                                          "registration_state": "not_started"})
             return identity
+
+    async def async_begin_registration(self) -> IndependentIdentity:
+        """Marca el intento antes de la red; una interrupcion impide reintentos."""
+        async with self._lock:
+            data = await self._load_checked()
+            if data is None:
+                raise IdentityError("No existe una identidad local")
+            identity = _decode(data)
+            if identity.registration_state != "not_started":
+                raise IdentityError("Registro anterior o pendiente; requiere recuperacion")
+            await self._store.async_save({"format": 2, "uid": identity.uid, "candidate_device_id": None,
+                                          "registration_state": "pending"})
+            return IndependentIdentity(identity.uid, None, "pending")
 
     async def async_bind_candidate(self, uid: str, device_id: str) -> IndependentIdentity:
         """Guarda un candidato sin reemplazar un identificador distinto."""
@@ -80,5 +103,6 @@ class IndependentIdentityStore:
             if identity.candidate_device_id not in (None, device_id):
                 raise IdentityError("Ya existe un candidato diferente")
             if identity.candidate_device_id is None:
-                await self._store.async_save({"format": 1, "uid": identity.uid, "candidate_device_id": device_id})
-            return IndependentIdentity(identity.uid, device_id)
+                await self._store.async_save({"format": 2, "uid": identity.uid, "candidate_device_id": device_id,
+                                              "registration_state": "complete"})
+            return IndependentIdentity(identity.uid, device_id, "complete")

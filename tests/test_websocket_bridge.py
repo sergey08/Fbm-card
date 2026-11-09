@@ -42,7 +42,7 @@ def run_immediate(coro):
 
 class BridgeTests(unittest.TestCase):
     def setUp(self):
-        self.client = types.SimpleNamespace(async_register=AsyncMock(), async_search_teams=AsyncMock(return_value=[{'nombre': 'A'}]),
+        self.client = types.SimpleNamespace(async_register=AsyncMock(), async_recover_registration=AsyncMock(), async_search_teams=AsyncMock(return_value=[{'nombre': 'A'}]),
             async_team_phase_options=AsyncMock(return_value={'nombre_fase': 'Final', 'rondas': [{'id': 'r', 'nombre': 'Final'}]}),
             async_team_schedule=AsyncMock(return_value={'partidos': []}))
         self.hass = types.SimpleNamespace(data={'fbm': {'entry': {'cliente_independiente': self.client}}})
@@ -50,7 +50,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_admin_required_for_all_commands(self):
         self.connection.user.is_admin = False
-        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round):
+        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round):
             with self.subTest(command=command), self.assertRaises(PermissionError):
                 run_immediate(command(self.hass, self.connection, {'id': 1, 'entry_id': 'entry'}))
         self.client.async_register.assert_not_awaited()
@@ -64,6 +64,11 @@ class BridgeTests(unittest.TestCase):
         run_immediate(module.ws_register(self.hass, self.connection, {'id': 1, 'entry_id': 'entry', 'android_release': '16'}))
         self.client.async_register.assert_awaited_once_with('16')
         self.connection.send_result.assert_called_once_with(1, {'candidato_guardado': True})
+
+    def test_recovery_requires_separate_explicit_command(self):
+        run_immediate(module.ws_recover(self.hass, self.connection, {'id': 2, 'entry_id': 'entry', 'android_release': '16'}))
+        self.client.async_recover_registration.assert_awaited_once_with('16')
+        self.client.async_register.assert_not_awaited()
 
     def test_search_and_schedule_validate_input(self):
         run_immediate(module.ws_search(self.hass, self.connection, {'id': 2, 'entry_id': 'entry', 'texto': '  Equipo ', 'skip': 0}))

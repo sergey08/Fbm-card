@@ -29,6 +29,7 @@ class IndependentClient:
             identity = await self._store.async_load()
             return {"identidad_creada": identity is not None,
                     "candidato_guardado": bool(identity and identity.candidate_device_id),
+                    "registro_pendiente": bool(identity and identity.registration_state == "pending"),
                     "sesion_en_memoria": self._adapter is not None}
 
     async def async_bind_candidate(self, candidate_device_id: str) -> None:
@@ -45,22 +46,33 @@ class IndependentClient:
         if not isinstance(android_release, str) or not android_release.strip():
             raise ValueError("Se requiere una version de perfil Android")
         async with self._lock:
+            identity = await self._store.async_begin_registration()
+            await self._registration_request(identity, android_release, allow_duplicate=False)
+
+    async def async_recover_registration(self, android_release: str) -> None:
+        """Reintento de recuperacion expresamente solicitado, nunca automatico."""
+        if not isinstance(android_release, str) or not android_release.strip():
+            raise ValueError("Se requiere una version de perfil Android")
+        async with self._lock:
             identity = await self._store.async_load()
-            if identity is None:
-                raise IdentityError("No existe una identidad local")
-            if identity.candidate_device_id is not None:
-                raise IdentityError("El dispositivo ya tiene candidato; no se volvera a registrar")
-            form = registration_fields(uid=identity.uid, plataforma="Android " + android_release.strip(),
-                                       tipo_dispositivo="mobile", version="5.0.42")
-            response = await asyncio.to_thread(post_device_form, form)
-            device_id = response.get("id_dispositivo") if isinstance(response, dict) else None
-            key = response.get("key") if isinstance(response, dict) else None
-            if (not isinstance(response, dict) or response.get("error") != ""
-                    or not isinstance(device_id, str) or not device_id.strip()
-                    or not isinstance(key, str) or not key.strip()):
-                raise IdentityError("Registro no validado; no se guardo un candidato")
-            await self._store.async_bind_candidate(identity.uid, device_id)
-            self._adapter = None
+            if identity is None or identity.registration_state != "pending" or identity.candidate_device_id is not None:
+                raise IdentityError("No hay un registro pendiente de recuperar")
+            await self._registration_request(identity, android_release, allow_duplicate=True)
+
+    async def _registration_request(self, identity, android_release, *, allow_duplicate):
+        form = registration_fields(uid=identity.uid, plataforma="Android " + android_release.strip(),
+                                   tipo_dispositivo="mobile", version="5.0.42")
+        response = await asyncio.to_thread(post_device_form, form)
+        device_id = response.get("id_dispositivo") if isinstance(response, dict) else None
+        key = response.get("key") if isinstance(response, dict) else None
+        error = response.get("error") if isinstance(response, dict) else None
+        allowed_errors = ("", "uuid ya registrado") if allow_duplicate else ("",)
+        if (not isinstance(error, str) or error not in allowed_errors
+                or not isinstance(device_id, str) or not device_id.strip()
+                or not isinstance(key, str) or not key.strip()):
+            raise IdentityError("Registro no validado; no se guardo un candidato")
+        await self._store.async_bind_candidate(identity.uid, device_id)
+        self._adapter = None
 
     async def async_connect(self, android_release: str) -> None:
         """Solicita acceso cuando se indica expresamente; no registra dispositivos."""

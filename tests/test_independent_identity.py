@@ -67,3 +67,10 @@ class IndependentIdentityTests(unittest.TestCase):
         with self.assertRaises(module.IdentityError): run_immediate(manager.async_load())
         with self.assertRaises(module.IdentityError): run_immediate(manager.async_create())
         self.assertEqual(backend.saves, 0)
+
+    def test_legacy_without_candidate_is_treated_as_pending(self):
+        backend = MemoryStore({'format': 1, 'uid': '0123456789abcdef', 'candidate_device_id': None})
+        manager = module.IndependentIdentityStore(backend)
+        self.assertEqual(run_immediate(manager.async_load()).registration_state, 'pending')
+        with self.assertRaises(module.IdentityError): run_immediate(manager.async_begin_registration())
+        self.assertEqual(backend.saves, 0)

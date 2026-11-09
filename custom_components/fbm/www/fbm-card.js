@@ -117,11 +117,11 @@ class FBMCard extends HTMLElement {
           await this._hass.callWS({ type: "fbm/client/create_identity", ...common });
           state.status = await this._hass.callWS({ type: "fbm/client/status", ...common });
           state.message = "Identidad local creada.";
-        } else if (action === "register" || action === "connect") {
+        } else if (action === "register" || action === "recover_registration" || action === "connect") {
           if (!state.release.trim()) throw new Error("Indica una versión para el perfil experimental.");
           await this._hass.callWS({ type: `fbm/client/${action}`, ...common, android_release: state.release.trim() });
           state.status = await this._hass.callWS({ type: "fbm/client/status", ...common });
-          state.message = action === "register" ? "Respuesta de registro aceptada; falta validar la conexión." : "Acceso solicitado; puedes probar la búsqueda.";
+          state.message = action === "connect" ? "Acceso solicitado; puedes probar la búsqueda." : "Candidato guardado; falta validar la conexión.";
         } else if (action === "search") {
           if (!state.query.trim()) throw new Error("Escribe el nombre de un equipo.");
           const data = await this._hass.callWS({ type: "fbm/team/search", ...common, texto: state.query.trim(), skip: 0 });
@@ -143,8 +143,12 @@ class FBMCard extends HTMLElement {
         }
       }
     } catch (_) {
-      state.message = action === "register"
-        ? "No se pudo confirmar el registro. El servidor podría haberlo procesado; revisa antes de repetirlo."
+      if ((action === "register" || action === "recover_registration") && state.entry) {
+        try { state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry }); }
+        catch (_) { state.status = { ...state.status, registro_pendiente: true }; }
+      }
+      state.message = action === "register" || action === "recover_registration"
+        ? "No se pudo confirmar el registro. El servidor podría haberlo procesado; no se repetirá automáticamente."
         : "No se pudo completar la operación. Comprueba la integración, los datos y la conexión.";
     } finally { state.busy = false; this._render(); }
   }
@@ -166,9 +170,14 @@ class FBMCard extends HTMLElement {
     button("Comprobar estado", "status", !!this._hass?.callWS);
     if (state.status) {
       card.append(this._element("p", `Identidad: ${state.status.identidad_creada ? "creada" : "pendiente"} · Dispositivo: ${state.status.candidato_guardado ? "guardado" : "pendiente"} · Sesión: ${state.status.sesion_en_memoria ? "en memoria" : "sin conectar"}`, "muted"));
+      if (state.status.registro_pendiente) card.append(this._element("p", "Hay un registro pendiente o incierto. No se reintentará hasta que se recupere de forma segura.", "muted"));
       button("Crear identidad local", "create", !state.status.identidad_creada);
       input("Versión del perfil Android experimental", "release");
-      button("Registrar dispositivo en FBM", "register", state.status.identidad_creada && !state.status.candidato_guardado);
+      button("Registrar dispositivo en FBM", "register", state.status.identidad_creada && !state.status.candidato_guardado && !state.status.registro_pendiente);
+      if (state.status.registro_pendiente) {
+        card.append(this._element("p", "Recuperar envía una nueva solicitud de registro con la misma identidad.", "muted"));
+        button("Recuperar registro pendiente", "recover_registration");
+      }
       button("Conectar", "connect", state.status.candidato_guardado);
       input("Buscar equipo", "query");
       button("Buscar", "search", state.status.sesion_en_memoria);
