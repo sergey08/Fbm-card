@@ -3,6 +3,7 @@ class FBMCard extends HTMLElement {
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Configuración inválida");
     if (this._config && (this._config.modo_experimental !== config.modo_experimental || this._config.id_tarjeta !== config.id_tarjeta)) this._experimental = null;
+    if (config.tipo_tarjeta && !["busqueda", "equipo"].includes(config.tipo_tarjeta)) throw new Error("Tipo de tarjeta inválido");
     this._config = { ...config };
     this._render();
   }
@@ -11,6 +12,10 @@ class FBMCard extends HTMLElement {
     const userChanged = hadHass && this._hass.user?.id !== hass?.user?.id;
     if (userChanged) this._experimental = null;
     this._hass = hass;
+    if (this._config?.modo_experimental === true && this._config.tipo_tarjeta === "equipo" && (!hadHass || userChanged)) {
+      this._fixedInit = false;
+      Promise.resolve().then(() => this._initializeFixed());
+    }
     // HA asigna hass con frecuencia. No reconstruir inputs activos en modo experimental:
     // reemplazar el DOM en cada actualización elimina el foco y bloquea la escritura.
     if (this._config?.modo_experimental === true && hadHass && !userChanged) return;
@@ -145,6 +150,30 @@ class FBMCard extends HTMLElement {
     } catch (_) { return null; }
   }
 
+  async _initializeFixed() {
+    if (this._fixedInit || !this._hass?.callWS || this._config?.tipo_tarjeta !== "equipo") return;
+    this._fixedInit = true;
+    const state = this._experimentalState();
+    if (state.busy) return;
+    state.busy = true;
+    try {
+      const result = await this._hass.callWS({ type: "fbm/client/entries" });
+      if (!Array.isArray(result.entries) || result.entries.length !== 1) throw new Error("Entrada FBM no disponible");
+      state.entry = result.entries[0];
+      state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry });
+      const saved = this._restoreExperimentalTeam(state.entry);
+      if (saved) {
+        state.teams = [saved]; state.selected = saved.id;
+        if (state.status.sesion_vigente) {
+          const data = await this._hass.callWS({ type: "fbm/team/standings", entry_id: state.entry, equipo: saved.id });
+          if (Array.isArray(data.clasificacion)) state.standings = data.clasificacion;
+        }
+      }
+    } catch (_) {
+      state.message = "No se pudo actualizar la clasificación. Comprueba la conexión.";
+    } finally { state.busy = false; this._render(); }
+  }
+
   _experimentalMatches() {
     const state = this._experimentalState();
     const matches = Array.isArray(state.schedule?.partidos) ? state.schedule.partidos : [];
@@ -202,6 +231,17 @@ class FBMCard extends HTMLElement {
           state.teams = Array.isArray(data.equipos) ? data.equipos : [];
           state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
           state.message = state.teams.length ? "Elige un equipo, categoría y temporada." : "No se han encontrado equipos.";
+        } else if (action === "fix_team") {
+          const selected = state.teams.find(team => team.id === state.selected);
+          if (!selected) throw new Error("Elige un equipo.");
+          this._saveExperimentalTeam(state.entry, selected);
+          state.editFixed = false;
+          state.message = "Equipo fijado en esta tarjeta.";
+          if (state.status?.sesion_vigente) {
+            remoteAttempted = true;
+            const data = await this._hass.callWS({ type: "fbm/team/standings", ...common, equipo: selected.id });
+            if (Array.isArray(data.clasificacion)) state.standings = data.clasificacion;
+          }
         } else if (action === "phases") {
           if (!state.selected) throw new Error("Elige un equipo.");
           remoteAttempted = true;
@@ -267,9 +307,22 @@ class FBMCard extends HTMLElement {
         button("Recuperar registro pendiente", "recover_registration");
       }
       if (!connected) button("Conectar", "connect", state.status.candidato_guardado);
-      input("Buscar equipo", "query");
-      button("Buscar", "search", connected);
-      if (state.teams.length) {
+      const fixed = this._config.tipo_tarjeta === "equipo";
+      const pinned = fixed ? this._restoreExperimentalTeam(state.entry) : null;
+      const editing = fixed && (!pinned || state.editFixed);
+      if (fixed && pinned && !editing) {
+        card.append(this._element("h3", pinned.nombre));
+        card.append(this._element("p", [pinned.club, pinned.categoria, pinned.temporada].join(" · "), "muted"));
+        button("Actualizar clasificación", "standings", connected);
+        const changeTeam = this._element("button", "Cambiar equipo");
+        changeTeam.type = "button";
+        changeTeam.addEventListener("click", () => { state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id; this._render(); });
+        card.append(changeTeam);
+      } else {
+        input("Buscar equipo", "query");
+        button("Buscar", "search", connected);
+      }
+      if (state.teams.length && (!fixed || editing)) {
         const label = this._element("label", "Equipo, categoría y temporada: ");
         const select = document.createElement("select");
         select.disabled = state.busy;
@@ -287,7 +340,8 @@ class FBMCard extends HTMLElement {
           this._render();
         });
         label.append(select); card.append(label);
-        button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
+        if (fixed) button("Fijar este equipo en la tarjeta", "fix_team", !!state.selected && connected);
+        else button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
         if (this._config.mostrar_horarios === true) button("Consultar fase y rondas", "phases", !!state.selected && connected);
         if (this._config.mostrar_horarios === true && Array.isArray(state.rounds)) {
           card.append(this._element("p", "Fase: " + state.phaseName, "muted"));
