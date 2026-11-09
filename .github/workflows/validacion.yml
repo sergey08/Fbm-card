@@ -90,6 +90,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fbm-card-${{ github.sha }}
-          path: dist/fbm-card-dev-install.zip
+          path: dist/fbm-card-install.zip
           retention-days: 7
           if-no-files-found: error
