@@ -503,7 +503,7 @@ def main(argv=None):
               "; marcador_error=" + error_marker(response) +
               ". Valores ocultos; el significado del marcador no esta verificado.", file=sys.stderr)
         return 1
-    print("Respuesta con key e idDispositivo recibida (valores ocultos).")
+    print("Respuesta de registro con campos validados localmente (valores ocultos).")
     print("La sesion no se guarda; esto no valida la busqueda ni el acceso posterior.")
     return 0
 
