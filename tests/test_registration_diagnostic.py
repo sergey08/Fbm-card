@@ -43,6 +43,8 @@ class RegistrationDiagnosticTests(unittest.TestCase):
                 result = module.main(['--android-release', '16', '--identidad', str(path), '--enviar'])
             self.assertEqual(result, 0)
             self.assertEqual(post.call_args.args[0], {'accion': 'registrar', 'uid': uid, 'plataforma': 'Android 16', 'tipo_dispositivo': 'mobile', 'version': '5.0.42'})
+            self.assertIn('campos validados localmente', output.getvalue())
+            self.assertNotIn('idDispositivo', output.getvalue())
             for secret in (uid, 'private-key', 'private-id'):
                 self.assertNotIn(secret, output.getvalue())
 
