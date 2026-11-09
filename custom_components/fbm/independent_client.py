@@ -7,7 +7,7 @@ from datetime import date
 from .aficion_adapter import AficionFBMAdapter, FBMAccessNotValidated
 from .guest_session import DeviceProfile
 from .independent_identity import IdentityError
-from .device_protocol import post_device_form, registration_fields
+from .device_protocol import post_device_form, registration_fields, extract_identity_fields
 from .query_cache import QueryCache
 
 
@@ -69,14 +69,10 @@ class IndependentClient:
         form = registration_fields(uid=identity.uid, plataforma="Android " + android_release.strip(),
                                    tipo_dispositivo="mobile", version="5.0.42")
         response = await asyncio.to_thread(post_device_form, form)
-        device_id = response.get("id_dispositivo") if isinstance(response, dict) else None
-        key = response.get("key") if isinstance(response, dict) else None
-        error = response.get("error") if isinstance(response, dict) else None
-        allowed_errors = ("", "uuid ya registrado") if allow_duplicate else ("",)
-        if (not isinstance(error, str) or error not in allowed_errors
-                or not isinstance(device_id, str) or not device_id.strip()
-                or not isinstance(key, str) or not key.strip()):
-            raise IdentityError("Registro no validado; no se guardo un candidato")
+        try:
+            _, device_id = extract_identity_fields(response, allow_duplicate=allow_duplicate)
+        except ValueError as exc:
+            raise IdentityError("Registro no validado; no se guardo un candidato") from None
         await self._store.async_bind_candidate(identity.uid, device_id)
         self._adapter = None
         self._cache.clear()
