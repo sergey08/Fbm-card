@@ -97,7 +97,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", start: "", end: "", schedule: null, message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, message: "", busy: false };
   }
 
   async _experimentalAction(action) {
@@ -126,12 +126,20 @@ class FBMCard extends HTMLElement {
           if (!state.query.trim()) throw new Error("Escribe el nombre de un equipo.");
           const data = await this._hass.callWS({ type: "fbm/team/search", ...common, texto: state.query.trim(), skip: 0 });
           state.teams = Array.isArray(data.equipos) ? data.equipos : [];
-          state.selected = ""; state.schedule = null;
+          state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null;
           state.message = state.teams.length ? "Elige un equipo, categoría y temporada." : "No se han encontrado equipos.";
+        } else if (action === "phases") {
+          if (!state.selected) throw new Error("Elige un equipo.");
+          const data = await this._hass.callWS({ type: "fbm/team/phases", ...common, equipo: state.selected });
+          if (!Array.isArray(data.rondas)) throw new Error("Respuesta de fases no válida.");
+          state.rounds = data.rondas; state.round = ""; state.phaseName = data.nombre_fase || ""; state.schedule = null;
+          state.message = state.rounds.length ? "Elige una ronda." : "Fase sin rondas: se utilizará el grupo actual.";
         } else if (action === "schedule") {
-          if (!state.selected || !state.start || !state.end) throw new Error("Elige equipo y fechas.");
-          state.schedule = await this._hass.callWS({ type: "fbm/team/schedule", ...common,
-            equipo: state.selected, desde: state.start, hasta: state.end });
+          if (!state.selected || !state.start || !state.end || !Array.isArray(state.rounds) || (state.rounds.length && !state.round)) throw new Error("Elige equipo, fase y fechas.");
+          const request = { type: state.rounds.length ? "fbm/team/schedule_round" : "fbm/team/schedule", ...common,
+            equipo: state.selected, desde: state.start, hasta: state.end };
+          if (state.rounds.length) request.ronda = state.round;
+          state.schedule = await this._hass.callWS(request);
         }
       }
     } catch (_) {
@@ -167,16 +175,33 @@ class FBMCard extends HTMLElement {
       if (state.teams.length) {
         const label = this._element("label", "Equipo, categoría y temporada: ");
         const select = document.createElement("select");
+        select.disabled = state.busy;
         const empty = this._element("option", "Selecciona un equipo"); empty.value = ""; select.append(empty);
         for (const team of state.teams) {
           const option = this._element("option", `${team.nombre} | ${team.club} | ${team.categoria} | ${team.temporada}`);
           option.value = team.id; select.append(option);
         }
         select.value = state.selected;
-        select.addEventListener("change", event => { state.selected = event.target.value; state.schedule = null; this._render(); });
+        select.addEventListener("change", event => { state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; this._render(); });
         label.append(select); card.append(label);
+        button("Consultar fase y rondas", "phases", !!state.selected && state.status.sesion_en_memoria);
+        if (Array.isArray(state.rounds)) {
+          card.append(this._element("p", "Fase: " + state.phaseName, "muted"));
+          if (state.rounds.length) {
+            const roundLabel = this._element("label", "Ronda: ");
+            const roundSelect = document.createElement("select");
+            roundSelect.disabled = state.busy;
+            const placeholder = this._element("option", "Selecciona una ronda"); placeholder.value = ""; roundSelect.append(placeholder);
+            for (const round of state.rounds) {
+              const option = this._element("option", round.nombre); option.value = round.id; roundSelect.append(option);
+            }
+            roundSelect.value = state.round;
+            roundSelect.addEventListener("change", event => { state.round = event.target.value; state.schedule = null; this._render(); });
+            roundLabel.append(roundSelect); card.append(roundLabel);
+          }
+        }
         input("Desde", "start", "date"); input("Hasta", "end", "date");
-        button("Consultar horarios", "schedule", !!state.selected && state.status.sesion_en_memoria);
+        button("Consultar horarios", "schedule", !!state.selected && state.status.sesion_en_memoria && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
       }
       if (state.schedule && Array.isArray(state.schedule.partidos)) {
         card.append(this._element("h3", "Partidos devueltos por FBM"));

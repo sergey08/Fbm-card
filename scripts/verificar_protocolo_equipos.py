@@ -42,6 +42,9 @@ def verify(data):
                          (5680552, "horariosJornadas"), (5681388, "detalleEquipo")):
         literal(offset, text)
     literal(1376762, "")  # id_ronda vacio en una ruta de LA5/g0;->g
+    literal(1368966, "")  # id_grupo vacio en la ruta de seleccion de ronda
+    literal(5627734, "IdRonda")
+    literal(5627746, "NombreRonda")
     literal(2407364, "00:00")
     literal(2407370, "23:59")
     literal(2407390, "-")

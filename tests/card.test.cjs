@@ -60,6 +60,7 @@ test("modo experimental busca y consulta solo el equipo seleccionado", async () 
   card._hass = { callWS: async msg => {
     calls.push(msg);
     if (msg.type === "fbm/team/search") return { equipos: [{ id: "opaque", nombre: "A", club: "C", categoria: "Cat", temporada: "26/27" }] };
+    if (msg.type === "fbm/team/phases") return { nombre_fase: "Fase", rondas: [] };
     if (msg.type === "fbm/team/schedule") return { partidos: [] };
     throw new Error("unexpected");
   } };
@@ -69,9 +70,27 @@ test("modo experimental busca y consulta solo el equipo seleccionado", async () 
   assert.equal(state.teams[0].id, "opaque");
   assert.equal(state.selected, "");
   state.selected = "opaque";
+  await card._experimentalAction("phases");
   await card._experimentalAction("schedule");
-  assert.equal(calls[1].type, "fbm/team/schedule");
-  assert.equal(calls[1].equipo, "opaque");
+  assert.equal(calls[2].type, "fbm/team/schedule");
+  assert.equal(calls[2].equipo, "opaque");
+});
+
+test("una ronda requiere selección explícita antes de consultar horarios", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))();
+  const calls = [];
+  card._config = { modo_experimental: true }; card._render = () => {};
+  card._hass = { callWS: async msg => { calls.push(msg); return msg.type === "fbm/team/phases" ? { nombre_fase: "Final", rondas: [{ id: "r", nombre: "Final" }] } : { partidos: [] }; } };
+  const state = card._experimentalState();
+  state.entry = "entry"; state.selected = "team"; state.start = "2026-11-01"; state.end = "2026-12-31";
+  await card._experimentalAction("phases");
+  await card._experimentalAction("schedule");
+  assert.equal(calls.length, 1);
+  state.round = "r";
+  await card._experimentalAction("schedule");
+  assert.equal(calls[1].type, "fbm/team/schedule_round");
+  assert.equal(calls[1].ronda, "r");
 });
 
 test("error de registro avisa de posible procesamiento sin reintentar", async () => {

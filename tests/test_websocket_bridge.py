@@ -43,13 +43,14 @@ def run_immediate(coro):
 class BridgeTests(unittest.TestCase):
     def setUp(self):
         self.client = types.SimpleNamespace(async_register=AsyncMock(), async_search_teams=AsyncMock(return_value=[{'nombre': 'A'}]),
+            async_team_phase_options=AsyncMock(return_value={'nombre_fase': 'Final', 'rondas': [{'id': 'r', 'nombre': 'Final'}]}),
             async_team_schedule=AsyncMock(return_value={'partidos': []}))
         self.hass = types.SimpleNamespace(data={'fbm': {'entry': {'cliente_independiente': self.client}}})
         self.connection = types.SimpleNamespace(user=types.SimpleNamespace(is_admin=True), send_result=MagicMock(), send_error=MagicMock())
 
     def test_admin_required_for_all_commands(self):
         self.connection.user.is_admin = False
-        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_connect, module.ws_search, module.ws_schedule):
+        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round):
             with self.subTest(command=command), self.assertRaises(PermissionError):
                 run_immediate(command(self.hass, self.connection, {'id': 1, 'entry_id': 'entry'}))
         self.client.async_register.assert_not_awaited()
@@ -79,3 +80,9 @@ class BridgeTests(unittest.TestCase):
         self.assertNotIn('secret-identity', str(self.connection.send_error.call_args))
         run_immediate(module.ws_register(self.hass, self.connection, {'id': 2, 'entry_id': 'missing', 'android_release': '16'}))
         self.assertEqual(self.client.async_register.await_count, 1)
+
+    def test_round_request_and_phase_options(self):
+        run_immediate(module.ws_phases(self.hass, self.connection, {'id': 1, 'entry_id': 'entry', 'equipo': 'team'}))
+        self.client.async_team_phase_options.assert_awaited_once_with('team')
+        run_immediate(module.ws_schedule_round(self.hass, self.connection, {'id': 2, 'entry_id': 'entry', 'equipo': 'team', 'ronda': 'r', 'desde': '2026-11-01', 'hasta': '2026-12-31'}))
+        self.client.async_team_schedule.assert_awaited_once_with('team', date(2026, 11, 1), date(2026, 12, 31), 'r')

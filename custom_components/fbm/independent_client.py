@@ -86,8 +86,16 @@ class IndependentClient:
             raise FBMAccessNotValidated("Se requiere una conexion explicita")
         return await adapter.search_teams(text, skip)
 
-    async def async_team_schedule(self, team_id: str, start: date, end: date) -> dict:
+    async def async_team_phase_options(self, team_id: str) -> dict:
         adapter = self._adapter
         if adapter is None:
             raise FBMAccessNotValidated("Se requiere una conexion explicita")
-        return await adapter.team_schedule(team_id, start, end)
+        return await adapter.team_phase_options(team_id)
+
+    async def async_team_schedule(self, team_id: str, start: date, end: date, round_id: str | None = None) -> dict:
+        adapter = self._adapter
+        if adapter is None:
+            raise FBMAccessNotValidated("Se requiere una conexion explicita")
+        if round_id is None:
+            return await adapter.team_schedule(team_id, start, end)
+        return await adapter.team_schedule(team_id, start, end, round_id)

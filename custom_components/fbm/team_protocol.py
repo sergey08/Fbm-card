@@ -7,7 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .team_phases import current_phase_group
+from .team_phases import schedule_selection
 from .device_protocol import open_request
 
 TEAM_URL = "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx"
@@ -21,15 +21,13 @@ def phases_fields(device_id: str, key: str, team_id: str) -> dict[str, str]:
 
 
 def schedule_fields(device_id: str, key: str, team_id: str, phases: object,
-                    start: date, end: date) -> dict[str, str]:
+                    start: date, end: date, round_id: str | None = None) -> dict[str, str]:
     base = phases_fields(device_id, key, team_id)
     if type(start) is not date or type(end) is not date or start > end or (end - start).days > 366:
         raise ValueError("Rango de fechas no valido")
-    selected = current_phase_group(phases)
-    if selected["rondas"]:
-        raise ValueError("Seleccion de ronda todavia no disponible")
+    selected = schedule_selection(phases, round_id)
     base.update({"accion": "horariosJornadas", "id_fase": selected["id_fase"],
-                 "id_grupo": selected["id_grupo"], "id_ronda": "",
+                 "id_grupo": selected["id_grupo"], "id_ronda": selected["id_ronda"],
                  "fecha_inicial": start.isoformat() + " 00:00",
                  "fecha_final": end.isoformat() + " 23:59"})
     return base
@@ -43,8 +41,11 @@ def post_team_form(fields: dict[str, str]) -> dict:
     action = fields.get("accion") if isinstance(fields, dict) else None
     if not isinstance(action, str) or action not in allowed or set(fields) != allowed[action] or any(not isinstance(x, str) for x in fields.values()):
         raise ValueError("Formulario de equipo no valido")
-    if any(not fields[k].strip() for k in allowed[action] - {"id_ronda"}):
+    optional = {"id_ronda", "id_grupo"} if action == "horariosJornadas" else set()
+    if any(not fields[k].strip() for k in allowed[action] - optional):
         raise ValueError("Faltan campos obligatorios")
+    if action == "horariosJornadas" and bool(fields["id_grupo"].strip()) == bool(fields["id_ronda"].strip()):
+        raise ValueError("Selecciona un grupo o una ronda")
     body = urllib.parse.urlencode(fields).encode("utf-8")
     request = urllib.request.Request(TEAM_URL, data=body, method="POST", headers={
         "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})

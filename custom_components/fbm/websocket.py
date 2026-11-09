@@ -70,6 +70,22 @@ async def _schedule(client, msg):
     return await client.async_team_schedule(team_id, date.fromisoformat(first), date.fromisoformat(last))
 
 
+async def _phases(client, msg):
+    team_id = msg["equipo"]
+    if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
+        raise ValueError("Equipo no valido")
+    return await client.async_team_phase_options(team_id)
+
+
+async def _schedule_round(client, msg):
+    team_id, round_id, first, last = msg["equipo"], msg["ronda"], msg["desde"], msg["hasta"]
+    if any(not isinstance(x, str) or not x.strip() or len(x) > 512 for x in (team_id, round_id)):
+        raise ValueError("Equipo o ronda no validos")
+    if not isinstance(first, str) or not isinstance(last, str) or len(first) != 10 or len(last) != 10:
+        raise ValueError("Fecha no valida")
+    return await client.async_team_schedule(team_id, date.fromisoformat(first), date.fromisoformat(last), round_id)
+
+
 @websocket_api.websocket_command({"type": "fbm/client/entries"})
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -124,6 +140,20 @@ async def ws_schedule(hass, connection, msg):
     await _dispatch(hass, connection, msg, _schedule)
 
 
+@websocket_api.websocket_command({"type": "fbm/team/phases", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_phases(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _phases)
+
+
+@websocket_api.websocket_command({"type": "fbm/team/schedule_round", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("ronda"): str, probatio.Required("desde"): str, probatio.Required("hasta"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_schedule_round(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _schedule_round)
+
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_connect, ws_search, ws_schedule):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round):
         websocket_api.async_register_command(hass, command)

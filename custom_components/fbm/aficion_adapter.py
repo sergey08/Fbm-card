@@ -19,6 +19,7 @@ from .team_search import normalize_team_results
 from .team_protocol import phases_fields, schedule_fields, post_team_form
 from .team_schedule import normalize_team_schedule
 from .device_protocol import open_request
+from .team_phases import phase_options
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -100,14 +101,20 @@ class AficionFBMAdapter:
             raise FBMAccessNotValidated("La clave de sesion requiere una nueva solicitud de acceso")
         return self._identity.device_id, key
 
-    async def team_schedule(self, team_id: str, start: date, end: date) -> dict:
+    async def team_phase_options(self, team_id: str) -> dict:
+        """Consulta opciones sin seleccionar rondas automaticamente."""
+        device_id, key = self._team_key()
+        response = await asyncio.to_thread(post_team_form, phases_fields(device_id, key, team_id))
+        return phase_options(response)
+
+    async def team_schedule(self, team_id: str, start: date, end: date, round_id: str | None = None) -> dict:
         """Consulta fases y horarios bajo demanda; no registra ni renueva sesiones."""
         if type(start) is not date or type(end) is not date or start > end or (end - start).days > 366:
             raise ValueError("Rango de fechas no valido")
         device_id, key = self._team_key()
         phase_response = await asyncio.to_thread(post_team_form, phases_fields(device_id, key, team_id))
         device_id, key = self._team_key()
-        fields = schedule_fields(device_id, key, team_id, phase_response, start, end)
+        fields = schedule_fields(device_id, key, team_id, phase_response, start, end, round_id)
         response = await asyncio.to_thread(post_team_form, fields)
         return normalize_team_schedule(response)
 

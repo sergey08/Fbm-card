@@ -30,3 +30,15 @@ class TeamPhasesTests(unittest.TestCase):
             if modification == 'error': self.data['error'] = 'rejected'
             with self.subTest(modification=modification), self.assertRaises(module.TeamPhasesError):
                 module.current_phase_group(self.data)
+
+    def test_rounds_require_explicit_selection_and_do_not_require_group(self):
+        self.data['grupoActual'] = ''
+        self.data['listaFasesGrupo'][1]['Rondas'] = [
+            {'IdRonda': 'r1', 'NombreRonda': 'Final'}, {'IdRonda': 'r2', 'NombreRonda': 'Otra'}]
+        options = module.phase_options(self.data)
+        self.assertEqual([x['nombre'] for x in options['rondas']], ['Final', 'Otra'])
+        with self.assertRaises(module.TeamPhasesError): module.schedule_selection(self.data)
+        self.assertEqual(module.schedule_selection(self.data, 'r1'), {'id_fase': 'phase-2', 'id_grupo': '', 'id_ronda': 'r1'})
+        with self.assertRaises(module.TeamPhasesError): module.schedule_selection(self.data, 'other')
+        self.data['listaFasesGrupo'][1]['Rondas'].append({'IdRonda': 'r1', 'NombreRonda': 'Duplicate'})
+        with self.assertRaises(module.TeamPhasesError): module.phase_options(self.data)
