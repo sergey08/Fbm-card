@@ -7,8 +7,14 @@ class FBMCard extends HTMLElement {
     this._render();
   }
   set hass(hass) {
-    if (this._hass && this._hass.user?.id !== hass?.user?.id) this._experimental = null;
-    this._hass = hass; this._render();
+    const hadHass = !!this._hass;
+    const userChanged = hadHass && this._hass.user?.id !== hass?.user?.id;
+    if (userChanged) this._experimental = null;
+    this._hass = hass;
+    // HA asigna hass con frecuencia. No reconstruir inputs activos en modo experimental:
+    // reemplazar el DOM en cada actualización elimina el foco y bloquea la escritura.
+    if (this._config?.modo_experimental === true && hadHass && !userChanged) return;
+    this._render();
   }
   getCardSize() { return 5; }
   static getStubConfig() { return { title: "FBM Card", equipos: [] }; }
