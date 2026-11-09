@@ -173,6 +173,53 @@ test("cambiar configuración fija invalida estado y no mezcla clasificaciones", 
   assert.throws(()=>card.setConfig({modo_experimental:true,tipo_tarjeta:"equipo"}),/id_tarjeta distinto/);
 });
 
+test("las pestañas de un equipo son independientes y no filtran partidos de grupo", () => {
+  const {elements,sandbox}=loadCard();
+  class Elem {
+    constructor(tag) {this.tag=tag;this.children=[];this.listeners={};this.textContent="";}
+    append(...items){this.children.push(...items);}
+    addEventListener(type,handler){this.listeners[type]=handler;}
+    setAttribute(key,value){this[key]=value;}
+  }
+  sandbox.document={createElement:tag=>new Elem(tag)};
+  const Team=elements.get("fbm-card");
+  const make=(id,tab)=>{
+    const card=new Team();
+    card._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:id};
+    card._hass={user:{id:"u"},callWS:async()=>({})};
+    card._render=()=>{};
+    const state=card._experimentalState();
+    state.entry="entry";state.status={sesion_vigente:true};state.tab=tab;
+    state.teams=[{id:"a",nombre:"A",club:"C",categoria:"Alv",temporada:"26/27"}];
+    state.selected="a";state.standings=[{posicion:1,equipo:"A"}];
+    card._restoreExperimentalTeam=()=>state.teams[0];
+    return card;
+  };
+  const cardA=make("gael","clasificacion");
+  const cardB=make("zoe","partidos");
+  const flatten=el=>[el,...(el.children||[]).flatMap(flatten)];
+  const a=new Elem("card"),b=new Elem("card");
+  cardA._renderExperimental(a);
+  cardB._renderExperimental(b);
+  assert.ok(flatten(a).some(el=>el.textContent==="Clasificación del grupo actual"));
+  assert.ok(!flatten(b).some(el=>el.textContent==="Clasificación del grupo actual"));
+  assert.ok(flatten(b).some(el=>el.textContent==="Consultar fases oficiales"));
+  const buttons=flatten(b).filter(el=>el.tag==="button");
+  const players=buttons.find(el=>el.textContent==="Jugadores");
+  players.listeners.click();
+  assert.equal(cardB._experimentalState().tab,"jugadores");
+  assert.equal(cardA._experimentalState().tab,"clasificacion");
+});
+
+test("escudos solo de dominios oficiales HTTPS", () => {
+  const {elements,sandbox}=loadCard();
+  sandbox.URL=URL;
+  const card=new (elements.get("fbm-card"))();
+  assert.equal(card._officialLogoUrl("http://fbm.es/logo.png"),"");
+  assert.equal(card._officialLogoUrl("https://example.com/logo.png"),"");
+  assert.equal(card._officialLogoUrl("https://fbm.es/escudo.png"),"https://fbm.es/escudo.png");
+});
+
 test("tarjeta fija guarda equipo separado por tarjeta y recupera clasificación al abrir", async () => {
   const { elements, sandbox } = loadCard();
   const store = new Map();
