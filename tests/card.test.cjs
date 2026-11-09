@@ -788,3 +788,50 @@ test("una respuesta de plantilla malformada no se presenta como lista valida", a
   assert.equal(state.playersTeamId, "");
   assert.match(state.message, /No se pudo completar/);
 });
+
+test("la ficha de un jugador solo se solicita explícitamente y no afecta a otra tarjeta", async () => {
+  const { elements } = loadCard();
+  const Card = elements.get("fbm-card");
+  const first = new Card(), second = new Card();
+  first._config = { modo_experimental: true }; second._config = { modo_experimental: true };
+  first._render = () => {}; second._render = () => {};
+  const requests = [];
+  const hass = { callWS: async request => {
+    requests.push(request);
+    return { jugador: { id: "p1", nombre: "Jugador ficticio", puntos_totales: 8 }, fuente: "FBM" };
+  } };
+  first._hass = hass; second._hass = hass;
+  const a = first._experimentalState(), b = second._experimentalState();
+  a.entry = "entry"; a.selected = "teamA";
+  a.players = [{id:"p1", nombre:"Jugador ficticio"}]; a.playersTeamId = "teamA"; a.playersEntryId = "entry";
+  b.entry = "entry"; b.selected = "teamB";
+  b.players = [{id:"p2", nombre:"Otro jugador"}]; b.playersTeamId = "teamB"; b.playersEntryId = "entry";
+  assert.equal(requests.length, 0);
+  await first._experimentalPlayerDetail("p1");
+  assert.deepEqual(requests, [{ type:"fbm/player/detail", entry_id:"entry", jugador:"p1" }]);
+  assert.equal(a.playerDetail.puntos_totales, 8);
+  assert.equal(a.playerDetailTeamId, "teamA");
+  assert.equal(b.playerDetail, null);
+});
+
+test("la ficha se rechaza si no pertenece a la plantilla o cambia el equipo", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))(); card._config = { modo_experimental: true };
+  card._render = () => {};
+  let finish;
+  const calls = [];
+  card._hass = {callWS: async request => {
+    calls.push(request);
+    return await new Promise(resolve => { finish = resolve; });
+  }};
+  const state = card._experimentalState(); state.entry = "entry"; state.selected = "teamA";
+  state.players = [{id:"p1", nombre:"Ficticio"}]; state.playersTeamId = "teamA"; state.playersEntryId = "entry";
+  await card._experimentalPlayerDetail("wrong");
+  assert.equal(calls.length, 0);
+  const pending = card._experimentalPlayerDetail("p1");
+  state.selected = "teamB";
+  finish({ jugador: { id:"p1", nombre:"Ficticio" }, fuente:"FBM" });
+  await pending;
+  assert.equal(calls.length, 1);
+  assert.equal(state.playerDetail, null);
+});
