@@ -122,7 +122,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, showGroup: false, message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
   }
 
   _experimentalPreferenceKey(entryId) {
@@ -256,6 +256,18 @@ class FBMCard extends HTMLElement {
       "equipo_fijo:",
       ...["id", "nombre", "club", "categoria", "temporada"].map(field => "  " + field + ": " + quote(team[field]))
     ].join("\n");
+  }
+
+  _officialLogoUrl(value) {
+    if (typeof value !== "string" || value.length > 1024) return "";
+    try {
+      const url = new URL(value);
+      const host = url.hostname.toLowerCase();
+      if (url.protocol !== "https:") return "";
+      if (host === "fbm.es" || host.endsWith(".fbm.es") ||
+          host === "appaficionfbm.gesdeportiva.es") return url.href;
+    } catch (_) { /* no mostrar URLs no verificadas */ }
+    return "";
   }
 
   _experimentalMatches() {
@@ -412,9 +424,51 @@ class FBMCard extends HTMLElement {
         label.append(select); card.append(label);
       }
       if (fixed && pinned && !editing) {
-        card.append(this._element("h3", pinned.nombre));
+        const header = this._element("div", "", "team-header");
+        const logo = this._officialLogoUrl(this._config.logo_equipo);
+        if (logo) {
+          const img = document.createElement("img");
+          img.src = logo; img.alt = "Escudo oficial de " + pinned.nombre;
+          img.className = "team-logo"; img.loading = "lazy";
+          header.append(img);
+        } else header.append(this._element("span", "🏀", "team-logo-placeholder"));
+        header.append(this._element("h3", pinned.nombre));
+        card.append(header);
         card.append(this._element("p", [pinned.club, pinned.categoria, pinned.temporada].join(" · "), "muted"));
-        button("Actualizar clasificación", "standings", connected);
+        const tabs = this._element("div", "", "fbm-tabs");
+        for (const [name, title] of [["partidos", "Partidos"], ["clasificacion", "Clasificación"], ["jugadores", "Jugadores"]]) {
+          const tab = this._element("button", title);
+          tab.type = "button"; tab.className = "fbm-tab";
+          tab.setAttribute("aria-pressed", String((state.tab || "clasificacion") === name));
+          tab.addEventListener("click", () => { state.tab = name; this._render(); });
+          tabs.append(tab);
+        }
+        card.append(tabs);
+        if (state.tab === "clasificacion" || !state.tab) button("Actualizar clasificación", "standings", connected);
+        if (state.tab === "partidos") {
+          const subtabs = this._element("div", "", "fbm-tabs");
+          for (const [name, title] of [["fases", "Fases"], ["jornadas", "Jornadas"]]) {
+            const sub = this._element("button", title);
+            sub.type = "button"; sub.className = "fbm-tab";
+            sub.setAttribute("aria-pressed", String((state.partidosTab || "fases") === name));
+            sub.addEventListener("click", () => { state.partidosTab = name; this._render(); });
+            subtabs.append(sub);
+          }
+          card.append(subtabs);
+          if (state.partidosTab !== "jornadas") {
+            button("Consultar fases oficiales", "phases", connected);
+            if (state.phaseName) card.append(this._element("p", "Fase actual: " + state.phaseName, "muted"));
+            if (Array.isArray(state.rounds)) {
+              if (!state.rounds.length) card.append(this._element("p", "No hay rondas enumeradas por FBM para la fase actual.", "muted"));
+              for (const round of state.rounds) card.append(this._element("p", round.nombre, "muted"));
+            }
+          } else {
+            card.append(this._element("p", "Calendario completo del grupo pendiente: la consulta oficial de jornadas aún no está validada. No se muestran enfrentamientos inventados.", "muted"));
+          }
+        }
+        if (state.tab === "jugadores") {
+          card.append(this._element("p", "Plantilla pendiente: aún no disponemos de un listado de jugadores verificado a través de FBM. No se muestran nombres ni datos personales no confirmados.", "muted"));
+        }
         const changeTeam = this._element("button", "Cambiar equipo");
         changeTeam.type = "button";
         changeTeam.addEventListener("click", () => { state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id; this._render(); });
@@ -526,7 +580,7 @@ class FBMCard extends HTMLElement {
           button("Consultar horarios", "schedule", !!state.selected && connected && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
         }
       }
-      if (Array.isArray(state.standings)) {
+      if (Array.isArray(state.standings) && (!fixed || !pinned || editing || !state.tab || state.tab === "clasificacion")) {
         card.append(this._element("h3", "Clasificación del grupo actual"));
         if (!state.standings.length) card.append(this._element("p", "No hay clasificación disponible.", "muted"));
         else {
@@ -543,8 +597,8 @@ class FBMCard extends HTMLElement {
           table.append(body); card.append(table);
         }
       }
-      if (this._config.mostrar_horarios === true && state.schedule && Array.isArray(state.schedule.partidos)) {
-        const visible = this._experimentalMatches();
+      if (this._config.mostrar_horarios === true && state.schedule && Array.isArray(state.schedule.partidos) && (!fixed || state.tab === "partidos")) {
+        const visible = fixed ? state.schedule.partidos : this._experimentalMatches();
         card.append(this._element("h3", state.showGroup ? "Partidos del grupo" : "Partidos del equipo"));
         card.append(this._element("p", "La selección del equipo compara nombres; los homónimos pueden coincidir. FBM puede devolver fechas fuera del intervalo solicitado.", "muted"));
         const toggle = this._element("button", state.showGroup ? "Ver solo mi equipo" : "Ver todo el grupo");
@@ -589,6 +643,13 @@ class FBMCard extends HTMLElement {
       .standings th,.standings td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--divider-color,#ddd)}
       .standings tbody tr:nth-child(even){background:var(--secondary-background-color,transparent)}
       .standings td.num,.standings th.num{text-align:right}
+      .team-header{display:flex;align-items:center;gap:12px;margin:8px 0}
+      .team-header h3{margin:0}
+      .team-logo,.team-logo-placeholder{width:52px;height:52px;flex-shrink:0;object-fit:contain;border-radius:12px;background:var(--secondary-background-color,#eee)}
+      .team-logo-placeholder{display:flex;align-items:center;justify-content:center;font-size:1.65rem}
+      .fbm-tabs{display:flex;gap:4px;overflow-x:auto;margin:12px 0;max-width:100%}
+      ha-card .fbm-tab{flex:1 0 auto;padding:8px 10px;border:0;border-radius:9px;background:var(--secondary-background-color,#eee);color:var(--primary-text-color,#222);cursor:pointer;font:inherit}
+      ha-card .fbm-tab[aria-pressed="true"]{background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);font-weight:700}
     `;
     const card = document.createElement("ha-card");
     if (this._config.modo_experimental === true) {
