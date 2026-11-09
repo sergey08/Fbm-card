@@ -38,6 +38,38 @@ class TeamScheduleTests(unittest.TestCase):
         self.assertEqual(result[1]['estado'], 'scheduled')
         self.assertTrue(all(match['marcador'] is None for match in result[1:]))
 
+    def test_real_apk_camelcase_dto_fields(self):
+        # Names and types from EquipoPartidoDto and ResultadosDto in APK 5.0.42.
+        payload = {"error": "", "jornadaActual": 7, "partidos": [
+            {"idPartido": "match1", "nombreEquipoLocal": "Local",
+             "nombreEquipoVisitante": "Visitante", "numeroJornada": 8,
+             "fecha": "2026-11-14", "hora": "10:30", "estado": "Terminado",
+             "resultados": {"resultadoLocal": "32", "resultadoVisitante": "27"}}
+        ]}
+        result = module.normalize_team_schedule(payload)
+        self.assertEqual(result["jornada_actual"], 7)
+        self.assertEqual(result["partidos"][0]["id"], "match1")
+        self.assertEqual(result["partidos"][0]["jornada"], 8)
+        self.assertEqual(result["partidos"][0]["marcador"], {"local": 32, "visitante": 27})
+        self.assertEqual(result["partidos"][0]["estado"], "finished")
+
+    def test_camelcase_unknown_state_never_invents_result(self):
+        payload = {"error": "", "jornadaActual": 0, "partidos": [
+            {"idPartido": "m", "nombreEquipoLocal": "A", "nombreEquipoVisitante": "B",
+             "estado": "No confirmado", "resultados": {"resultadoLocal": "15",
+                                                      "resultadoVisitante": "14"}}
+        ]}
+        match = module.normalize_team_schedule(payload)["partidos"][0]
+        self.assertEqual(match["estado"], "unknown")
+        self.assertIsNone(match["marcador"])
+
+    def test_rejects_mixed_casing_without_complete_variant(self):
+        payload = {"error": "", "jornadaActual": 2, "partidos": [
+            {"idPartido": "m", "NombreEquipoLocal": "A", "nombreEquipoVisitante": "B"}
+        ]}
+        with self.assertRaises(module.TeamScheduleError):
+            module.normalize_team_schedule(payload)
+
     def test_empty_and_invalid_responses(self):
         self.assertEqual(module.normalize_team_schedule({'error': '', 'jornadaActual': 0, 'partidos': []})['partidos'], [])
         for response in ({'error': 'failed', 'jornadaActual': 0, 'partidos': []},
