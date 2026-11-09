@@ -108,6 +108,13 @@ async def _roster(client, msg):
     return await client.async_team_roster(team_id)
 
 
+async def _player_detail(client, msg):
+    player_id = msg["jugador"]
+    if type(player_id) is not str or not player_id.strip() or len(player_id) > 512:
+        raise ValueError("Jugador no válido")
+    return await client.async_player_detail(player_id)
+
+
 async def _standings(client, msg):
     team_id = msg["equipo"]
     if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
@@ -220,6 +227,13 @@ async def ws_roster(hass, connection, msg):
     await _dispatch(hass, connection, msg, _roster)
 
 
+@websocket_api.websocket_command({"type": "fbm/player/detail", probatio.Required("entry_id"): str, probatio.Required("jugador"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_player_detail(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _player_detail)
+
+
 @websocket_api.websocket_command({"type": "fbm/team/standings", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -228,7 +242,7 @@ async def ws_standings(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail):
         websocket_api.async_register_command(hass, command)
 
 
