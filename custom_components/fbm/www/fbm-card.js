@@ -176,6 +176,18 @@ class FBMCard extends HTMLElement {
     } finally { state.busy = false; this._render(); }
   }
 
+  _fixedCardYaml(team) {
+    if (!this._experimentalTeamIsValid(team)) return "";
+    const quote = value => JSON.stringify(value);
+    return [
+      "type: custom:fbm-card", "title: " + quote(team.nombre),
+      "modo_experimental: true", "tipo_tarjeta: equipo",
+      "id_tarjeta: " + quote("fbm-fijo-" + team.id.slice(0, 16)),
+      "equipo_fijo:",
+      ...["id", "nombre", "club", "categoria", "temporada"].map(field => "  " + field + ": " + quote(team[field]))
+    ].join("\n");
+  }
+
   _experimentalMatches() {
     const state = this._experimentalState();
     const matches = Array.isArray(state.schedule?.partidos) ? state.schedule.partidos : [];
@@ -319,7 +331,7 @@ class FBMCard extends HTMLElement {
         const changeTeam = this._element("button", "Cambiar equipo");
         changeTeam.type = "button";
         changeTeam.addEventListener("click", () => { state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id; this._render(); });
-        card.append(changeTeam);
+        if (!this._config.equipo_fijo) card.append(changeTeam);
       } else {
         input("Buscar equipo", "query");
         button("Buscar", "search", connected);
@@ -343,7 +355,23 @@ class FBMCard extends HTMLElement {
         });
         label.append(select); card.append(label);
         if (fixed) button("Fijar este equipo en la tarjeta", "fix_team", !!state.selected && connected);
-        else button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
+        else {
+          button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
+          const copy = this._element("button", "Copiar configuración de tarjeta fija");
+          copy.type = "button"; copy.disabled = state.busy || !state.selected;
+          copy.addEventListener("click", async () => {
+            const team = state.teams.find(t => t.id === state.selected);
+            if (!team) return;
+            try {
+              await navigator.clipboard.writeText(this._fixedCardYaml(team));
+              state.message = "Configuración copiada. Añade otra tarjeta manual y pega el YAML.";
+            } catch (_) {
+              state.message = "El navegador no permite copiar. Utiliza el editor de tarjetas de HA.";
+            }
+            this._render();
+          });
+          card.append(copy);
+        }
         if (this._config.mostrar_horarios === true) button("Consultar fase y rondas", "phases", !!state.selected && connected);
         if (this._config.mostrar_horarios === true && Array.isArray(state.rounds)) {
           card.append(this._element("p", "Fase: " + state.phaseName, "muted"));
