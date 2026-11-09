@@ -39,7 +39,7 @@ class RegistrationDiagnosticTests(unittest.TestCase):
             module.create_identity(path)
             uid = module.load_identity(path)
             output = io.StringIO()
-            with patch.object(module, 'post_device_form', return_value={'key': 'private-key', 'idDispositivo': 'private-id'}) as post, contextlib.redirect_stdout(output):
+            with patch.object(module, 'post_device_form', return_value={'error': '', 'key': 'private-key', 'id_dispositivo': 'private-id'}) as post, contextlib.redirect_stdout(output):
                 result = module.main(['--android-release', '16', '--identidad', str(path), '--enviar'])
             self.assertEqual(result, 0)
             self.assertEqual(post.call_args.args[0], {'accion': 'registrar', 'uid': uid, 'plataforma': 'Android 16', 'tipo_dispositivo': 'mobile', 'version': '5.0.42'})
