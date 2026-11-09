@@ -143,6 +143,7 @@ class FBMCard extends HTMLElement {
     if (!key || !this._experimentalTeamIsValid(team)) return;
     const data = {};
     for (const field of ["id", "nombre", "club", "categoria", "temporada"]) data[field] = team[field];
+    if (typeof team.escudo === "string" && team.escudo.length <= 1024) data.escudo = team.escudo;
     try { window.localStorage?.setItem(key, JSON.stringify(data)); } catch (_) { /* almacenamiento deshabilitado */ }
   }
 
@@ -160,7 +161,9 @@ class FBMCard extends HTMLElement {
     try {
       const team = JSON.parse(window.localStorage?.getItem(key) || "null");
       if (!this._experimentalTeamIsValid(team)) return null;
-      return { id: team.id, nombre: team.nombre, club: team.club, categoria: team.categoria, temporada: team.temporada };
+      const result = { id: team.id, nombre: team.nombre, club: team.club, categoria: team.categoria, temporada: team.temporada };
+      if (typeof team.escudo === "string" && team.escudo.length <= 1024) result.escudo = team.escudo;
+      return result;
     } catch (_) { return null; }
   }
 
@@ -191,7 +194,7 @@ class FBMCard extends HTMLElement {
     const exists = favorites.some(saved => saved.id === team.id);
     const updated = exists ? favorites.filter(saved => saved.id !== team.id) : [
       ...favorites.filter(saved => saved.id !== team.id),
-      Object.fromEntries(["id", "nombre", "club", "categoria", "temporada"].map(field => [field, team[field]]))
+      Object.fromEntries(["id", "nombre", "club", "categoria", "temporada", "escudo"].filter(field => field !== "escudo" || (typeof team.escudo === "string" && team.escudo.length <= 1024)).map(field => [field, team[field]]))
     ];
     if (updated.length > 30) return false;
     try { window.localStorage?.setItem(key, JSON.stringify(updated)); return true; }
@@ -210,6 +213,7 @@ class FBMCard extends HTMLElement {
     if (!key) return;
     const data = {};
     for (const prop of ["id", "nombre", "club", "categoria", "temporada"]) data[prop] = team[prop];
+    if (typeof team.escudo === "string" && team.escudo.length <= 1024) data.escudo = team.escudo;
     try { window.localStorage?.setItem(key, JSON.stringify(data)); } catch (_) {}
   }
 
@@ -270,15 +274,11 @@ class FBMCard extends HTMLElement {
     return "";
   }
 
-  _requestClubLogo(state, club) {
-    if (!state.entry || !this._hass?.callWS || state.logoClub === club) return;
-    state.logoClub = club;
-    state.logoUrl = "";
-    this._hass.callWS({type: "fbm/club/logo", entry_id: state.entry, club}).then(result => {
-      if (this._experimental !== state || state.logoClub !== club) return;
-      state.logoUrl = this._officialLogoUrl(result?.url);
-      this._render();
-    }).catch(() => { /* La tarjeta sigue funcionando si falta el catálogo. */ });
+  _apkCrestUrl(value) {
+    if (typeof value !== "string" || !value.trim() || value.length > 1024 || /[\x00-\x1f\x7f]/.test(value)) return "";
+    try {
+      return "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=" + encodeURIComponent(value.trim());
+    } catch (_) { return ""; }
   }
 
   _experimentalMatches() {
@@ -437,8 +437,8 @@ class FBMCard extends HTMLElement {
       if (fixed && pinned && !editing) {
         const header = this._element("div", "", "team-header");
         const configuredLogo = this._officialLogoUrl(this._config.logo_equipo);
-        if (!configuredLogo) this._requestClubLogo(state, pinned.club);
-        const logo = configuredLogo || (state.logoClub === pinned.club ? state.logoUrl : "");
+        const standing = Array.isArray(state.standings) ? state.standings.find(item => item.id === pinned.id) : null;
+        const logo = configuredLogo || this._apkCrestUrl(pinned.escudo || standing?.escudo);
         if (logo) {
           const img = document.createElement("img");
           img.src = logo; img.alt = "Escudo oficial de " + pinned.nombre;

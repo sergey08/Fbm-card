@@ -220,16 +220,23 @@ test("escudos solo de dominios oficiales HTTPS", () => {
   assert.equal(card._officialLogoUrl("https://fbm.es/escudo.png"),"https://fbm.es/escudo.png");
 });
 
-test("respuestas de escudos antiguas no afectan al club actual", async () => {
-  const {elements,sandbox}=loadCard(); sandbox.URL=URL;
-  const card=new (elements.get("fbm-card"))();
-  const pending={}; card._hass={callWS:({club})=>new Promise(resolve=>pending[club]=resolve)};
-  card._render=()=>{}; const state=card._experimentalState(); state.entry="entry";
-  card._requestClubLogo(state,"A"); card._requestClubLogo(state,"B");
-  pending.B({url:"https://fbmtv.fbm.es/imagenes/equipos/escudo-6892.jpg"}); await Promise.resolve();
-  pending.A({url:"https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg"}); await Promise.resolve();
-  assert.equal(state.logoClub,"B");
-  assert.equal(state.logoUrl,"https://fbmtv.fbm.es/imagenes/equipos/escudo-6892.jpg");
+test("el campo Escudo construye la URL oficial sin inyectar parámetros", () => {
+  const {elements}=loadCard(); const card=new (elements.get("fbm-card"))();
+  assert.equal(card._apkCrestUrl("abc&x=otro"), "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=abc%26x%3Dotro");
+  for (const invalid of [null, "", "  ", "a\n", "x".repeat(1025)]) assert.equal(card._apkCrestUrl(invalid), "");
+});
+
+test("un favorito conserva el escudo oficial sin datos ajenos", () => {
+  const {elements,sandbox}=loadCard(); const data=new Map();
+  sandbox.window.localStorage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};
+  const card=new (elements.get("fbm-card"))(); card._hass={user:{id:"u"}};
+  card._config={tipo_tarjeta:"equipo",id_tarjeta:"a"};
+  const team={id:"a",nombre:"A",club:"C",categoria:"Cat",temporada:"26/27",escudo:"crest-id",key:"privada"};
+  card._saveExperimentalTeam("entry",team);
+  assert.equal(card._restoreExperimentalTeam("entry").escudo,"crest-id");
+  assert.ok(![...data.values()].join().includes("privada"));
+  card._toggleExperimentalFavorite("entry",team);
+  assert.equal(card._experimentalFavorites("entry")[0].escudo,"crest-id");
 });
 
 test("un escudo inaccesible recupera el símbolo neutro", () => {
@@ -248,11 +255,11 @@ test("un escudo inaccesible recupera el símbolo neutro", () => {
   const state=card._experimentalState(); state.entry="entry"; state.status={sesion_vigente:true};
   const team={id:"a",nombre:"Equipo",club:"PINTOBASKET E.C.B.",categoria:"Cat",temporada:"26/27"};
   state.teams=[team]; state.selected="a"; card._restoreExperimentalTeam=()=>team;
-  state.logoClub=team.club; state.logoUrl="https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg";
+  state.standings=[{id:"a",escudo:"identificador-fbm"}];
   const root=new Elem("card"); card._renderExperimental(root);
   const flatten=el=>[el,...(el.children||[]).flatMap(flatten)];
   const img=flatten(root).find(el=>el.tag==="img");
-  assert.equal(img.src,"https://fbmtv.fbm.es/imagenes/equipos/escudo-6419.jpg");
+  assert.equal(img.src,"https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=identificador-fbm");
   img.listeners.error(); assert.equal(img.replacement.textContent,"🏀");
 });
 
