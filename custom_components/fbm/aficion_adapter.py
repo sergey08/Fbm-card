@@ -87,6 +87,8 @@ class AficionFBMAdapter:
         fields = self._identity.search_fields(
             action, text, skip, datetime.now(timezone.utc)
         )
+        if not fields["key"]:
+            raise FBMAccessNotValidated("La clave de sesion requiere una nueva solicitud de acceso")
         return await asyncio.to_thread(_post_search, fields)
 
     async def search_teams(self, text: str, skip: int = 0) -> list[dict[str, str]]:
@@ -101,6 +103,10 @@ class AficionFBMAdapter:
         if not key:
             raise FBMAccessNotValidated("La clave de sesion requiere una nueva solicitud de acceso")
         return self._identity.device_id, key
+
+    def session_is_usable(self) -> bool:
+        """Indica solo si existe clave dentro del plazo local observado."""
+        return self._identity is not None and bool(self._identity.key_for_request(datetime.now(timezone.utc)))
 
     async def team_phase_options(self, team_id: str) -> dict:
         """Consulta opciones sin seleccionar rondas automaticamente."""

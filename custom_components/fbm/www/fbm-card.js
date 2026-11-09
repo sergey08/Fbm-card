@@ -160,6 +160,7 @@ class FBMCard extends HTMLElement {
     const state = this._experimentalState();
     if (state.busy || !this._hass?.callWS) return;
     state.busy = true; state.message = ""; this._render();
+    let remoteAttempted = false;
     try {
       if (action === "status") {
         const data = await this._hass.callWS({ type: "fbm/client/entries" });
@@ -183,17 +184,21 @@ class FBMCard extends HTMLElement {
           state.message = "Identidad local creada.";
         } else if (action === "register" || action === "recover_registration" || action === "connect") {
           if (!state.release.trim()) throw new Error("Indica una versión para el perfil experimental.");
+          if (action === "connect") { state.schedule = null; state.standings = null; state.rounds = null; state.round = ""; }
+          remoteAttempted = true;
           await this._hass.callWS({ type: `fbm/client/${action}`, ...common, android_release: state.release.trim() });
           state.status = await this._hass.callWS({ type: "fbm/client/status", ...common });
           state.message = action === "connect" ? "Acceso solicitado; puedes probar la búsqueda." : "Candidato guardado; falta validar la conexión.";
         } else if (action === "search") {
           if (!state.query.trim()) throw new Error("Escribe el nombre de un equipo.");
+          remoteAttempted = true;
           const data = await this._hass.callWS({ type: "fbm/team/search", ...common, texto: state.query.trim(), skip: 0 });
           state.teams = Array.isArray(data.equipos) ? data.equipos : [];
           state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
           state.message = state.teams.length ? "Elige un equipo, categoría y temporada." : "No se han encontrado equipos.";
         } else if (action === "phases") {
           if (!state.selected) throw new Error("Elige un equipo.");
+          remoteAttempted = true;
           const data = await this._hass.callWS({ type: "fbm/team/phases", ...common, equipo: state.selected });
           if (!Array.isArray(data.rondas)) throw new Error("Respuesta de fases no válida.");
           state.rounds = data.rondas; state.round = ""; state.phaseName = data.nombre_fase || ""; state.schedule = null;
@@ -203,18 +208,23 @@ class FBMCard extends HTMLElement {
           const request = { type: state.rounds.length ? "fbm/team/schedule_round" : "fbm/team/schedule", ...common,
             equipo: state.selected, desde: state.start, hasta: state.end };
           if (state.rounds.length) request.ronda = state.round;
+          remoteAttempted = true;
           state.schedule = await this._hass.callWS(request);
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
+          remoteAttempted = true;
           const data = await this._hass.callWS({ type: "fbm/team/standings", ...common, equipo: state.selected });
           if (!Array.isArray(data.clasificacion)) throw new Error("Clasificación no válida.");
           state.standings = data.clasificacion;
         }
       }
     } catch (_) {
-      if ((action === "register" || action === "recover_registration") && state.entry) {
+      if (remoteAttempted && ["register", "recover_registration", "connect", "search", "phases", "schedule", "standings"].includes(action) && state.entry) {
         try { state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry }); }
-        catch (_) { state.status = { ...state.status, registro_pendiente: true }; }
+        catch (_) {
+          state.status = { ...state.status, sesion_vigente: false };
+          if (action === "register" || action === "recover_registration") state.status.registro_pendiente = true;
+        }
       }
       state.message = action === "register" || action === "recover_registration"
         ? "No se pudo confirmar el registro. El servidor podría haberlo procesado; no se repetirá automáticamente."
@@ -238,7 +248,9 @@ class FBMCard extends HTMLElement {
     };
     button("Comprobar estado", "status", !!this._hass?.callWS);
     if (state.status) {
-      card.append(this._element("p", `Identidad: ${state.status.identidad_creada ? "creada" : "pendiente"} · Dispositivo: ${state.status.candidato_guardado ? "guardado" : "pendiente"} · Sesión: ${state.status.sesion_en_memoria ? "en memoria" : "sin conectar"}`, "muted"));
+      const connected = state.status.sesion_vigente === true;
+      const sessionText = connected ? "vigente en la última comprobación local" : (state.status.sesion_en_memoria ? "necesita reconexión" : "sin conectar");
+      card.append(this._element("p", `Identidad: ${state.status.identidad_creada ? "creada" : "pendiente"} · Dispositivo: ${state.status.candidato_guardado ? "guardado" : "pendiente"} · Sesión: ${sessionText}`, "muted"));
       if (state.status.registro_pendiente) card.append(this._element("p", "Hay un registro pendiente o incierto. No se reintentará hasta que se recupere de forma segura.", "muted"));
       button("Crear identidad local", "create", !state.status.identidad_creada);
       input("Versión del perfil Android experimental", "release");
@@ -249,7 +261,7 @@ class FBMCard extends HTMLElement {
       }
       button("Conectar", "connect", state.status.candidato_guardado);
       input("Buscar equipo", "query");
-      button("Buscar", "search", state.status.sesion_en_memoria);
+      button("Buscar", "search", connected);
       if (state.teams.length) {
         const label = this._element("label", "Equipo, categoría y temporada: ");
         const select = document.createElement("select");
@@ -268,8 +280,8 @@ class FBMCard extends HTMLElement {
           this._render();
         });
         label.append(select); card.append(label);
-        button("Consultar clasificación del grupo actual", "standings", !!state.selected && state.status.sesion_en_memoria);
-        button("Consultar fase y rondas", "phases", !!state.selected && state.status.sesion_en_memoria);
+        button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
+        button("Consultar fase y rondas", "phases", !!state.selected && connected);
         if (Array.isArray(state.rounds)) {
           card.append(this._element("p", "Fase: " + state.phaseName, "muted"));
           if (state.rounds.length) {
@@ -286,7 +298,7 @@ class FBMCard extends HTMLElement {
           }
         }
         input("Desde", "start", "date"); input("Hasta", "end", "date");
-        button("Consultar horarios", "schedule", !!state.selected && state.status.sesion_en_memoria && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
+        button("Consultar horarios", "schedule", !!state.selected && connected && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
       }
       if (Array.isArray(state.standings)) {
         card.append(this._element("h3", "Clasificación del grupo actual"));

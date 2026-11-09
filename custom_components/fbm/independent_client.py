@@ -8,6 +8,7 @@ from .aficion_adapter import AficionFBMAdapter, FBMAccessNotValidated
 from .guest_session import DeviceProfile
 from .independent_identity import IdentityError
 from .device_protocol import post_device_form, registration_fields
+from .query_cache import QueryCache
 
 
 class IndependentClient:
@@ -17,11 +18,14 @@ class IndependentClient:
         self._store = identity_store
         self._adapter = None
         self._lock = asyncio.Lock()
+        self._cache = QueryCache(ttl_seconds=300, max_entries=128)
 
     async def async_create_identity(self) -> None:
         """Crea una identidad persistente cuando se solicita expresamente."""
         async with self._lock:
             await self._store.async_create()
+            self._adapter = None
+            self._cache.clear()
 
     async def async_status(self) -> dict[str, bool]:
         """Estado sin credenciales ni identificadores."""
@@ -30,7 +34,8 @@ class IndependentClient:
             return {"identidad_creada": identity is not None,
                     "candidato_guardado": bool(identity and identity.candidate_device_id),
                     "registro_pendiente": bool(identity and identity.registration_state == "pending"),
-                    "sesion_en_memoria": self._adapter is not None}
+                    "sesion_en_memoria": self._adapter is not None,
+                    "sesion_vigente": bool(self._adapter and self._adapter.session_is_usable())}
 
     async def async_bind_candidate(self, candidate_device_id: str) -> None:
         """Vincula un candidato proporcionado por un flujo de provision explicito."""
@@ -40,6 +45,7 @@ class IndependentClient:
                 raise IdentityError("No existe una identidad local")
             await self._store.async_bind_candidate(identity.uid, candidate_device_id)
             self._adapter = None
+            self._cache.clear()
 
     async def async_register(self, android_release: str) -> None:
         """Solicita un registro experimental solo cuando se llama explicitamente."""
@@ -73,6 +79,7 @@ class IndependentClient:
             raise IdentityError("Registro no validado; no se guardo un candidato")
         await self._store.async_bind_candidate(identity.uid, device_id)
         self._adapter = None
+        self._cache.clear()
 
     async def async_connect(self, android_release: str) -> None:
         """Solicita acceso cuando se indica expresamente; no registra dispositivos."""
@@ -80,6 +87,7 @@ class IndependentClient:
             raise ValueError("Se requiere una version de perfil Android")
         async with self._lock:
             self._adapter = None
+            self._cache.clear()
             identity = await self._store.async_load()
             if identity is None or not identity.candidate_device_id:
                 raise IdentityError("Falta una identidad con candidato de dispositivo")
@@ -91,29 +99,47 @@ class IndependentClient:
         """Olvida la sesion en memoria sin eliminar la identidad persistida."""
         async with self._lock:
             self._adapter = None
+            self._cache.clear()
+
+    async def _cached_query(self, key, operation, *, ttl):
+        """Serializa consultas y conserva solo resultados normalizados en memoria."""
+        async with self._lock:
+            adapter = self._adapter
+            if adapter is None or not adapter.session_is_usable():
+                raise FBMAccessNotValidated("Se requiere una conexion explicita vigente")
+            cached = self._cache.get(key)
+            if cached is not None:
+                return cached
+            result = await operation(adapter)
+            self._cache.put(key, result, ttl_seconds=ttl)
+            return result
 
     async def async_search_teams(self, text: str, skip: int = 0) -> list[dict[str, str]]:
-        adapter = self._adapter
-        if adapter is None:
-            raise FBMAccessNotValidated("Se requiere una conexion explicita")
-        return await adapter.search_teams(text, skip)
+        if not isinstance(text, str) or not text.strip() or len(text) > 100 or type(skip) is not int or not 0 <= skip <= 10000:
+            raise ValueError("Busqueda no valida")
+        return await self._cached_query(("equipos", text, skip), lambda adapter: adapter.search_teams(text, skip), ttl=300)
 
     async def async_team_phase_options(self, team_id: str) -> dict:
-        adapter = self._adapter
-        if adapter is None:
-            raise FBMAccessNotValidated("Se requiere una conexion explicita")
-        return await adapter.team_phase_options(team_id)
+        self._validate_team_id(team_id)
+        return await self._cached_query(("fases", team_id), lambda adapter: adapter.team_phase_options(team_id), ttl=300)
 
     async def async_team_schedule(self, team_id: str, start: date, end: date, round_id: str | None = None) -> dict:
-        adapter = self._adapter
-        if adapter is None:
-            raise FBMAccessNotValidated("Se requiere una conexion explicita")
-        if round_id is None:
-            return await adapter.team_schedule(team_id, start, end)
-        return await adapter.team_schedule(team_id, start, end, round_id)
+        self._validate_team_id(team_id)
+        if type(start) is not date or type(end) is not date or start > end or (end - start).days > 366:
+            raise ValueError("Rango de fechas no valido")
+        if round_id is not None:
+            self._validate_team_id(round_id)
+        async def query(adapter):
+            if round_id is None:
+                return await adapter.team_schedule(team_id, start, end)
+            return await adapter.team_schedule(team_id, start, end, round_id)
+        return await self._cached_query(("horarios", team_id, start.isoformat(), end.isoformat(), round_id or ""), query, ttl=60)
 
     async def async_team_standings(self, team_id: str) -> dict:
-        adapter = self._adapter
-        if adapter is None:
-            raise FBMAccessNotValidated("Se requiere una conexion explicita")
-        return await adapter.team_standings(team_id)
+        self._validate_team_id(team_id)
+        return await self._cached_query(("clasificacion", team_id), lambda adapter: adapter.team_standings(team_id), ttl=120)
+
+    @staticmethod
+    def _validate_team_id(value):
+        if not isinstance(value, str) or not value.strip() or len(value) > 512:
+            raise ValueError("Identificador deportivo no valido")

@@ -284,6 +284,35 @@ test("registro pendiente bloquea alta normal y exige recuperación explícita", 
   assert.deepEqual(calls, ["fbm/client/recover_registration", "fbm/client/status"]);
 });
 
+test("una sesión caducada muestra reconexión y bloquea búsquedas", () => {
+  const { elements, sandbox } = loadCard();
+  class Element {
+    constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; this.textContent = ""; }
+    append(...children) { this.children.push(...children); }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    setAttribute() {}
+  }
+  sandbox.document = { createElement: tag => new Element(tag) };
+  const card = new (elements.get("fbm-card"))(); card._config = { modo_experimental: true };
+  const state = card._experimentalState();
+  state.status = { identidad_creada: true, candidato_guardado: true, sesion_en_memoria: true, sesion_vigente: false };
+  const parent = new Element("card"); card._renderExperimental(parent);
+  assert.equal(parent.children.find(el => el.textContent === "Buscar").disabled, true);
+  assert.ok(parent.children.some(el => el.textContent.includes("necesita reconexión")));
+});
+
+test("una nueva conexión borra resultados previos sin consultar datos", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))(); card._config = {}; card._render = () => {};
+  const calls = [];
+  card._hass = { callWS: async msg => { calls.push(msg.type); return msg.type === "fbm/client/status" ? { sesion_vigente: true } : {}; } };
+  const state = card._experimentalState(); state.entry = "entry";
+  state.schedule = { partidos: [{ local: "old", visitante: "old" }] }; state.standings = [{ equipo: "old" }]; state.rounds = [{ id: "old" }];
+  await card._experimentalAction("connect");
+  assert.equal(state.schedule, null); assert.equal(state.standings, null); assert.equal(state.rounds, null);
+  assert.deepEqual(calls, ["fbm/client/connect", "fbm/client/status"]);
+});
+
 test("si falla la comprobación posterior se bloquea el registro en la tarjeta", async () => {
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();

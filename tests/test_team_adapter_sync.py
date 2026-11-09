@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import types
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1] / 'custom_components/fbm'
 package = types.ModuleType('fbm_team_adapter_sync_test')
@@ -53,7 +53,7 @@ class TeamAdapterSyncTests(unittest.TestCase):
     def test_client_connection_is_explicit_and_does_not_expose_identity(self):
         identity = local_identity_module.IndependentIdentity('0123456789abcdef', 'private-device')
         store = types.SimpleNamespace(async_load=AsyncMock(return_value=identity), async_create=AsyncMock())
-        adapter = types.SimpleNamespace(search_teams=AsyncMock(return_value=[{'nombre': 'A'}]))
+        adapter = types.SimpleNamespace(search_teams=AsyncMock(return_value=[{'nombre': 'A'}]), session_is_usable=lambda: True)
         client = independent_module.IndependentClient(store)
         connect_path = package.__name__ + '.independent_client.AficionFBMAdapter.access_with_profile'
         with patch(connect_path, new=AsyncMock(return_value=adapter)) as connect:
@@ -78,6 +78,59 @@ class TeamAdapterSyncTests(unittest.TestCase):
             with self.assertRaises(ValueError): run_immediate(client.async_connect('16'))
         with self.assertRaises(adapter_module.FBMAccessNotValidated):
             run_immediate(client.async_search_teams('A'))
+
+    def test_expired_search_never_sends_an_empty_key(self):
+        identity = identity_module.GuestIdentity('secret', 'device', 0)
+        adapter = adapter_module.AficionFBMAdapter(identity)
+        with patch.object(adapter_module.asyncio, 'to_thread', new=AsyncMock()) as send:
+            with self.assertRaises(adapter_module.FBMAccessNotValidated):
+                run_immediate(adapter.search('buscarEquipo', 'A'))
+            send.assert_not_awaited()
+        self.assertFalse(adapter.session_is_usable())
+
+    def test_status_distinguishes_expired_session_from_no_session(self):
+        client = independent_module.IndependentClient(types.SimpleNamespace(async_load=AsyncMock(return_value=None)))
+        client._adapter = adapter_module.AficionFBMAdapter(identity_module.GuestIdentity('secret', 'device', 0))
+        status = run_immediate(client.async_status())
+        self.assertTrue(status['sesion_en_memoria'])
+        self.assertFalse(status['sesion_vigente'])
+        self.assertNotIn('secret', str(status))
+
+    def test_cache_is_bounded_in_time_defensive_and_cleared_on_disconnect(self):
+        now = [10.0]
+        adapter = types.SimpleNamespace(session_is_usable=MagicMock(return_value=True),
+            search_teams=AsyncMock(return_value=[{'nombre': 'A'}]))
+        client = independent_module.IndependentClient(types.SimpleNamespace())
+        client._cache = independent_module.QueryCache(clock=lambda: now[0])
+        client._adapter = adapter
+        result = run_immediate(client.async_search_teams('A'))
+        result[0]['nombre'] = 'modified'
+        self.assertEqual(run_immediate(client.async_search_teams('A'))[0]['nombre'], 'A')
+        adapter.search_teams.assert_awaited_once_with('A', 0)
+        now[0] += 301
+        run_immediate(client.async_search_teams('A'))
+        self.assertEqual(adapter.search_teams.await_count, 2)
+        adapter.session_is_usable.return_value = False
+        with self.assertRaises(adapter_module.FBMAccessNotValidated): run_immediate(client.async_search_teams('A'))
+        self.assertEqual(adapter.search_teams.await_count, 2)
+        run_immediate(client.async_disconnect())
+        self.assertEqual(len(client._cache), 0)
+
+    def test_cache_separates_team_date_and_round_and_never_caches_errors(self):
+        adapter = types.SimpleNamespace(session_is_usable=lambda: True,
+            team_schedule=AsyncMock(return_value={'partidos': []}),
+            team_standings=AsyncMock(side_effect=[ValueError('bad'), {'clasificacion': []}]))
+        client = independent_module.IndependentClient(types.SimpleNamespace())
+        client._adapter = adapter
+        start, end = date(2026, 11, 1), date(2026, 12, 31)
+        run_immediate(client.async_team_schedule('team-a', start, end))
+        run_immediate(client.async_team_schedule('team-a', start, end))
+        run_immediate(client.async_team_schedule('team-b', start, end))
+        run_immediate(client.async_team_schedule('team-a', start, end, 'round'))
+        self.assertEqual(adapter.team_schedule.await_count, 3)
+        with self.assertRaises(ValueError): run_immediate(client.async_team_standings('team-a'))
+        self.assertEqual(run_immediate(client.async_team_standings('team-a')), {'clasificacion': []})
+        self.assertEqual(adapter.team_standings.await_count, 2)
 
     def test_registration_requires_explicit_call_and_refuses_ambiguous_response(self):
         identity = local_identity_module.IndependentIdentity('0123456789abcdef')
