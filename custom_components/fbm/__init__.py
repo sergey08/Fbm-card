@@ -35,7 +35,7 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
             return True
         await resources.async_create_item({"res_type": "module", "url": CARD_URL})
         return True
-    except (AttributeError, KeyError, TypeError, ValueError) as err:
+    except (AttributeError, KeyError, TypeError, ValueError, OSError) as err:
         _LOGGER.warning("No se pudo registrar el recurso FBM automáticamente: %s", err)
         return False
 
