@@ -159,6 +159,15 @@ class IndependentClient:
             return await adapter.team_schedule(team_id, start, end, round_id)
         return await self._cached_query(("horarios", team_id, start.isoformat(), end.isoformat(), round_id or ""), query, ttl=60)
 
+    async def async_team_group_identity(self, team_id: str) -> dict:
+        """Read official current group; do not enable follow or infer season."""
+        self._validate_team_id(team_id)
+        return await self._cached_query(
+            ("grupo_actual", team_id),
+            lambda adapter: adapter.team_group_identity(team_id),
+            ttl=120,
+        )
+
     async def async_team_standings(self, team_id: str) -> dict:
         self._validate_team_id(team_id)
         return await self._cached_query(("clasificacion", team_id), lambda adapter: adapter.team_standings(team_id), ttl=120)
