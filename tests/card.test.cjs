@@ -129,6 +129,11 @@ test("buscador genera configuración portable de equipo fijo sin credenciales", 
   assert.match(yaml,/tipo_tarjeta: equipo/);
   assert.match(yaml,/equipo_fijo:/);
   assert.match(yaml,/Pintobasket/);
+  const another = {...team,id:"deporte123-otro"};
+  const yaml2=card._fixedCardYaml(another);
+  const extract = y => y.split("\\n").find(line => line.startsWith("id_tarjeta:"));
+  assert.notEqual(extract(yaml), extract(yaml2), "dos favoritos no deben compartir id_tarjeta");
+
   assert.doesNotMatch(yaml,/api.key|dispositivo|uid/i);
   const fixed = new (elements.get("fbm-card"))();
   fixed._config={tipo_tarjeta:"equipo",modo_experimental:true,equipo_fijo:team};
