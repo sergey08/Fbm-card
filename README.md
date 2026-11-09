@@ -36,6 +36,14 @@ id_tarjeta: mis_equipos
 
 No añadas manualmente otro recurso `fbm-card.js` si la integración ya ha registrado `/fbm_static/fbm-card.js`: dos versiones del mismo elemento personalizado pueden interferir en el navegador.
 
+## Favoritos y tarjetas independientes (DEV)
+
+El buscador permite seleccionar un equipo de la lista oficial de FBM y pulsar **☆ Añadir a favoritos**. Se pueden guardar **varios equipos**, volver a elegirlos en el selector «Mis equipos favoritos» y quitarlos con «★ Quitar de favoritos». Cada favorito conserva el nombre oficial, club, categoría, temporada e ID del equipo, pero **nunca** almacena el UID, la clave del dispositivo o la sesión de FBM.
+
+El botón **Copiar tarjeta independiente de este equipo** produce una configuración YAML con `tipo_tarjeta: equipo` y `equipo_fijo`. Crea una tarjeta manual nueva en el panel de Home Assistant y pega esa configuración. Repite el procedimiento con otros favoritos: las tarjetas quedan **independientes entre sí**, cada una con su clasificación, sin alterar el buscador ni las otras tarjetas. La integración y la identidad invitada son compartidas; **no debe registrarse otro dispositivo por tarjeta**.
+
+Los favoritos del buscador se guardan localmente **por usuario de Home Assistant, navegador y entrada FBM** (sin sincronización entre navegadores). Las tarjetas fijas creadas mediante YAML se guardan en la configuración del dashboard y, por tanto, mantienen su equipo al abrir el mismo panel desde otro dispositivo. El botón «Fijar este equipo en la tarjeta» de una tarjeta fija vacía conserva la selección únicamente en el almacenamiento de ese navegador; para una selección portátil usa la opción de copiar YAML.
+
 ## Dos tipos de tarjeta (DEV)
 
 **Buscador de equipos**: consulta y selecciona equipos en el servicio oficial FBM, con categoría y temporada. No crea una identidad por abrir la tarjeta.
