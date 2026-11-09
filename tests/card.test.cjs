@@ -751,3 +751,40 @@ test("no ofrece sensores FBM no disponibles", () => {
 
 
 
+
+test("la plantilla solo se consulta a demanda y cada tarjeta conserva sus datos", async () => {
+  const { elements } = loadCard();
+  const Card = elements.get("fbm-card");
+  const a = new Card(); const b = new Card();
+  a._config = { modo_experimental: true }; b._config = { modo_experimental: true };
+  a._render = () => {}; b._render = () => {};
+  const calls = [];
+  const hass = { callWS: async msg => {
+    calls.push(msg);
+    return { jugadores: [{ id: "p1", nombre: "Jugador de prueba", puntos_totales: 7 }], total: 1 };
+  } };
+  a._hass = hass; b._hass = hass;
+  const sa = a._experimentalState(), sb = b._experimentalState();
+  sa.entry = "entry"; sa.selected = "team-a";
+  sb.entry = "entry"; sb.selected = "team-b";
+  assert.equal(calls.length, 0);
+  await a._experimentalAction("players");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "fbm/team/players");
+  assert.equal(calls[0].equipo, "team-a");
+  assert.equal(sa.playersTeamId, "team-a");
+  assert.equal(sa.players[0].puntos_totales, 7);
+  assert.equal(sb.players, null);
+});
+
+test("una respuesta de plantilla malformada no se presenta como lista valida", async () => {
+  const { elements } = loadCard();
+  const card = new (elements.get("fbm-card"))(); card._config = { modo_experimental: true };
+  card._render = () => {};
+  card._hass = { callWS: async () => ({ error: "not-ready" }) };
+  const state = card._experimentalState(); state.entry = "entry"; state.selected = "team";
+  await card._experimentalAction("players");
+  assert.equal(state.players, null);
+  assert.equal(state.playersTeamId, "");
+  assert.match(state.message, /No se pudo completar/);
+});
