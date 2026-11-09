@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1] / 'custom_components/fbm'
 package = types.ModuleType('fbm_team_adapter_sync_test')
 package.__path__ = [str(ROOT)]
 sys.modules[package.__name__] = package
-for name in ('device_protocol', 'guest_identity', 'guest_session', 'team_search', 'team_phases', 'season_evidence', 'schedule_probe', 'player_protocol', 'player_detail', 'team_roster', 'team_protocol', 'team_schedule', 'aficion_adapter', 'independent_identity', 'independent_client'):
+for name in ('device_protocol', 'guest_identity', 'guest_session', 'team_search', 'team_phases', 'season_evidence', 'schedule_probe', 'player_protocol', 'player_detail', 'player_context', 'player_statistics', 'player_statistics_bridge', 'team_roster', 'team_protocol', 'team_schedule', 'aficion_adapter', 'independent_identity', 'independent_client'):
     spec = importlib.util.spec_from_file_location(package.__name__ + '.' + name, ROOT / (name + '.py'))
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
@@ -92,6 +92,41 @@ class TeamAdapterSyncTests(unittest.TestCase):
         self.assertEqual(transport.await_args.args[1]['id_jugador'], 'p1')
         self.assertEqual(result['jugador']['puntos_totales'], 18)
         self.assertNotIn('foto', str(result))
+
+    def test_player_statistics_blocks_mismatched_team_before_stats_requests(self):
+        identity = identity_module.GuestIdentity.from_response(
+            'key', 'device', datetime.now(timezone.utc))
+        raw = {'error': '', 'jugador': {'id': 'p'}, 'equipo': {'id': 'other'},
+               'idComponenteClub': 'c', 'idTemporadaActual': 'season'}
+        with patch.object(adapter_module.asyncio, 'to_thread',
+                          new=AsyncMock(return_value=raw)) as send:
+            with self.assertRaises(ValueError):
+                run_immediate(
+                    adapter_module.AficionFBMAdapter(identity).player_statistics('p', 't'))
+        self.assertEqual(send.await_count, 1)
+        self.assertEqual(send.await_args.args[1]['accion'], 'detalleJugador')
+
+    def test_player_stats_requests_only_verified_four_ids(self):
+        identity = identity_module.GuestIdentity.from_response(
+            'key', 'device', datetime.now(timezone.utc))
+        raw = {'error': '', 'jugador': {'id': 'p'}, 'equipo': {'id': 't'},
+               'idComponenteClub': 'c', 'idTemporadaActual': 'season'}
+        responses = [raw, {'error':'', 'puntosTotalesJugador': 6},
+                     {'error':'', 'listaDatosPartido': []}]
+        with patch.object(adapter_module.asyncio, 'to_thread',
+                          new=AsyncMock(side_effect=responses)) as send:
+            result = run_immediate(
+                adapter_module.AficionFBMAdapter(identity).player_statistics('p', 't'))
+        self.assertEqual(send.await_count, 3)
+        forms = [call.args[1] for call in send.await_args_list]
+        self.assertEqual([v['accion'] for v in forms],
+            ['detalleJugador', 'datosGlobalesJugadorEquipo', 'datosMediasJugadorPartidos'])
+        for form in forms[1:]:
+            self.assertEqual(form['id_equipo'], 't')
+            self.assertEqual(form['id_componente_club'], 'c')
+            self.assertEqual(form['id_temporada'], 'season')
+        self.assertEqual(result['globales']['estadisticas']['puntos_totales'], 6)
+        self.assertNotIn('season', str(result))
 
     def test_standings_calls_phases_then_classification(self):
         identity = identity_module.GuestIdentity.from_response('key', 'device', datetime.now(timezone.utc))
