@@ -62,3 +62,34 @@ jobs:
         run: python3 scripts/probar_registro_invitado.py --android-release 16
       - name: Probar registro Lovelace con simulaciones aisladas
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Empaquetar integración FBM de prueba (sin publicar)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          source = Path("custom_components/fbm")
+          required = (source / "manifest.json", source / "__init__.py",
+                      source / "www/fbm-card.js")
+          assert all(item.is_file() for item in required), "Paquete FBM incompleto"
+          out = Path("dist/fbm-card-dev-install.zip")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          with ZipFile(out, "w", ZIP_DEFLATED) as archive:
+              for item in sorted(source.rglob("*")):
+                  if item.is_file() and "__pycache__" not in item.parts:
+                      archive.write(item, item.as_posix())
+          with ZipFile(out) as archive:
+              names = set(archive.namelist())
+              assert all(item.as_posix() in names for item in required)
+              assert not any(name.startswith("/") or ".." in Path(name).parts
+                             for name in names), "Ruta insegura en paquete"
+          print(f"Paquete DEV listo: {out} (sin secretos ni datos locales)")
+          PY
+      - name: Guardar paquete DEV para instalación aislada
+        uses: actions/upload-artifact@v4
+        with:
+          name: fbm-card-dev-${{ github.sha }}
+          path: dist/fbm-card-dev-install.zip
+          retention-days: 7
+          if-no-files-found: error
