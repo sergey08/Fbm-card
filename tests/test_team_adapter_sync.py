@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1] / 'custom_components/fbm'
 package = types.ModuleType('fbm_team_adapter_sync_test')
 package.__path__ = [str(ROOT)]
 sys.modules[package.__name__] = package
-for name in ('device_protocol', 'guest_identity', 'guest_session', 'team_search', 'team_phases', 'season_evidence', 'team_protocol', 'team_schedule', 'aficion_adapter', 'independent_identity', 'independent_client'):
+for name in ('device_protocol', 'guest_identity', 'guest_session', 'team_search', 'team_phases', 'season_evidence', 'schedule_probe', 'team_protocol', 'team_schedule', 'aficion_adapter', 'independent_identity', 'independent_client'):
     spec = importlib.util.spec_from_file_location(package.__name__ + '.' + name, ROOT / (name + '.py'))
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
