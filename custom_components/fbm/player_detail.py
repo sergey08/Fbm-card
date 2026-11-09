@@ -20,10 +20,13 @@ class PlayerDetailError(ValueError):
     """Invalid, unsupported or unavailable player detail."""
 
 
-def post_player_detail_form(fields: dict[str, str]) -> dict:
-    if not isinstance(fields, dict) or set(fields) != {
-        "accion", "id_dispositivo", "key", "id_jugador"
-    } or fields.get("accion") != "detalleJugador":
+def _post_player_form(fields: dict[str, str], permitted: set[str]) -> dict:
+    if not isinstance(fields, dict) or fields.get("accion") not in permitted:
+        raise ValueError("Acción de jugador no autorizada")
+    expected = {"accion", "id_dispositivo", "key", "id_jugador"}
+    if fields.get("accion") != "detalleJugador":
+        expected |= {"id_equipo", "id_componente_club", "id_temporada"}
+    if set(fields) != expected:
         raise ValueError("Formulario de jugador no autorizado")
     if any(type(value) is not str or not value.strip() or len(value) > 1024
            for value in fields.values()):
@@ -51,6 +54,18 @@ def post_player_detail_form(fields: dict[str, str]) -> dict:
     if not isinstance(payload, dict):
         raise PlayerDetailError("Respuesta de ficha no válida")
     return payload
+
+
+def post_player_detail_form(fields: dict[str, str]) -> dict:
+    """APK detalleJugador: exact allowlist, no other actions."""
+    return _post_player_form(fields, {"detalleJugador"})
+
+
+def post_player_statistics_form(fields: dict[str, str]) -> dict:
+    """APK statistics actions through the same official /v2/jugador.ashx."""
+    return _post_player_form(
+        fields, {"datosGlobalesJugadorEquipo", "datosMediasJugadorPartidos"}
+    )
 
 
 def normalize_player_detail(response: object, requested_player_id: str) -> dict:
