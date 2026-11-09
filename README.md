@@ -1,10 +1,10 @@
-> **Arquitectura DEV en transición (08/11/2026).** Este repositorio está pasando de tarjeta independiente a **integración + tarjeta en una sola instalación**. La integración se encuentra en `custom_components/fbm/`, con la tarjeta empaquetada en `custom_components/fbm/www/fbm-card.js`. El manifiesto y el flujo de configuración están creados, pero **no hay todavía conexión validada a la API oficial de FBM, ni registro automático del recurso Lovelace verificado en Home Assistant, ni instalación probada en Home Assistant**. Las instrucciones anteriores de instalación manual de la tarjeta son históricas y no describen aún la instalación final desde Marketplace. **No instalar como versión estable.**
+> **Arquitectura DEV en transición.** Este repositorio está pasando de tarjeta independiente a **integración + tarjeta en una sola instalación**. Las pruebas de diagnóstico han recuperado equipos y horarios reales con una identidad independiente; el registro inicial, la compatibilidad y el flujo completo aún no se han validado en Home Assistant. El prototipo de tarjeta experimental y sus límites se describen en [identidad independiente](docs/identidad-independiente.md). El registro automático del recurso Lovelace tampoco se ha verificado en una instalación real. Las instrucciones anteriores de instalación manual son históricas y no describen aún la instalación final desde Marketplace. **No instalar como versión estable.**
 
 # FBM Card
 
 Tarjeta para Home Assistant con calendarios, resultados y clasificaciones de la Federación de Baloncesto de Madrid (FBM).
 
-**Estado: desarrollo (rama dev). Sin conexión con datos oficiales todavía.**
+**Estado: desarrollo (rama dev). Búsqueda y horarios comprobados mediante diagnóstico; integración completa pendiente de validar.**
 
 ## Primera beta prevista
 
@@ -81,11 +81,11 @@ FBM Card es universal: **no estará limitada a Pintobasket**. Cada persona debe 
 
 **Fuente única:** FBM (web oficial o API oficial de Afición FBM, en modo invitado). Prohibido obtener calendarios, resultados, clasificación o catálogo de equipos desde clubes o fuentes de terceros.
 
-**Estado actual:** este es un requisito de producto, **todavía no implementado**. El ejemplo de Pintobasket del README es solo un caso de prueba inicial y nunca debe fijarse como equipo obligatorio o predeterminado en la versión pública.
+**Estado actual:** hay un prototipo experimental de búsqueda por equipo, categoría y temporada, pero el flujo completo aún no se ha probado en Home Assistant. Pintobasket es solo un caso de prueba y no es un equipo obligatorio o predeterminado.
 
 ## Selector de varios equipos (implementado parcialmente en DEV)
 
-La tarjeta permite configurar una lista de equipos y alternar entre ellos. La última selección se guarda **en el navegador/dispositivo**, con una clave que incluye el identificador del usuario de Home Assistant y `id_tarjeta`. No hay sincronización entre dispositivos ni catálogo automático de equipos todavía. Sin identidad de usuario no se guarda la preferencia.
+En el modo basado en entidades, la tarjeta permite configurar una lista de equipos y alternar entre ellos. La última selección se guarda **en el navegador/dispositivo**, con una clave que incluye el identificador del usuario de Home Assistant y `id_tarjeta`. No hay sincronización entre dispositivos. El modo experimental incorpora búsqueda FBM, pero aún no comparte estas preferencias ni se ha validado en HA. Sin identidad de usuario no se guarda la preferencia.
 
 ```yaml
 type: custom:fbm-card
@@ -102,7 +102,7 @@ equipos:
 
 ## Favoritos locales (DEV)
 
-Ya se puede marcar o desmarcar como favorito cualquiera de los equipos configurados. Los favoritos aparecen primero en el selector, identificados con ★. Se almacenan en el navegador, separados por identificador de usuario de Home Assistant y por `id_tarjeta`. **No se sincronizan entre móviles u otros navegadores** y no permiten aún buscar equipos en el catálogo oficial: para eso sigue pendiente validar la API pública FBM. Sin identidad de usuario disponible no se muestra el botón para guardar favoritos.
+En el modo basado en entidades se puede marcar o desmarcar como favorito cualquiera de los equipos configurados. Los favoritos aparecen primero en el selector, identificados con ★. Se almacenan en el navegador, separados por identificador de usuario de Home Assistant y por `id_tarjeta`. **No se sincronizan entre móviles u otros navegadores** ni están conectados al buscador experimental. Sin identidad de usuario disponible no se muestra el botón para guardar favoritos.
 
 ## Restricción de procedencia de datos
 
@@ -110,7 +110,7 @@ El adaptador de datos debe obtener información **exclusivamente de endpoints of
 
 ## Descubrimiento de sensores FBM (DEV)
 
-Cuando no hay equipos configurados, la tarjeta enumera hasta diez entidades `sensor.*` de Home Assistant con estructura de partidos/clasificación y `fuente: FBM`, para ayudar a configurar equipos. **No es aún el buscador oficial de clubes y equipos**: únicamente inspecciona sensores ya existentes, y una etiqueta declarada no certifica la procedencia. Sigue pendiente el adaptador que consulte exclusivamente FBM.
+En el modo basado en entidades, cuando no hay equipos configurados, la tarjeta enumera hasta diez entidades `sensor.*` de Home Assistant con estructura de partidos/clasificación y `fuente: FBM`. Esta enumeración solo inspecciona sensores existentes y una etiqueta declarada no certifica la procedencia. El buscador experimental es un flujo separado y está pendiente de validación en HA.
 
 ## Modo de descubrimiento automático (DEV)
 

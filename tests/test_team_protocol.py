@@ -41,12 +41,12 @@ class TeamProtocolTests(unittest.TestCase):
             def __exit__(self, *args): pass
             def read(self, n): return b'{"error":"","listaFasesGrupo":[]}'
         fields = protocol.phases_fields('device', 'key', 'team')
-        with patch('urllib.request.urlopen', return_value=Response()) as urlopen:
+        with patch.object(protocol, 'open_request', return_value=Response()) as urlopen:
             self.assertEqual(protocol.post_team_form(fields)['error'], '')
             request = urlopen.call_args.args[0]
             self.assertEqual(request.full_url, protocol.TEAM_URL)
             self.assertEqual({k: v[0] for k, v in parse_qs(request.data.decode()).items()}, fields)
-        with patch('urllib.request.urlopen') as urlopen:
+        with patch.object(protocol, 'open_request') as urlopen:
             with self.assertRaises(ValueError):
                 protocol.post_team_form({**fields, 'unexpected': 'x'})
             urlopen.assert_not_called()

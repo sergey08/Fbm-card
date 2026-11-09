@@ -1,0 +1,129 @@
+"""Puente experimental WebSocket para administradores de Home Assistant."""
+from __future__ import annotations
+
+from datetime import date
+import probatio
+from homeassistant.components import websocket_api
+
+from .const import DOMAIN
+
+
+def _client(hass, entry_id):
+    if not isinstance(entry_id, str) or not entry_id or len(entry_id) > 128:
+        raise ValueError("Entrada no valida")
+    entry = hass.data.get(DOMAIN, {}).get(entry_id)
+    if not isinstance(entry, dict) or "cliente_independiente" not in entry:
+        raise ValueError("Entrada FBM no disponible")
+    return entry["cliente_independiente"]
+
+
+async def _dispatch(hass, connection, msg, operation):
+    """Devuelve solo datos normalizados y errores genericos sin credenciales."""
+    try:
+        client = _client(hass, msg["entry_id"])
+        result = await operation(client, msg)
+    except Exception:  # No exponer excepciones de red o almacenamiento al cliente.
+        connection.send_error(msg["id"], "fbm_error", "No se pudo completar la operacion FBM.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+async def _status(client, msg):
+    return await client.async_status()
+
+
+async def _create(client, msg):
+    await client.async_create_identity()
+    return {"identidad_creada": True}
+
+
+def _release(msg):
+    release = msg["android_release"]
+    if not isinstance(release, str) or not release.strip() or len(release) > 32:
+        raise ValueError("Perfil Android no valido")
+    return release.strip()
+
+
+async def _register(client, msg):
+    await client.async_register(_release(msg))
+    return {"candidato_guardado": True}
+
+
+async def _connect(client, msg):
+    await client.async_connect(_release(msg))
+    return {"sesion_en_memoria": True}
+
+
+async def _search(client, msg):
+    text, skip = msg["texto"], msg["skip"]
+    if not isinstance(text, str) or not text.strip() or len(text) > 100 or type(skip) is not int or not 0 <= skip <= 10000:
+        raise ValueError("Busqueda no valida")
+    return {"equipos": await client.async_search_teams(text.strip(), skip)}
+
+
+async def _schedule(client, msg):
+    team_id, first, last = msg["equipo"], msg["desde"], msg["hasta"]
+    if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
+        raise ValueError("Equipo no valido")
+    if not isinstance(first, str) or not isinstance(last, str) or len(first) != 10 or len(last) != 10:
+        raise ValueError("Fecha no valida")
+    return await client.async_team_schedule(team_id, date.fromisoformat(first), date.fromisoformat(last))
+
+
+@websocket_api.websocket_command({"type": "fbm/client/entries"})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_entries(hass, connection, msg):
+    entries = hass.data.get(DOMAIN, {})
+    if not isinstance(entries, dict):
+        connection.send_error(msg["id"], "fbm_error", "No se pudo consultar la integracion FBM.")
+        return
+    ids = [key for key, value in entries.items() if isinstance(key, str) and isinstance(value, dict) and "cliente_independiente" in value]
+    connection.send_result(msg["id"], {"entries": ids})
+
+
+@websocket_api.websocket_command({"type": "fbm/client/status", probatio.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_status(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _status)
+
+
+@websocket_api.websocket_command({"type": "fbm/client/create_identity", probatio.Required("entry_id"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_create(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _create)
+
+
+@websocket_api.websocket_command({"type": "fbm/client/register", probatio.Required("entry_id"): str, probatio.Required("android_release"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_register(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _register)
+
+
+@websocket_api.websocket_command({"type": "fbm/client/connect", probatio.Required("entry_id"): str, probatio.Required("android_release"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_connect(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _connect)
+
+
+@websocket_api.websocket_command({"type": "fbm/team/search", probatio.Required("entry_id"): str, probatio.Required("texto"): str, probatio.Required("skip"): int})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_search(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _search)
+
+
+@websocket_api.websocket_command({"type": "fbm/team/schedule", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("desde"): str, probatio.Required("hasta"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_schedule(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _schedule)
+
+
+def async_register_commands(hass):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_connect, ws_search, ws_schedule):
+        websocket_api.async_register_command(hass, command)

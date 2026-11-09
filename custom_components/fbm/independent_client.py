@@ -7,6 +7,7 @@ from datetime import date
 from .aficion_adapter import AficionFBMAdapter, FBMAccessNotValidated
 from .guest_session import DeviceProfile
 from .independent_identity import IdentityError
+from .device_protocol import post_device_form, registration_fields
 
 
 class IndependentClient:
@@ -22,6 +23,14 @@ class IndependentClient:
         async with self._lock:
             await self._store.async_create()
 
+    async def async_status(self) -> dict[str, bool]:
+        """Estado sin credenciales ni identificadores."""
+        async with self._lock:
+            identity = await self._store.async_load()
+            return {"identidad_creada": identity is not None,
+                    "candidato_guardado": bool(identity and identity.candidate_device_id),
+                    "sesion_en_memoria": self._adapter is not None}
+
     async def async_bind_candidate(self, candidate_device_id: str) -> None:
         """Vincula un candidato proporcionado por un flujo de provision explicito."""
         async with self._lock:
@@ -29,6 +38,28 @@ class IndependentClient:
             if identity is None:
                 raise IdentityError("No existe una identidad local")
             await self._store.async_bind_candidate(identity.uid, candidate_device_id)
+            self._adapter = None
+
+    async def async_register(self, android_release: str) -> None:
+        """Solicita un registro experimental solo cuando se llama explicitamente."""
+        if not isinstance(android_release, str) or not android_release.strip():
+            raise ValueError("Se requiere una version de perfil Android")
+        async with self._lock:
+            identity = await self._store.async_load()
+            if identity is None:
+                raise IdentityError("No existe una identidad local")
+            if identity.candidate_device_id is not None:
+                raise IdentityError("El dispositivo ya tiene candidato; no se volvera a registrar")
+            form = registration_fields(uid=identity.uid, plataforma="Android " + android_release.strip(),
+                                       tipo_dispositivo="mobile", version="5.0.42")
+            response = await asyncio.to_thread(post_device_form, form)
+            device_id = response.get("id_dispositivo") if isinstance(response, dict) else None
+            key = response.get("key") if isinstance(response, dict) else None
+            if (not isinstance(response, dict) or response.get("error") != ""
+                    or not isinstance(device_id, str) or not device_id.strip()
+                    or not isinstance(key, str) or not key.strip()):
+                raise IdentityError("Registro no validado; no se guardo un candidato")
+            await self._store.async_bind_candidate(identity.uid, device_id)
             self._adapter = None
 
     async def async_connect(self, android_release: str) -> None:

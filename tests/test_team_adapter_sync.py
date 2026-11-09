@@ -60,6 +60,30 @@ class TeamAdapterSyncTests(unittest.TestCase):
         with self.assertRaises(adapter_module.FBMAccessNotValidated):
             run_immediate(client.async_search_teams('A'))
 
+    def test_registration_requires_explicit_call_and_refuses_ambiguous_response(self):
+        identity = local_identity_module.IndependentIdentity('0123456789abcdef')
+        store = types.SimpleNamespace(async_load=AsyncMock(return_value=identity), async_bind_candidate=AsyncMock())
+        client = independent_module.IndependentClient(store)
+        path = package.__name__ + '.independent_client.asyncio.to_thread'
+        with patch(path, new=AsyncMock(return_value={'error': 'uuid ya registrado', 'key': 'k', 'id_dispositivo': 'd'})) as post:
+            with self.assertRaises(local_identity_module.IdentityError):
+                run_immediate(client.async_register('16'))
+            post.assert_awaited_once()
+            store.async_bind_candidate.assert_not_awaited()
+        with patch(path, new=AsyncMock(return_value={'error': '', 'key': 'k', 'id_dispositivo': 'd'})) as post:
+            run_immediate(client.async_register('16'))
+            self.assertEqual(post.await_args.args[1]['accion'], 'registrar')
+            store.async_bind_candidate.assert_awaited_once_with(identity.uid, 'd')
+
+    def test_register_refuses_an_existing_candidate_without_network(self):
+        identity = local_identity_module.IndependentIdentity('0123456789abcdef', 'existing')
+        client = independent_module.IndependentClient(types.SimpleNamespace(async_load=AsyncMock(return_value=identity)))
+        path = package.__name__ + '.independent_client.asyncio.to_thread'
+        with patch(path, new=AsyncMock()) as post:
+            with self.assertRaises(local_identity_module.IdentityError):
+                run_immediate(client.async_register('16'))
+            post.assert_not_awaited()
+
     def test_two_explicit_mocked_calls_return_normalized_schedule(self):
         identity = identity_module.GuestIdentity.from_response('key', 'device', datetime.now(timezone.utc))
         phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [

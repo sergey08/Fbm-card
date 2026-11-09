@@ -95,6 +95,101 @@ class FBMCard extends HTMLElement {
     return el;
   }
 
+  _experimentalState() {
+    return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
+      selected: "", start: "", end: "", schedule: null, message: "", busy: false };
+  }
+
+  async _experimentalAction(action) {
+    const state = this._experimentalState();
+    if (state.busy || !this._hass?.callWS) return;
+    state.busy = true; state.message = ""; this._render();
+    try {
+      if (action === "status") {
+        const data = await this._hass.callWS({ type: "fbm/client/entries" });
+        if (!Array.isArray(data.entries) || data.entries.length !== 1) throw new Error("No hay una única integración FBM disponible.");
+        state.entry = data.entries[0];
+        state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry });
+      } else {
+        if (!state.entry) throw new Error("Comprueba primero el estado de la integración.");
+        const common = { entry_id: state.entry };
+        if (action === "create") {
+          await this._hass.callWS({ type: "fbm/client/create_identity", ...common });
+          state.status = await this._hass.callWS({ type: "fbm/client/status", ...common });
+          state.message = "Identidad local creada.";
+        } else if (action === "register" || action === "connect") {
+          if (!state.release.trim()) throw new Error("Indica una versión para el perfil experimental.");
+          await this._hass.callWS({ type: `fbm/client/${action}`, ...common, android_release: state.release.trim() });
+          state.status = await this._hass.callWS({ type: "fbm/client/status", ...common });
+          state.message = action === "register" ? "Respuesta de registro aceptada; falta validar la conexión." : "Acceso solicitado; puedes probar la búsqueda.";
+        } else if (action === "search") {
+          if (!state.query.trim()) throw new Error("Escribe el nombre de un equipo.");
+          const data = await this._hass.callWS({ type: "fbm/team/search", ...common, texto: state.query.trim(), skip: 0 });
+          state.teams = Array.isArray(data.equipos) ? data.equipos : [];
+          state.selected = ""; state.schedule = null;
+          state.message = state.teams.length ? "Elige un equipo, categoría y temporada." : "No se han encontrado equipos.";
+        } else if (action === "schedule") {
+          if (!state.selected || !state.start || !state.end) throw new Error("Elige equipo y fechas.");
+          state.schedule = await this._hass.callWS({ type: "fbm/team/schedule", ...common,
+            equipo: state.selected, desde: state.start, hasta: state.end });
+        }
+      }
+    } catch (_) {
+      state.message = action === "register"
+        ? "No se pudo confirmar el registro. El servidor podría haberlo procesado; revisa antes de repetirlo."
+        : "No se pudo completar la operación. Comprueba la integración, los datos y la conexión.";
+    } finally { state.busy = false; this._render(); }
+  }
+
+  _renderExperimental(card) {
+    const state = this._experimentalState();
+    card.append(this._element("h2", this._config.title || "🏀 FBM Card"));
+    card.append(this._element("p", "Conexión experimental. Disponible para administradores; aún no validada en Home Assistant.", "muted"));
+    const button = (label, action, enabled = true) => {
+      const el = this._element("button", label); el.type = "button"; el.disabled = state.busy || !enabled;
+      el.addEventListener("click", () => this._experimentalAction(action)); card.append(el);
+    };
+    const input = (labelText, key, type = "text") => {
+      const label = this._element("label", labelText + " ");
+      const el = document.createElement("input"); el.type = type; el.value = state[key];
+      el.addEventListener("input", event => { state[key] = event.target.value; });
+      label.append(el); card.append(label);
+    };
+    button("Comprobar estado", "status", !!this._hass?.callWS);
+    if (state.status) {
+      card.append(this._element("p", `Identidad: ${state.status.identidad_creada ? "creada" : "pendiente"} · Dispositivo: ${state.status.candidato_guardado ? "guardado" : "pendiente"} · Sesión: ${state.status.sesion_en_memoria ? "en memoria" : "sin conectar"}`, "muted"));
+      button("Crear identidad local", "create", !state.status.identidad_creada);
+      input("Versión del perfil Android experimental", "release");
+      button("Registrar dispositivo en FBM", "register", state.status.identidad_creada && !state.status.candidato_guardado);
+      button("Conectar", "connect", state.status.candidato_guardado);
+      input("Buscar equipo", "query");
+      button("Buscar", "search", state.status.sesion_en_memoria);
+      if (state.teams.length) {
+        const label = this._element("label", "Equipo, categoría y temporada: ");
+        const select = document.createElement("select");
+        const empty = this._element("option", "Selecciona un equipo"); empty.value = ""; select.append(empty);
+        for (const team of state.teams) {
+          const option = this._element("option", `${team.nombre} | ${team.club} | ${team.categoria} | ${team.temporada}`);
+          option.value = team.id; select.append(option);
+        }
+        select.value = state.selected;
+        select.addEventListener("change", event => { state.selected = event.target.value; state.schedule = null; this._render(); });
+        label.append(select); card.append(label);
+        input("Desde", "start", "date"); input("Hasta", "end", "date");
+        button("Consultar horarios", "schedule", !!state.selected && state.status.sesion_en_memoria);
+      }
+      if (state.schedule && Array.isArray(state.schedule.partidos)) {
+        card.append(this._element("h3", "Partidos devueltos por FBM"));
+        card.append(this._element("p", "La respuesta puede incluir todo el grupo y fechas fuera del intervalo solicitado.", "muted"));
+        for (const match of state.schedule.partidos) {
+          const result = match.marcador ? `${match.marcador.local}–${match.marcador.visitante}` : (match.fecha || "Fecha pendiente");
+          card.append(this._element("div", `${match.local} – ${match.visitante} | ${result}`, "row"));
+        }
+      }
+    }
+    if (state.message) card.append(this._element("p", state.message, "muted"));
+  }
+
   _render() {
     if (!this._config) return;
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
@@ -113,6 +208,11 @@ class FBMCard extends HTMLElement {
       .standings td.num,.standings th.num{text-align:right}
     `;
     const card = document.createElement("ha-card");
+    if (this._config.modo_experimental === true) {
+      this._renderExperimental(card);
+      this.shadowRoot.replaceChildren(style, card);
+      return;
+    }
     const title = this._element("h2", this._config.title || "🏀 FBM Card");
     const selected = this._selectedTeam();
     const team = this._element("div", selected?.nombre || this._config.equipo || "Sin equipo seleccionado", "muted");

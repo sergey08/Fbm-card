@@ -65,7 +65,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             await adapter.query("jornada", {"competicion": 1, "grupo": 2, "jornada": 3})
 
     async def test_without_identity_does_not_contact_server(self):
-        with patch("urllib.request.urlopen") as urlopen:
+        with patch("fbm_adapter_test_pkg.aficion_adapter.open_request") as urlopen:
             with self.assertRaises(FBMAccessNotValidated):
                 await AficionFBMAdapter().search("buscarEquipo", "Pinto")
             urlopen.assert_not_called()
@@ -74,7 +74,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         identity = GuestIdentity.from_response(
             "dummy", "device", datetime.now(timezone.utc)
         )
-        with patch("urllib.request.urlopen", return_value=FakeResponse(b'{"resultado":"ok"}')) as urlopen:
+        with patch("fbm_adapter_test_pkg.aficion_adapter.open_request", return_value=FakeResponse(b'{"resultado":"ok"}')) as urlopen:
             result = await AficionFBMAdapter(identity).search("buscarEquipo", "Pinto")
             self.assertEqual(result["resultado"], "ok")
             request = urlopen.call_args.args[0]
@@ -125,12 +125,12 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
                 search.assert_not_called()
 
     async def test_non_json_rejected(self):
-        with patch("urllib.request.urlopen", return_value=FakeResponse(b"not-json")):
+        with patch("fbm_adapter_test_pkg.aficion_adapter.open_request", return_value=FakeResponse(b"not-json")):
             with self.assertRaises(FBMRequestError):
                 _post_search({"accion": "buscarEquipo"})
 
     async def test_oversized_response_rejected(self):
-        with patch("urllib.request.urlopen", return_value=FakeResponse(b"x" * (128 * 1024 + 1))):
+        with patch("fbm_adapter_test_pkg.aficion_adapter.open_request", return_value=FakeResponse(b"x" * (128 * 1024 + 1))):
             with self.assertRaises(FBMRequestError):
                 _post_search({"accion": "buscarEquipo"})
 

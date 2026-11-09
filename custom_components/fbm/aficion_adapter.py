@@ -18,6 +18,7 @@ from .guest_session import DeviceProfile, register_guest, access_guest
 from .team_search import normalize_team_results
 from .team_protocol import phases_fields, schedule_fields, post_team_form
 from .team_schedule import normalize_team_schedule
+from .device_protocol import open_request
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -40,7 +41,7 @@ def _post_search(fields: dict[str, str]) -> dict[str, Any]:
                  "User-Agent": "FBMCard-DEV/0.1"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with open_request(req, timeout=12) as response:
             if response.status != 200:
                 raise FBMRequestError(f"Respuesta HTTP {response.status}")
             raw = response.read(MAX_RESPONSE_BYTES + 1)

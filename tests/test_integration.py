@@ -28,6 +28,12 @@ module("homeassistant.core", HomeAssistant=object)
 module("homeassistant.config_entries", ConfigEntry=object)
 module("homeassistant.helpers")
 module("homeassistant.helpers.storage", Store=MagicMock())
+module("probatio", Required=lambda key: key)
+module("homeassistant.components.websocket_api",
+       websocket_command=lambda schema: lambda function: function,
+       require_admin=lambda function: function,
+       async_response=lambda function: function,
+       async_register_command=MagicMock())
 module("custom_components")
 module("custom_components.fbm").__path__ = [str(PKG)]
 

@@ -15,6 +15,7 @@ from .const import CARD_URL, DOMAIN
 from .query_cache import QueryCache
 from .independent_identity import IndependentIdentityStore
 from .independent_client import IndependentClient
+from .websocket import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
     )
+    async_register_commands(hass)
     return True
 
 

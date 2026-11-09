@@ -81,6 +81,17 @@ class DeviceTransportError(RuntimeError):
         self.status = status
 
 
+def open_request(request, *, timeout):
+    """Abre sin seguir redirecciones que puedan reenviar identificadores o claves."""
+    import urllib.request
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    return urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
+
+
 def post_device_form(fields: dict[str, str], *, timeout: int = 12) -> dict:
     """Transporta un formulario explícito; no genera UID ni inicia registro solo.
 
@@ -114,7 +125,7 @@ def post_device_form(fields: dict[str, str], *, timeout: int = 12) -> dict:
                  "User-Agent": "FBMCard-DEV/0.1"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with open_request(request, timeout=timeout) as response:
             if response.status != 200:
                 raise DeviceTransportError("http", response.status)
             raw = response.read(131073)

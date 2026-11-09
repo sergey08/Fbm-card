@@ -129,7 +129,7 @@ def search_once(device_id, key, text):
         data=urllib.parse.urlencode(fields).encode("utf-8"), method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})
     try:
-        with urllib.request.urlopen(request, timeout=12) as response:
+        with protocol.open_request(request, timeout=12) as response:
             if response.status != 200:
                 raise RuntimeError("http")
             raw = response.read(131073)
@@ -155,7 +155,7 @@ def phases_once(device_id, key, team_id):
         data=urllib.parse.urlencode(fields).encode("utf-8"), method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})
     try:
-        with urllib.request.urlopen(request, timeout=12) as response:
+        with protocol.open_request(request, timeout=12) as response:
             if response.status != 200:
                 raise RuntimeError("http")
             raw = response.read(131073)
@@ -204,7 +204,7 @@ def schedule_once(fields):
         data=urllib.parse.urlencode(fields).encode("utf-8"), method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})
     try:
-        with urllib.request.urlopen(request, timeout=12) as response:
+        with protocol.open_request(request, timeout=12) as response:
             if response.status != 200:
                 raise RuntimeError("http")
             raw = response.read(131073)

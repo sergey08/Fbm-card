@@ -167,7 +167,7 @@ class RegistrationDiagnosticTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *args): pass
             def read(self, limit): return b'{"equipos": []}'
-        with patch('urllib.request.urlopen', return_value=Response()) as urlopen:
+        with patch.object(module.protocol, 'open_request', return_value=Response()) as urlopen:
             self.assertEqual(module.search_once('device', 'key', 'Pinto'), {'equipos': []})
             request = urlopen.call_args.args[0]
             self.assertEqual(request.full_url, 'https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx')
@@ -205,7 +205,7 @@ class RegistrationDiagnosticTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *args): pass
             def read(self, limit): return b'{"fases": []}'
-        with patch('urllib.request.urlopen', return_value=Response()) as urlopen:
+        with patch.object(module.protocol, 'open_request', return_value=Response()) as urlopen:
             module.phases_once('device', 'key', 'team')
             request = urlopen.call_args.args[0]
             self.assertEqual(request.full_url, 'https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx')

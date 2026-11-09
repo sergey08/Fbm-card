@@ -67,14 +67,23 @@ class DeviceTransportTests(unittest.TestCase):
         from urllib.error import HTTPError
         error = HTTPError('https://example.invalid/private', 403, 'secret', {}, None)
         fields = module.registration_fields(uid='u', plataforma='p', tipo_dispositivo='t', version='v')
-        with patch('urllib.request.urlopen', side_effect=error):
+        with patch.object(module, 'open_request', side_effect=error):
             with self.assertRaises(module.DeviceTransportError) as raised:
                 module.post_device_form(fields)
         self.assertEqual((raised.exception.category, raised.exception.status), ('http', 403))
         self.assertNotIn('secret', str(raised.exception))
 
+    def test_transport_disables_redirects(self):
+        import urllib.request
+        request = urllib.request.Request('https://example.invalid/', data=b'secret')
+        with patch('urllib.request.build_opener') as build:
+            module.open_request(request, timeout=12)
+            handler = build.call_args.args[0]
+            self.assertIsNone(handler.redirect_request(request, None, 302, 'redirect', {}, 'https://other.invalid/'))
+            build.return_value.open.assert_called_once_with(request, timeout=12)
+
     def test_reject_unknown_action_without_network(self):
-        with patch("urllib.request.urlopen") as urlopen:
+        with patch.object(module, "open_request") as urlopen:
             with self.assertRaises(ValueError):
                 module.post_device_form({"accion": "otra"})
             urlopen.assert_not_called()
@@ -88,7 +97,7 @@ class DeviceTransportTests(unittest.TestCase):
                 pass
             def read(self, limit):
                 return b'{"key":"dummy","idDispositivo":"device"}'
-        with patch("urllib.request.urlopen", return_value=Response()) as urlopen:
+        with patch.object(module, "open_request", return_value=Response()) as urlopen:
             result = module.post_device_form(module.registration_fields(
                 uid="u", plataforma="p", tipo_dispositivo="t", version="v"))
             self.assertEqual(result["idDispositivo"], "device")
@@ -97,7 +106,7 @@ class DeviceTransportTests(unittest.TestCase):
             self.assertEqual(parse_qs(request.data.decode())["accion"], ["registrar"])
 
     def test_incomplete_form_rejected_without_network(self):
-        with patch("urllib.request.urlopen") as urlopen:
+        with patch.object(module, "open_request") as urlopen:
             with self.assertRaises(ValueError):
                 module.post_device_form({"accion": "registrar"})
             urlopen.assert_not_called()
@@ -114,7 +123,7 @@ class DeviceTransportTests(unittest.TestCase):
         fields = module.access_fields(
             uid="u", token_push="", id_dispositivo="d",
             plataforma="p", tipo_dispositivo="t", version="5.0.42")
-        with patch("urllib.request.urlopen", return_value=Response()) as urlopen:
+        with patch.object(module, "open_request", return_value=Response()) as urlopen:
             module.post_device_form(fields)
         request = urlopen.call_args.args[0]
         from urllib.parse import parse_qsl
@@ -129,7 +138,7 @@ class DeviceTransportTests(unittest.TestCase):
         fields = module.registration_fields(
             uid="u", plataforma="p", tipo_dispositivo="t", version="v")
         fields["unexpected"] = "x"
-        with patch("urllib.request.urlopen") as urlopen:
+        with patch.object(module, "open_request") as urlopen:
             with self.assertRaises(ValueError):
                 module.post_device_form(fields)
             urlopen.assert_not_called()
@@ -143,7 +152,7 @@ class DeviceTransportTests(unittest.TestCase):
                 pass
             def read(self, limit):
                 return b'not-json'
-        with patch("urllib.request.urlopen", return_value=Response()):
+        with patch.object(module, "open_request", return_value=Response()):
             with self.assertRaises(RuntimeError):
                 module.post_device_form(module.access_fields(uid="u", token_push="", id_dispositivo="d", plataforma="p", tipo_dispositivo="t", version="v"))
 

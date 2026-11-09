@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 
 from .team_phases import current_phase_group
+from .device_protocol import open_request
 
 TEAM_URL = "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx"
 
@@ -48,7 +49,7 @@ def post_team_form(fields: dict[str, str]) -> dict:
     request = urllib.request.Request(TEAM_URL, data=body, method="POST", headers={
         "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})
     try:
-        with urllib.request.urlopen(request, timeout=12) as response:
+        with open_request(request, timeout=12) as response:
             if response.status != 200:
                 raise RuntimeError("Respuesta HTTP de equipo no valida")
             raw = response.read(131073)
