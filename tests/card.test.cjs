@@ -50,6 +50,28 @@ test("el campo de búsqueda conserva foco y texto cuando Home Assistant actualiz
   assert.equal(card._experimental, null);
 });
 
+test("equipo seleccionado en buscador se comparte con tarjeta fija del mismo usuario", () => {
+  const {elements,sandbox} = loadCard();
+  const memory = new Map();
+  sandbox.window.localStorage = {
+    getItem:key=>memory.get(key)??null,
+    setItem:(key,val)=>memory.set(key,val)
+  };
+  const Card = elements.get("fbm-card");
+  const team = {id:"deportivo",nombre:"Pinto",club:"Club",categoria:"Alevín",temporada:"26/27"};
+  const search = new Card();
+  search._config = {tipo_tarjeta:"busqueda",id_tarjeta:"buscador"};
+  search._hass = {user:{id:"usuario-a"}};
+  search._saveRecentTeam("entry-a",team);
+  const fixed = new Card();
+  fixed._config = {tipo_tarjeta:"equipo",id_tarjeta:"equipo-fijo"};
+  fixed._hass = {user:{id:"usuario-a"}};
+  assert.equal(fixed._restoreRecentTeam("entry-a").id,team.id);
+  assert.equal(fixed._restoreRecentTeam("entry-b"),null);
+  fixed._hass = {user:{id:"usuario-b"}};
+  assert.equal(fixed._restoreRecentTeam("entry-a"),null);
+});
+
 test("buscador genera configuración portable de equipo fijo sin credenciales", () => {
   const {elements} = loadCard();
   const card = new (elements.get("fbm-card"))();
