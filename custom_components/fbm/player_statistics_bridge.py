@@ -29,12 +29,14 @@ class PlayerStatisticsFetcher:
         detail = await self._raw_detail(player_id)
         binding = verified_player_stats_context(detail, player_id, team_id)
         global_fields = player_stats_fields(
-            device_id, key, **binding, action="datosGlobalesJugadorEquipo"
+            device_id, key, binding["id_jugador"], binding["id_equipo"],
+            binding["id_componente_club"], binding["id_temporada"], action="datosGlobalesJugadorEquipo"
         )
         global_response = await self._post_statistics(global_fields)
         global_data = normalize_global_player_stats(global_response)
         match_fields = player_stats_fields(
-            device_id, key, **binding, action="datosMediasJugadorPartidos"
+            device_id, key, binding["id_jugador"], binding["id_equipo"],
+            binding["id_componente_club"], binding["id_temporada"], action="datosMediasJugadorPartidos"
         )
         match_response = await self._post_statistics(match_fields)
         match_data = normalize_player_match_list(match_response)
