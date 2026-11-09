@@ -182,6 +182,15 @@ class IndependentClient:
                 raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
             return await self._adapter.team_group_identity(team_id)
 
+    async def async_team_roster(self, team_id: str) -> dict:
+        """On-demand roster; same adapter to be used for opt-in group syncing."""
+        self._validate_team_id(team_id)
+        return await self._cached_query(
+            ("plantilla", team_id),
+            lambda adapter: adapter.team_roster(team_id),
+            ttl=120,
+        )
+
     async def async_team_standings(self, team_id: str) -> dict:
         self._validate_team_id(team_id)
         return await self._cached_query(("clasificacion", team_id), lambda adapter: adapter.team_standings(team_id), ttl=120)
