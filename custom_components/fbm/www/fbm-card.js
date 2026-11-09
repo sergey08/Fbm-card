@@ -152,6 +152,40 @@ class FBMCard extends HTMLElement {
     } catch (_) { return null; }
   }
 
+  _experimentalFavoritesKey(entryId) {
+    const user = this._hass?.user?.id;
+    if (typeof user !== "string" || !user || typeof entryId !== "string" || !entryId) return null;
+    return "fbm-card:experimental-favoritos:v1:" + JSON.stringify([user, entryId]);
+  }
+
+  _experimentalFavorites(entryId) {
+    const key = this._experimentalFavoritesKey(entryId);
+    if (!key) return [];
+    try {
+      const values = JSON.parse(window.localStorage?.getItem(key) || "[]");
+      if (!Array.isArray(values)) return [];
+      return values.filter(team => this._experimentalTeamIsValid(team)).slice(0, 30);
+    } catch (_) { return []; }
+  }
+
+  _isExperimentalFavorite(entryId, teamId) {
+    return this._experimentalFavorites(entryId).some(team => team.id === teamId);
+  }
+
+  _toggleExperimentalFavorite(entryId, team) {
+    const key = this._experimentalFavoritesKey(entryId);
+    if (!key || !this._experimentalTeamIsValid(team)) return false;
+    const favorites = this._experimentalFavorites(entryId);
+    const exists = favorites.some(saved => saved.id === team.id);
+    const updated = exists ? favorites.filter(saved => saved.id !== team.id) : [
+      ...favorites.filter(saved => saved.id !== team.id),
+      Object.fromEntries(["id", "nombre", "club", "categoria", "temporada"].map(field => [field, team[field]]))
+    ];
+    if (updated.length > 30) return false;
+    try { window.localStorage?.setItem(key, JSON.stringify(updated)); return true; }
+    catch (_) { return false; }
+  }
+
   _recentTeamKey(entryId) {
     const user = this._hass?.user?.id;
     if (typeof user !== "string" || !user || !entryId) return null;
@@ -348,6 +382,23 @@ class FBMCard extends HTMLElement {
       const fixed = this._config.tipo_tarjeta === "equipo";
       const pinned = fixed ? this._restoreExperimentalTeam(state.entry) : null;
       const editing = fixed && (!pinned || state.editFixed);
+      const favorites = this._experimentalFavorites(state.entry);
+      if (fixed && editing && favorites.length) {
+        const label = this._element("label", "Elegir entre mis favoritos:");
+        const select = document.createElement("select");
+        const empty = this._element("option", "Selecciona un favorito"); empty.value = ""; select.append(empty);
+        for (const team of favorites) {
+          const option = this._element("option", [team.nombre, team.categoria, team.temporada].join(" · "));
+          option.value = team.id; select.append(option);
+        }
+        select.addEventListener("change", event => {
+          const team = favorites.find(item => item.id === event.target.value);
+          if (!team) return;
+          state.teams = [team]; state.selected = team.id; state.standings = null;
+          this._render();
+        });
+        label.append(select); card.append(label);
+      }
       if (fixed && pinned && !editing) {
         card.append(this._element("h3", pinned.nombre));
         card.append(this._element("p", [pinned.club, pinned.categoria, pinned.temporada].join(" · "), "muted"));
@@ -394,6 +445,23 @@ class FBMCard extends HTMLElement {
         if (fixed) button("Fijar este equipo en la tarjeta", "fix_team", !!state.selected && connected);
         else {
           button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
+          const current = state.teams.find(team => team.id === state.selected);
+          if (current) {
+            const favorite = this._isExperimentalFavorite(state.entry, current.id);
+            const toggle = this._element("button", favorite ? "★ Quitar de favoritos" : "☆ Añadir a favoritos");
+            toggle.type = "button";
+            toggle.disabled = state.busy;
+            toggle.addEventListener("click", () => {
+              const saved = this._toggleExperimentalFavorite(state.entry, current);
+              state.message = saved ? "Favoritos actualizados. Puedes crear una tarjeta independiente para este equipo." : "No se pudieron guardar los favoritos en este navegador.";
+              this._render();
+            });
+            card.append(toggle);
+          }
+          if (favorites.length) {
+            const summary = this._element("p", "Mis favoritos: " + favorites.map(team => team.nombre + " (" + team.categoria + ")").join(", "), "muted");
+            card.append(summary);
+          }
           const copy = this._element("button", "Copiar configuración de tarjeta fija");
           copy.type = "button"; copy.disabled = state.busy || !state.selected;
           copy.addEventListener("click", async () => {
