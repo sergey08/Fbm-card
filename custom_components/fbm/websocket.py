@@ -82,6 +82,14 @@ async def _phases(client, msg):
     return await client.async_team_phase_options(team_id)
 
 
+async def _group_identity(client, msg):
+    team_id = msg["equipo"]
+    if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
+        raise ValueError("Equipo no válido")
+    # Read-only official lookup. Never follows groups or creates entities.
+    return await client.async_team_group_identity(team_id)
+
+
 async def _standings(client, msg):
     team_id = msg["equipo"]
     if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
@@ -173,6 +181,13 @@ async def ws_schedule_round(hass, connection, msg):
     await _dispatch(hass, connection, msg, _schedule_round)
 
 
+@websocket_api.websocket_command({"type": "fbm/team/group_identity", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_group_identity(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _group_identity)
+
+
 @websocket_api.websocket_command({"type": "fbm/team/standings", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -181,7 +196,7 @@ async def ws_standings(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity):
         websocket_api.async_register_command(hass, command)
 
 
