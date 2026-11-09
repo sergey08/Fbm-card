@@ -15,6 +15,7 @@ from .const import CARD_URL, DOMAIN
 from .query_cache import QueryCache
 from .independent_identity import IndependentIdentityStore
 from .independent_client import IndependentClient
+from .followed_groups_store import FollowedGroups
 from .websocket import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,13 +64,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return await hass.async_add_executor_job(Path(identity_storage.path).exists)
 
     identity_manager = IndependentIdentityStore(identity_storage, async_exists=identity_file_exists)
+    recovery_storage = Store(hass, 1, f"{DOMAIN}.recovery.{entry.entry_id}", private=True, atomic_writes=True)
+    client = IndependentClient(identity_manager, recovery_store=recovery_storage)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "estado": "pendiente_validacion_api_oficial",
         "recurso_lovelace_registrado": recurso_registrado,
         "cache": QueryCache(),
         "cache_consultas": QueryCache(ttl_seconds=300, max_entries=128),
         "identidad_independiente": identity_manager,
-        "cliente_independiente": IndependentClient(identity_manager),
+        "cliente_independiente": client,
+        # Store is initialized lazily only after an explicitly selected group.
+        # No requests, new groups or filesystem mutations are triggered here.
+        "grupos_sqlite_path": hass.config.path(f"fbm_groups_{entry.entry_id}.sqlite"),
+        "grupos_store_factory": FollowedGroups,
     }
     return True
 
