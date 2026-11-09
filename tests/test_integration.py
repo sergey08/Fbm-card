@@ -95,7 +95,7 @@ class SessionRestoreTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(await client.async_restore())
         identity.async_load.assert_not_awaited()
         access.assert_not_awaited()
-        profile.async_save.assert_not_awaited()
+        profile.async_save.assert_not_called()
 
     async def test_access_failure_is_nonfatal_and_does_not_reregister(self):
         identity = MagicMock()
