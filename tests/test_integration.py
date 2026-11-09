@@ -94,6 +94,11 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.resources.async_create_item.side_effect = ValueError("storage disabled")
         self.assertFalse(await fbm._async_register_lovelace_resource(self.hass))
 
+    async def test_storage_io_error_is_nonfatal(self):
+        self.resources.async_load.side_effect = OSError("storage unavailable")
+        self.assertFalse(await fbm._async_register_lovelace_resource(self.hass))
+        self.resources.async_create_item.assert_not_awaited()
+
     async def test_missing_bundled_card_fails_setup(self):
         self.hass.http.async_register_static_paths = AsyncMock()
         with patch.object(pathlib.Path, "is_file", return_value=False):
