@@ -10,12 +10,8 @@ class TeamScheduleError(ValueError):
     """Official schedule payload has an unrecognized or unsafe shape."""
 
 
-def normalize_team_schedule(response: object) -> dict:
-    if not isinstance(response, dict) or response.get("error") != "":
-        raise TeamScheduleError("Respuesta de horarios ambigua o con error")
-    matches, current_round = response.get("partidos"), response.get("jornadaActual")
-    if not isinstance(matches, list) or type(current_round) is not int:
-        raise TeamScheduleError("Faltan partidos o jornada actual")
+def _normalize_matches(matches: list) -> list:
+    """Common official match renderer for team and competition schedules."""
 
     required_variants = (
         {"idPartido": "id", "nombreEquipoLocal": "local", "nombreEquipoVisitante": "visitante"},
@@ -61,4 +57,29 @@ def normalize_team_schedule(response: object) -> dict:
                     local.isdecimal() and away.isdecimal()):
                 record["marcador"] = {"local": int(local), "visitante": int(away)}
         normalized.append(record)
-    return {"jornada_actual": current_round, "partidos": normalized}
+    return normalized
+
+
+def normalize_team_schedule(response: object) -> dict:
+    """EquipoPartidoResponseDto includes jornadaActual and partidos."""
+    if not isinstance(response, dict) or response.get("error") != "":
+        raise TeamScheduleError("Respuesta de horarios ambigua o con error")
+    matches, current_round = response.get("partidos"), response.get("jornadaActual")
+    if not isinstance(matches, list) or type(current_round) is not int:
+        raise TeamScheduleError("Faltan partidos o jornada actual")
+    return {"jornada_actual": current_round, "partidos": _normalize_matches(matches)}
+
+
+def normalize_category_schedule(response: object) -> dict:
+    """PartidosCategoriaResponseDto contains partidos but no jornadaActual.
+
+    Do not fabricate a current matchday, and do not invent fixtures from
+    unrelated category-level data.
+    """
+    if not isinstance(response, dict) or response.get("error") != "":
+        raise TeamScheduleError("Respuesta de categoría ambigua o con error")
+    matches = response.get("partidos")
+    if not isinstance(matches, list):
+        raise TeamScheduleError("Falta la lista de partidos de categoría")
+    return {"jornada_actual": None, "partidos": _normalize_matches(matches)}
+
