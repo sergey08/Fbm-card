@@ -66,6 +66,51 @@ class IdentitySetupTests(unittest.TestCase):
         self.assertIn('grupos_sqlite_path', hass.data['fbm']['example'])
 
 
+
+class SessionRestoreTests(unittest.IsolatedAsyncioTestCase):
+    async def test_saved_profile_reuses_existing_device_without_registration(self):
+        identity = MagicMock()
+        identity.async_load = AsyncMock(return_value=types.SimpleNamespace(
+            uid="0123456789abcdef", candidate_device_id="existing-device"))
+        profile = MagicMock()
+        profile.async_load = AsyncMock(return_value={"format": 1, "android_release": "16"})
+        profile.async_save = AsyncMock()
+        client = fbm.IndependentClient(identity, recovery_store=profile)
+        from custom_components.fbm.independent_client import AficionFBMAdapter
+        with patch.object(AficionFBMAdapter, "access_with_profile", new_callable=AsyncMock) as access:
+            access.return_value.session_is_usable.return_value = True
+            self.assertTrue(await client.async_restore())
+        access.assert_awaited_once()
+        profile.async_save.assert_awaited_once_with({"format": 1, "android_release": "16"})
+        identity.async_load.assert_awaited_once()
+
+    async def test_missing_profile_causes_no_network_or_identity_mutation(self):
+        identity = MagicMock()
+        identity.async_load = AsyncMock()
+        profile = MagicMock()
+        profile.async_load = AsyncMock(return_value=None)
+        client = fbm.IndependentClient(identity, recovery_store=profile)
+        from custom_components.fbm.independent_client import AficionFBMAdapter
+        with patch.object(AficionFBMAdapter, "access_with_profile", new_callable=AsyncMock) as access:
+            self.assertFalse(await client.async_restore())
+        identity.async_load.assert_not_awaited()
+        access.assert_not_awaited()
+        profile.async_save.assert_not_awaited()
+
+    async def test_access_failure_is_nonfatal_and_does_not_reregister(self):
+        identity = MagicMock()
+        identity.async_load = AsyncMock(return_value=types.SimpleNamespace(
+            uid="0123456789abcdef", candidate_device_id="existing-device"))
+        profile = MagicMock()
+        profile.async_load = AsyncMock(return_value={"format": 1, "android_release": "16"})
+        profile.async_save = AsyncMock()
+        client = fbm.IndependentClient(identity, recovery_store=profile)
+        from custom_components.fbm.independent_client import AficionFBMAdapter
+        with patch.object(AficionFBMAdapter, "access_with_profile", new_callable=AsyncMock,
+                          side_effect=OSError("network down")):
+            self.assertFalse(await client.async_restore())
+        profile.async_save.assert_not_awaited()
+
 class ResourceTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.resources = MagicMock()
