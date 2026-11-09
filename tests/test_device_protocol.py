@@ -37,6 +37,19 @@ class DeviceProtocolTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     module.extract_identity_fields(response)
 
+    def test_access_response_requires_verified_shape(self):
+        self.assertEqual(module.extract_access_identity_fields(
+            {'error': '', 'key': 'k', 'id_dispositivo': ''}, 'known'), ('k', 'known'))
+        self.assertEqual(module.extract_access_identity_fields(
+            {'error': '', 'key': 'k', 'id_dispositivo': 'known'}, 'known'), ('k', 'known'))
+        for response in ({'key': 'k', 'id_dispositivo': ''},
+                         {'error': 'no', 'key': 'k', 'id_dispositivo': ''},
+                         {'error': '', 'key': 'k', 'id_dispositivo': 'other'},
+                         {'error': '', 'key': '', 'id_dispositivo': ''},
+                         {'error': '', 'key': 'k'}):
+            with self.subTest(response=response), self.assertRaises(ValueError):
+                module.extract_access_identity_fields(response, 'known')
+
     def test_missing_uid_rejected(self):
         with self.assertRaises(ValueError):
             module.registration_fields(uid="", plataforma="p",

@@ -4,9 +4,9 @@ import importlib.util
 import sys
 import types
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 ROOT = Path(__file__).resolve().parents[1] / "custom_components/fbm"
 package = types.ModuleType("fbm_adapter_test_pkg")
@@ -39,6 +39,26 @@ class FakeResponse:
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_schedule_uses_phases_and_normalizes_without_extra_network(self):
+        identity = GuestIdentity.from_response('secret', 'device', datetime.now(timezone.utc))
+        phases = {'error': '', 'faseActual': 'f', 'grupoActual': 'g', 'listaFasesGrupo': [
+            {'IdFase': 'f', 'NombreFase': 'Phase', 'Grupos': [{'IdGrupo': 'g', 'NombreGrupo': 'Group'}], 'Rondas': []}]}
+        schedule = {'error': '', 'jornadaActual': 4, 'partidos': [{'IdPartido': 'm', 'NombreEquipoLocal': 'A',
+                    'NombreEquipoVisitante': 'B', 'Estado': 'Terminado',
+                    'Resultados': {'ResultadoLocal': '32', 'ResultadoVisitante': '57'}}]}
+        with patch('fbm_adapter_test_pkg.aficion_adapter.asyncio.to_thread', new=AsyncMock(side_effect=[phases, schedule])) as call:
+            result = await AficionFBMAdapter(identity).team_schedule('team', date(2026, 11, 1), date(2026, 12, 31))
+        self.assertEqual(call.await_count, 2)
+        self.assertEqual(call.await_args_list[0].args[1]['accion'], 'fasesGrupos')
+        self.assertEqual(call.await_args_list[1].args[1]['accion'], 'horariosJornadas')
+        self.assertEqual(result['partidos'][0]['marcador'], {'local': 32, 'visitante': 57})
+
+    async def test_schedule_invalid_dates_never_contact_server(self):
+        identity = GuestIdentity.from_response('secret', 'device', datetime.now(timezone.utc))
+        with patch('fbm_adapter_test_pkg.aficion_adapter.asyncio.to_thread', new=AsyncMock()) as call:
+            with self.assertRaises(ValueError):
+                await AficionFBMAdapter(identity).team_schedule('team', date(2026, 12, 1), date(2026, 11, 1))
+            call.assert_not_awaited()
     async def test_no_unvalidated_access(self):
         adapter = AficionFBMAdapter()
         with self.assertRaises(FBMAccessNotValidated):
@@ -85,7 +105,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         profile = DeviceProfile(uid="u", plataforma="p",
                                 tipo_dispositivo="t", version="5.0.42")
         with patch("fbm_adapter_test_pkg.guest_session.post_device_form",
-                   return_value={"key": "new-key", "idDispositivo": "known"}):
+                   return_value={"key": "new-key", "id_dispositivo": "", "error": ""}):
             adapter = await AficionFBMAdapter.access_with_profile(profile, "known")
         with patch("fbm_adapter_test_pkg.aficion_adapter._post_search",
                    return_value={"resultado": "ok"}) as search:
@@ -98,7 +118,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         profile = DeviceProfile(uid="u", plataforma="p",
                                 tipo_dispositivo="t", version="5.0.42")
         with patch("fbm_adapter_test_pkg.guest_session.post_device_form",
-                   return_value={"key": "k", "idDispositivo": "other"}):
+                   return_value={"key": "k", "id_dispositivo": "other", "error": ""}):
             with patch("fbm_adapter_test_pkg.aficion_adapter._post_search") as search:
                 with self.assertRaises(ValueError):
                     await AficionFBMAdapter.access_with_profile(profile, "known")

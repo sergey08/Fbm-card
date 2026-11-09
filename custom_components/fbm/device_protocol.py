@@ -51,6 +51,24 @@ def extract_identity_fields(response: object) -> tuple[str, str]:
     return key, device_id
 
 
+def extract_access_identity_fields(response: object, expected_device_id: str) -> tuple[str, str]:
+    """Interpreta el acceso observado conservando el ID conocido si viene vacio.
+
+    Solo acepta el error vacio observado; rechaza respuestas ambiguas y IDs distintos.
+    La validez de la sesion se debe comprobar mediante una consulta posterior.
+    """
+    if not isinstance(expected_device_id, str) or not expected_device_id.strip():
+        raise ValueError("Falta identificador de dispositivo conocido")
+    if not isinstance(response, dict) or response.get("error") != "":
+        raise ValueError("Respuesta de acceso ambigua o con error")
+    key, received_id = response.get("key"), response.get("id_dispositivo")
+    if not isinstance(key, str) or not key.strip():
+        raise ValueError("Falta clave de acceso")
+    if not isinstance(received_id, str) or received_id not in ("", expected_device_id):
+        raise ValueError("Identificador de acceso inconsistente")
+    return key, expected_device_id
+
+
 DEVICE_URL = "https://appaficionfbm.gesdeportiva.es/dispositivo.ashx"
 
 

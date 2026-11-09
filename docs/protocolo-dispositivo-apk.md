@@ -470,3 +470,11 @@ El resumen local indica que los datos pueden corresponder al grupo y ofrece `--e
 El usuario mostró seis partidos de su equipo. Cuatro estaban etiquetados `Terminado` y tenían `ResultadoLocal` y `ResultadoVisitante` como cadenas numéricas; dos tenían `Estado` igual a `No comenzado` y ambos resultados como `-`. Es una muestra concreta, no una especificación exhaustiva para directo, suspendidos o aplazados.
 
 El normalizador reconoce solo esos dos estados literales y conserva `estado_oficial`; cualquier otro estado es `unknown`. Solo crea un marcador cuando el estado es `Terminado` y ambos resultados son cadenas decimales ASCII completas; en los demás casos lo deja ausente (`None`). No interpreta parciales ni resultados en directo. El filtrado del resumen sigue siendo textual y los horarios `00:00:00` no se interpretan como hora confirmada o pendiente.
+
+### Cliente bajo demanda: acceso, fases y horarios
+
+Se ha conectado el contrato observado al adaptador: `access_guest` interpreta únicamente una respuesta con `error` vacío, `key` no vacía e `id_dispositivo` vacío o igual al identificador conocido; conserva ese identificador y rechaza campos ausentes o incompatibles. Esto permite reproducir el acceso de prueba, pero no certifica por sí solo la sesión ni cambia el registro automático.
+
+`AficionFBMAdapter.team_schedule` exige una identidad inyectada con clave vigente y recibe identificador opaco y fechas del equipo elegido. Consulta fases y después `horariosJornadas`, normaliza resultados y nunca registra dispositivos ni renueva la clave automáticamente. Rechaza fechas inválidas antes de cualquier petición y rechaza fases ambiguas o con rondas antes de consultar horarios. Los resultados son del grupo completo según la observación real y la API puede ignorar el rango de fechas; el adaptador no los filtra ni promete calendario individual. La configuración y tarjeta de HA aún no están conectadas a este método; no se ha ejecutado contra HA ni la API desde estas pruebas.
+
+Las pruebas sin red cubren formularios, respuesta de acceso, errores, selección, marcadores y una orquestación con llamadas simuladas. En este entorno, la suite que usa `IsolatedAsyncioTestCase` se queda bloqueada al iniciar; la prueba de orquestación aislada sin bucle ha pasado, pero no sustituye a ejecutar la suite asíncrona completa en un entorno compatible.

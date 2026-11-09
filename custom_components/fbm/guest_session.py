@@ -9,7 +9,8 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from .device_protocol import (
-    registration_fields, access_fields, post_device_form, extract_identity_fields
+    registration_fields, access_fields, post_device_form, extract_identity_fields,
+    extract_access_identity_fields
 )
 from .guest_identity import GuestIdentity
 
@@ -75,9 +76,7 @@ async def access_guest(profile: DeviceProfile, device_id: str) -> GuestIdentity:
             tipo_dispositivo=profile.tipo_dispositivo, version=profile.version
         ),
     )
-    key, response_device_id = extract_identity_fields(response)
-    if response_device_id != device_id:
-        raise ValueError("La respuesta no corresponde al dispositivo solicitado")
+    key, response_device_id = extract_access_identity_fields(response, device_id)
     return GuestIdentity.from_response(
         key, response_device_id, datetime.now(timezone.utc)
     )

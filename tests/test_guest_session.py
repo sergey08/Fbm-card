@@ -38,13 +38,13 @@ class GuestSessionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_access_requires_matching_device(self):
         with patch("fbm_session_test_pkg.guest_session.post_device_form",
-                   return_value={"key": "k", "idDispositivo": "other"}):
+                   return_value={"key": "k", "id_dispositivo": "other", "error": ""}):
             with self.assertRaises(ValueError):
                 await access_guest(self.profile, "expected")
 
     async def test_access_uses_supplied_id(self):
         with patch("fbm_session_test_pkg.guest_session.post_device_form",
-                   return_value={"key": "k", "idDispositivo": "d"}) as post:
+                   return_value={"key": "k", "id_dispositivo": "", "error": ""}) as post:
             identity = await access_guest(self.profile, "d")
         self.assertEqual(identity.device_id, "d")
         self.assertEqual(post.call_args.args[0]["id_dispositivo"], "d")

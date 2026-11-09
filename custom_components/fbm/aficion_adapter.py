@@ -10,12 +10,14 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from .guest_identity import GuestIdentity
 from .guest_session import DeviceProfile, register_guest, access_guest
 from .team_search import normalize_team_results
+from .team_protocol import phases_fields, schedule_fields, post_team_form
+from .team_schedule import normalize_team_schedule
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -88,6 +90,25 @@ class AficionFBMAdapter:
         """Normaliza equipos sin elegir automaticamente entre categorias o temporadas."""
         response = await self.search("buscarEquipo", text, skip)
         return normalize_team_results(response)
+
+    def _team_key(self) -> tuple[str, str]:
+        if self._identity is None:
+            raise FBMAccessNotValidated("No hay identidad para consultar equipos")
+        key = self._identity.key_for_request(datetime.now(timezone.utc))
+        if not key:
+            raise FBMAccessNotValidated("La clave de sesion requiere una nueva solicitud de acceso")
+        return self._identity.device_id, key
+
+    async def team_schedule(self, team_id: str, start: date, end: date) -> dict:
+        """Consulta fases y horarios bajo demanda; no registra ni renueva sesiones."""
+        if type(start) is not date or type(end) is not date or start > end or (end - start).days > 366:
+            raise ValueError("Rango de fechas no valido")
+        device_id, key = self._team_key()
+        phase_response = await asyncio.to_thread(post_team_form, phases_fields(device_id, key, team_id))
+        device_id, key = self._team_key()
+        fields = schedule_fields(device_id, key, team_id, phase_response, start, end)
+        response = await asyncio.to_thread(post_team_form, fields)
+        return normalize_team_schedule(response)
 
     async def query(self, kind: str, identifiers: dict) -> dict[str, Any]:
         """Conserva el bloqueo del contrato general hasta mapear sus consultas."""

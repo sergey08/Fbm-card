@@ -1,0 +1,65 @@
+"""Operaciones experimentales de fases y horarios observadas en FBM."""
+from __future__ import annotations
+
+from datetime import date
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
+
+from .team_phases import current_phase_group
+
+TEAM_URL = "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx"
+
+
+def phases_fields(device_id: str, key: str, team_id: str) -> dict[str, str]:
+    if any(not isinstance(x, str) or not x.strip() for x in (device_id, key, team_id)):
+        raise ValueError("Faltan identificadores de equipo o sesion")
+    return {"accion": "fasesGrupos", "id_dispositivo": device_id, "key": key,
+            "id_equipo": team_id}
+
+
+def schedule_fields(device_id: str, key: str, team_id: str, phases: object,
+                    start: date, end: date) -> dict[str, str]:
+    base = phases_fields(device_id, key, team_id)
+    if type(start) is not date or type(end) is not date or start > end or (end - start).days > 366:
+        raise ValueError("Rango de fechas no valido")
+    selected = current_phase_group(phases)
+    if selected["rondas"]:
+        raise ValueError("Seleccion de ronda todavia no disponible")
+    base.update({"accion": "horariosJornadas", "id_fase": selected["id_fase"],
+                 "id_grupo": selected["id_grupo"], "id_ronda": "",
+                 "fecha_inicial": start.isoformat() + " 00:00",
+                 "fecha_final": end.isoformat() + " 23:59"})
+    return base
+
+
+def post_team_form(fields: dict[str, str]) -> dict:
+    """POST explicito, de tamaño limitado, sin registrar respuesta ni credenciales."""
+    allowed = {"fasesGrupos": {"accion", "id_dispositivo", "key", "id_equipo"},
+               "horariosJornadas": {"accion", "id_dispositivo", "key", "id_equipo",
+                                    "id_fase", "id_grupo", "id_ronda", "fecha_inicial", "fecha_final"}}
+    action = fields.get("accion") if isinstance(fields, dict) else None
+    if not isinstance(action, str) or action not in allowed or set(fields) != allowed[action] or any(not isinstance(x, str) for x in fields.values()):
+        raise ValueError("Formulario de equipo no valido")
+    if any(not fields[k].strip() for k in allowed[action] - {"id_ronda"}):
+        raise ValueError("Faltan campos obligatorios")
+    body = urllib.parse.urlencode(fields).encode("utf-8")
+    request = urllib.request.Request(TEAM_URL, data=body, method="POST", headers={
+        "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "FBMCard-DEV/0.1"})
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            if response.status != 200:
+                raise RuntimeError("Respuesta HTTP de equipo no valida")
+            raw = response.read(131073)
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise RuntimeError("No se pudo consultar el equipo") from None
+    if len(raw) > 131072:
+        raise RuntimeError("Respuesta de equipo demasiado grande")
+    try:
+        data = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise RuntimeError("Respuesta de equipo no es JSON valido") from None
+    if not isinstance(data, dict):
+        raise RuntimeError("Respuesta de equipo inesperada")
+    return data
