@@ -131,7 +131,7 @@ test("buscador genera configuración portable de equipo fijo sin credenciales", 
   assert.match(yaml,/Pintobasket/);
   const another = {...team,id:"deporte123-otro"};
   const yaml2=card._fixedCardYaml(another);
-  const extract = y => y.split("\\n").find(line => line.startsWith("id_tarjeta:"));
+  const extract = y => y.match(/^id_tarjeta:.*$/m)?.[0];
   assert.notEqual(extract(yaml), extract(yaml2), "dos favoritos no deben compartir id_tarjeta");
 
   assert.doesNotMatch(yaml,/api.key|dispositivo|uid/i);
