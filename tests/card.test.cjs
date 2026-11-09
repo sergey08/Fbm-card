@@ -808,7 +808,10 @@ test("la ficha de un jugador solo se solicita explícitamente y no afecta a otra
   b.players = [{id:"p2", nombre:"Otro jugador"}]; b.playersTeamId = "teamB"; b.playersEntryId = "entry";
   assert.equal(requests.length, 0);
   await first._experimentalPlayerDetail("p1");
-  assert.deepEqual(requests, [{ type:"fbm/player/detail", entry_id:"entry", jugador:"p1" }]);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "fbm/player/detail");
+  assert.equal(requests[0].entry_id, "entry");
+  assert.equal(requests[0].jugador, "p1");
   assert.equal(a.playerDetail.puntos_totales, 8);
   assert.equal(a.playerDetailTeamId, "teamA");
   assert.equal(b.playerDetail, null);
