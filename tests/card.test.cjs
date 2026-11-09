@@ -113,7 +113,7 @@ test("modo experimental busca y consulta solo el equipo seleccionado", async () 
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();
   const calls = [];
-  card._config = { modo_experimental: true };
+  card._config = { modo_experimental: true, mostrar_horarios: true };
   card._render = () => {};
   card._hass = { callWS: async msg => {
     calls.push(msg);
@@ -138,7 +138,7 @@ test("una ronda requiere selección explícita antes de consultar horarios", asy
   const { elements } = loadCard();
   const card = new (elements.get("fbm-card"))();
   const calls = [];
-  card._config = { modo_experimental: true }; card._render = () => {};
+  card._config = { modo_experimental: true, mostrar_horarios: true }; card._render = () => {};
   card._hass = { callWS: async msg => { calls.push(msg); return msg.type === "fbm/team/phases" ? { nombre_fase: "Final", rondas: [{ id: "r", nombre: "Final" }] } : { partidos: [] }; } };
   const state = card._experimentalState();
   state.entry = "entry"; state.selected = "team"; state.start = "2026-11-01"; state.end = "2026-12-31";
@@ -189,7 +189,7 @@ test("la tarjeta conserva fecha, hora y marcador tal como se recibieron", () => 
   }
   sandbox.document = { createElement: tag => new Element(tag) };
   const card = new (elements.get("fbm-card"))();
-  card._config = { modo_experimental: true };
+  card._config = { modo_experimental: true, mostrar_horarios: true };
   const state = card._experimentalState();
   state.status = { identidad_creada: true, candidato_guardado: true, sesion_en_memoria: true };
   state.teams = [{ id: "a", nombre: "A", club: "C", categoria: "Cat", temporada: "26/27" }];
@@ -198,6 +198,34 @@ test("la tarjeta conserva fecha, hora y marcador tal como se recibieron", () => 
   const row = parent.children.find(el => el.className === "row");
   assert.equal(row.children[0].children[0].textContent, "07/11/2026 00:00:00");
   assert.equal(row.children[1].textContent, "32–57");
+});
+
+test("v0.1 oculta los horarios por defecto incluso si existen resultados previos", async () => {
+  const { elements, sandbox } = loadCard();
+  class Element {
+    constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; this.textContent = ""; }
+    append(...children) { this.children.push(...children); }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    setAttribute() {}
+  }
+  sandbox.document = { createElement: tag => new Element(tag) };
+  const card = new (elements.get("fbm-card"))();
+  card._config = { modo_experimental: true };
+  const state = card._experimentalState();
+  state.status = { identidad_creada: true, candidato_guardado: true, sesion_en_memoria: true, sesion_vigente: true };
+  state.teams = [{ id: "a", nombre: "A", club: "C", categoria: "Cat", temporada: "26/27" }];
+  state.selected = "a"; state.rounds = [];
+  state.schedule = { partidos: [{ local: "A", visitante: "B" }] };
+  const cardElement = new Element("card"); card._renderExperimental(cardElement);
+  const flatten = el => [el, ...(el.children || []).flatMap(flatten)];
+  const texts = flatten(cardElement).map(el => String(el.textContent));
+  assert.ok(!texts.some(text => /Consultar horarios|Partidos del equipo|Partidos del grupo/.test(text)));
+  card._render = () => {};
+  let called = false;
+  card._hass = { callWS: async () => { called = true; return {}; } };
+  state.entry = "entry"; state.start = "2026-11-01"; state.end = "2026-11-30";
+  await card._experimentalAction("schedule");
+  assert.equal(called, false);
 });
 
 test("la clasificación se solicita solo al pulsar y conserva los datos del servidor", async () => {
