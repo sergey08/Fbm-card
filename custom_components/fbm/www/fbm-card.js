@@ -204,6 +204,7 @@ class FBMCard extends HTMLElement {
           state.rounds = data.rondas; state.round = ""; state.phaseName = data.nombre_fase || ""; state.schedule = null;
           state.message = state.rounds.length ? "Elige una ronda." : "Fase sin rondas: se utilizará el grupo actual.";
         } else if (action === "schedule") {
+          if (this._config.mostrar_horarios !== true) throw new Error("Horarios desactivados en esta versión.");
           if (!state.selected || !state.start || !state.end || !Array.isArray(state.rounds) || (state.rounds.length && !state.round)) throw new Error("Elige equipo, fase y fechas.");
           const request = { type: state.rounds.length ? "fbm/team/schedule_round" : "fbm/team/schedule", ...common,
             equipo: state.selected, desde: state.start, hasta: state.end };
@@ -297,8 +298,10 @@ class FBMCard extends HTMLElement {
             roundLabel.append(roundSelect); card.append(roundLabel);
           }
         }
-        input("Desde", "start", "date"); input("Hasta", "end", "date");
-        button("Consultar horarios", "schedule", !!state.selected && connected && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
+        if (this._config.mostrar_horarios === true) {
+          input("Desde", "start", "date"); input("Hasta", "end", "date");
+          button("Consultar horarios", "schedule", !!state.selected && connected && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
+        }
       }
       if (Array.isArray(state.standings)) {
         card.append(this._element("h3", "Clasificación del grupo actual"));
@@ -317,7 +320,7 @@ class FBMCard extends HTMLElement {
           table.append(body); card.append(table);
         }
       }
-      if (state.schedule && Array.isArray(state.schedule.partidos)) {
+      if (this._config.mostrar_horarios === true && state.schedule && Array.isArray(state.schedule.partidos)) {
         const visible = this._experimentalMatches();
         card.append(this._element("h3", state.showGroup ? "Partidos del grupo" : "Partidos del equipo"));
         card.append(this._element("p", "La selección del equipo compara nombres; los homónimos pueden coincidir. FBM puede devolver fechas fuera del intervalo solicitado.", "muted"));
