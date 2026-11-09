@@ -14,8 +14,9 @@ from .query_cache import QueryCache
 class IndependentClient:
     """Mantiene sesiones en memoria; no registra ni realiza trafico al crearse."""
 
-    def __init__(self, identity_store):
+    def __init__(self, identity_store, *, recovery_store=None):
         self._store = identity_store
+        self._recovery_store = recovery_store
         self._adapter = None
         self._lock = asyncio.Lock()
         self._cache = QueryCache(ttl_seconds=300, max_entries=128)
@@ -90,6 +91,33 @@ class IndependentClient:
             profile = DeviceProfile(uid=identity.uid, plataforma="Android " + android_release.strip(),
                                     tipo_dispositivo="mobile", version="5.0.42")
             self._adapter = await AficionFBMAdapter.access_with_profile(profile, identity.candidate_device_id)
+            # Save only the Android release, never UID, token or device identity.
+            # A failure here must not invalidate a successful connection.
+            if self._recovery_store is not None:
+                try:
+                    await self._recovery_store.async_save({"format": 1, "android_release": android_release.strip()})
+                except Exception:
+                    pass
+
+    async def async_restore(self) -> bool:
+        """Restore existing device access only; never create/register identities.
+
+        No stored Android release means no automatic traffic. Access failures
+        are nonfatal; the next explicit connect remains available.
+        """
+        if self._recovery_store is None:
+            return False
+        try:
+            saved = await self._recovery_store.async_load()
+            if not isinstance(saved, dict) or set(saved) != {"format", "android_release"} or saved["format"] != 1:
+                return False
+            release = saved["android_release"]
+            if not isinstance(release, str) or not release.strip() or len(release) > 32:
+                return False
+            await self.async_connect(release)
+            return True
+        except Exception:
+            return False
 
     async def async_disconnect(self) -> None:
         """Olvida la sesion en memoria sin eliminar la identidad persistida."""
