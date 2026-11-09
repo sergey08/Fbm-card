@@ -306,7 +306,7 @@ test("registro pendiente bloquea alta normal y exige recuperación explícita", 
   const parent = new Element("card"); card._renderExperimental(parent);
   const register = parent.children.find(el => el.textContent === "Registrar dispositivo en FBM");
   const recover = parent.children.find(el => el.textContent === "Recuperar registro pendiente");
-  assert.equal(register.disabled, true);
+  assert.equal(register, undefined);
   assert.equal(calls.length, 0);
   await recover.listeners.click();
   assert.deepEqual(calls, ["fbm/client/recover_registration", "fbm/client/status"]);
