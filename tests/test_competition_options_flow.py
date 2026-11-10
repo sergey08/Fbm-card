@@ -92,6 +92,16 @@ class FakeClient:
         self.calls.append("standings")
         return {"clasificacion": [{"id": "team-A"}, {"id": "team-B"}]}
 
+    async def async_team_schedule(self, team, start, end):
+        self.calls.append("schedule")
+        return {"partidos": [{"id": "m1", "local": "Pinto Basket",
+                             "visitante": "Rival", "estado": "finished",
+                             "marcador": {"local": 35, "visitante": 31}}]}
+
+    async def async_team_roster(self, team):
+        self.calls.append("roster")
+        return {"jugadores": [{"id": "p1", "nombre": "Jugador de prueba"}]}
+
     async def async_verify_group_season(self, teams):
         self.calls.append("season")
         return {"season_verified": self.verified,
@@ -148,6 +158,45 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(archive.followed(), [])
         self.assertIsNotNone(archive.latest(selection, "standings"))
         self.assertNotIn("roster", self.client.calls)
+
+    async def test_manual_refresh_requires_confirmation_and_no_rosters_by_default(self):
+        await self.flow.async_step_search({"texto": "pinto"})
+        await self.flow.async_step_select({"equipo": "team-A"})
+        await self.flow.async_step_confirm({"confirmar": True})
+        self.client.calls.clear()
+        result = await self.flow.async_step_refresh()
+        self.assertEqual(result["step_id"], "refresh")
+        result = await self.flow.async_step_refresh({"competicion": "0"})
+        self.assertEqual(result["step_id"], "refresh_confirm")
+        self.assertEqual(self.client.calls, [])
+        result = await self.flow.async_step_refresh_confirm({"confirmar": True})
+        self.assertEqual(result["type"], "create_entry")
+        self.assertIn("schedule", self.client.calls)
+        self.assertNotIn("roster", self.client.calls)
+        identity = {"season_verified": True, "season_id": "verified-season",
+                    "phase_id": "phase", "group_id": "group"}
+        archive = Archive(str(self.path))
+        self.assertEqual(len(archive.latest(identity, "fixtures")["payload"]["partidos"]), 1)
+        self.assertIsNone(archive.latest(identity, "roster", "team-A"))
+
+    async def test_manual_refresh_explicit_roster_opt_in(self):
+        await self.flow.async_step_search({"texto": "pinto"})
+        await self.flow.async_step_select({"equipo": "team-A"})
+        await self.flow.async_step_confirm({"confirmar": True})
+        await self.flow.async_step_refresh({"competicion": "0"})
+        result = await self.flow.async_step_refresh_confirm(
+            {"confirmar": True, "incluir_plantillas": True})
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(self.client.calls.count("roster"), 2)
+
+    async def test_manual_refresh_requires_existing_follow_and_anchor(self):
+        self.assertEqual((await self.flow.async_step_refresh())["reason"], "none_followed")
+        self.assertFalse(self.path.exists())
+        Archive(str(self.path)).follow({
+            "season_verified": True, "season_id": "verified-season",
+            "phase_id": "phase", "group_id": "group"})
+        self.assertEqual(
+            (await self.flow.async_step_refresh())["reason"], "no_refreshable_groups")
 
     async def test_invalid_season_never_writes_competition(self):
         self.client.verified = False
