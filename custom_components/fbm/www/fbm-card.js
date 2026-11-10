@@ -710,7 +710,7 @@ class FBMCard extends HTMLElement {
                 const teams = this._element("div", "", "fbm-fixture-teams");
                 const teamLabel = (name, image, side) => {
                   const box = this._element("div", "", "fbm-fixture-side fbm-fixture-" + side);
-                  if (typeof image === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(image)) {
+                  if (typeof image === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(image) || this._officialLogoUrl(image))) {
                     const img = document.createElement("img"); img.src = image;
                     img.className = "fbm-fixture-logo"; img.alt = "Escudo de " + name;
                     img.loading = "lazy"; img.addEventListener("error", () => img.remove(), { once: true });
@@ -719,12 +719,12 @@ class FBMCard extends HTMLElement {
                   box.append(this._element("span", name));
                   return box;
                 };
-                teams.append(teamLabel(match.local || "Local sin indicar", match.img_local, "local"));
+                teams.append(teamLabel(match.local || "Local sin indicar", match.img_local || this._apkCrestUrl(match.escudo_local), "local"));
                 const score = match.marcador &&
                   Number.isInteger(match.marcador.local) && Number.isInteger(match.marcador.visitante)
                   ? match.marcador.local + " – " + match.marcador.visitante : "vs";
                 teams.append(this._element("strong", score, "fbm-fixture-score"));
-                teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante, "away"));
+                teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante || this._apkCrestUrl(match.escudo_visitante), "away"));
                 box.append(teams);
                 if (match.campo) box.append(this._element("p", match.campo, "fbm-player-caption"));
                 games.append(box);
