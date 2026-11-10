@@ -103,33 +103,43 @@ class CompetitionAutoUpdater:
         async with self._group_lock:
             if self._stopped:
                 return
-            archive, groups = await self._archive_and_groups()
-            if not groups:
-                self._mark("groups", "no_followed_groups")
-                return
-            state = await self._read_state()
-            index = int(state.get("group_index", 0)) % len(groups)
-            group = groups[index]
-            # Advance even after a network failure so one group does not
-            # permanently block others. Never follow automatically.
-            await self._save_state({"group_index": (index + 1) % len(groups)})
-            if self._stopped:
-                return
-            now = date.today()
             try:
-                response = await sync_group(
-                    self.client, archive, group["anchor_team_id"],
-                    now - timedelta(days=45), now + timedelta(days=60),
-                    fetch_rosters=False,
-                    expected_competition={k: group[k] for k in
-                                          ("season_id", "phase_id", "group_id")})
-                status = response.get("status") if isinstance(response, dict) else None
-                self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
+                await self._run_group_impl()
             except Exception:
-                # Never leak service errors, IDs or player details into HA state.
-                # The archive retains the last successful snapshot.
+                # Include archive/store errors, not just remote API failures.
+                # Do not expose private FBM data in Home Assistant state.
                 self._mark("groups", "failed")
-                return
+
+    async def _run_group_impl(self):
+        if self._stopped:
+            return
+        archive, groups = await self._archive_and_groups()
+        if not groups:
+            self._mark("groups", "no_followed_groups")
+            return
+        state = await self._read_state()
+        index = int(state.get("group_index", 0)) % len(groups)
+        group = groups[index]
+        # Advance even after a network failure so one group does not
+        # permanently block others. Never follow automatically.
+        await self._save_state({"group_index": (index + 1) % len(groups)})
+        if self._stopped:
+            return
+        now = date.today()
+        try:
+            response = await sync_group(
+                self.client, archive, group["anchor_team_id"],
+                now - timedelta(days=45), now + timedelta(days=60),
+                fetch_rosters=False,
+                expected_competition={k: group[k] for k in
+                                      ("season_id", "phase_id", "group_id")})
+            status = response.get("status") if isinstance(response, dict) else None
+            self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
+        except Exception:
+            # Never leak service errors, IDs or player details into HA state.
+            # The archive retains the last successful snapshot.
+            self._mark("groups", "failed")
+            return
 
     async def _run_players(self):
         async with self._player_lock:
