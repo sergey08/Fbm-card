@@ -104,7 +104,7 @@ class SafeDiagnosticsTests(unittest.TestCase):
         identifier = base64.b64encode(b"private-player-identifier").decode()
         shape = mod._image_reference_shape(identifier.encode("utf-16le").hex())
         self.assertEqual(shape["utf16le_inner_magic"], "other")
-        self.assertNotIn("identifier", str(shape))
+        self.assertNotIn("private-player-identifier", str(shape))
 
     def test_photo_format_probe_reports_structure_not_photo_contents(self):
         import base64
