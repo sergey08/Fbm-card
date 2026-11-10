@@ -130,7 +130,11 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}),
             description_placeholders={
                 "team": candidate["name"],
-                "group": f'{data["season_id"]} / {data["phase_id"]} / {data["group_id"]} ({data["team_count"]} equipos)',
+                "group": (
+                    f'{data.get("phase_name", "Fase")} · '
+                    f'{data.get("group_name", "Grupo")} · '
+                    f'{data["team_count"]} equipos'
+                ),
             })
 
     async def async_step_manage(self, user_input=None):
