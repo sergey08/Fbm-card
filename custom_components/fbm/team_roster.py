@@ -61,7 +61,10 @@ def normalize_team_roster(response: object) -> dict:
                 if value is not None and (type(value) is not str or len(value) > 256):
                     raise PlayerRosterError("Campo de texto no válido")
             elif target in ("partidos_jugados", "puntos_totales"):
-                if value is not None and (type(value) is not int or value < 0):
+                if value == -1 and type(value) is int:
+                    # FBM may mark unavailable counts as -1; never display it as a stat.
+                    value = None
+                elif value is not None and (type(value) is not int or value < 0):
                     raise PlayerRosterError("Estadística entera no válida")
             else:
                 if value is not None and (type(value) not in (int, float)
@@ -110,6 +113,11 @@ def diagnose_roster_rows(response: object) -> dict:
                             "str" if type(value) is str else "other")
                     dist = number_types.setdefault(field, {})
                     dist[kind] = dist.get(kind, 0) + 1
+                    if type(value) in (int, float) and value < 0:
+                        sign_counts = dist.setdefault("negative_count", 0)
+                        dist["negative_count"] = sign_counts + 1
+                        if value == -1:
+                            dist["minus_one_count"] = dist.get("minus_one_count", 0) + 1
         try:
             normalize_team_roster({"error": "", keys[0]: [raw]})
         except PlayerRosterError as exc:
