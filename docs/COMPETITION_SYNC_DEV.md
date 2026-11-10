@@ -37,6 +37,12 @@ Direct **search by competition name without any team** is reserved for a later s
 
 A manual synchronization checks that the group is still followed before each roster request and again before writing snapshots. If a user stops following during a long request, it returns `not_followed`, does not request any additional player roster and does not persist the in-flight batch. Retrying an unchanged competition remains a successful operation with `records_written=0`; unchanged snapshots are deduplicated. This behavior is covered by synthetic offline tests, not live FBM deployment.
 
+### Bounded individual match-statistics batches (DEV)
+
+After an administrator explicitly requests roster download, the integration can fetch individual sporting statistics in **separate batches of at most five players per team** with at least 0.5 s between successful or failed requests. The admin-only WebSocket command `fbm/competition/player_stats_batch` accepts `entry_id`, `season_id`, `phase_id`, `group_id`, `equipo`, `offset`, `limit` (1–5). It reads player IDs from the already archived roster of the explicitly followed competition; it refuses unknown teams, unselected groups and unverified player-team response bindings. Responses return counts and `next_offset`, never player names or details.
+
+SQLite stores only normalized `player_stats` snapshots keyed by player ID, with permitted per-match numeric sporting fields and global numbers exactly as provided by FBM. Missing global values remain `null`. Admin competition analysis can derive known player points from per-match scores and reports `partidos_con_puntos`; these are observed partial totals, not season totals if coverage is incomplete. The normal HA sensor remains **team-level only**. This feature is not in the installed b2 and is not yet a scheduled task.
+
 ### Manual refresh of a followed competition (DEV)
 
 The **Configure → Refresh competition** options-flow path lists only explicitly followed groups with a retained verified `anchor_team_id`. It requires selecting the competition and **a separate confirmation** before making any FBM calls. The requested date window is bounded to 45 days in the past and 60 days in the future (105 days total). It refreshes official standings and group fixtures; **player-roster downloads are off by default** and require an explicit additional checkbox. `sync_group` enforces an `expected_competition` binding and aborts with `competition_changed` before fetching fixtures or rosters if the official season, phase or group has changed. An unfollowed group cannot be downloaded. There is no scheduler or automatic polling.
@@ -116,6 +122,12 @@ Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home
 ### Cancelación durante la descarga y actualización sin cambios (DEV)
 
 La sincronización manual comprueba que el grupo sigue seleccionado antes de consultar la plantilla de cada equipo y de nuevo antes de guardar instantáneas. Si se deja de seguir durante una descarga, devuelve `not_followed`, no consulta más plantillas ni guarda ese lote. Una actualización sin cambios se considera correcta, con `records_written=0`, y no crea duplicados. Comprobado con pruebas offline; falta validación funcional en HA.
+
+### Lotes limitados de estadísticas individuales (DEV)
+
+Tras descargar voluntariamente las plantillas, la integración puede recuperar estadísticas individuales en **lotes separados de hasta cinco jugadores por equipo**, con pausas de 0,5 s entre consultas. El nuevo WebSocket solo para administradores `fbm/competition/player_stats_batch` recibe `entry_id`, `season_id`, `phase_id`, `group_id`, `equipo`, `offset` y `limit` (1–5). Toma los jugadores de plantillas ya archivadas de competiciones seguidas; rechaza equipos desconocidos, grupos no seguidos y estadísticas sin asociación oficial jugador-equipo. Devuelve únicamente contadores y `next_offset`, no nombres ni detalles personales.
+
+SQLite almacena instantáneas `player_stats` normalizadas por jugador, con puntos y otros valores deportivos por partido y datos globales exactamente como se publican. Los valores ausentes se conservan como `null`. El análisis administrativo calcula los puntos conocidos a partir de partidos individuales y muestra cuántos partidos tienen puntuación, sin presentarlos como totales completos de temporada cuando falta cobertura. El sensor normal de HA continúa siendo **solo de equipos**. No está aún en la beta b2 instalada y todavía no hay tarea automática.
 
 ### Actualización manual de una competición seguida (DEV)
 
