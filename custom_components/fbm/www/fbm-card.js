@@ -1331,6 +1331,26 @@ class FBMCompetitionCard extends HTMLElement {
     if (className) el.className = className;
     return el;
   }
+  _verifiedCrest(value) {
+    if (typeof value !== "string" || value.length > 1024) return "";
+    try {
+      const url=new URL(value);
+      if (url.protocol !== "https:" || url.username || url.password ||
+          url.port || url.hash) return "";
+      const host=url.hostname.toLowerCase();
+      if (host==="appaficionfbm.gesdeportiva.es") {
+        if (url.pathname.toLowerCase()!=="/imagenes.ashx") return "";
+        const params=url.searchParams;
+        const id=params.get("id");
+        if (params.size!==2 || params.get("tipo")!=="escudo" ||
+            !id || !/^[a-z0-9]{1,256}$/i.test(id)) return "";
+        return url.href;
+      }
+      if ((host==="fbm.es" || host==="www.fbm.es") &&
+          !url.search && /\.(?:png|jpe?g|webp)$/i.test(url.pathname)) return url.href;
+    } catch (_) {}
+    return "";
+  }
   _group() {
     const sensor = this._hass?.states?.[this._config?.entity];
     const groups = Array.isArray(sensor?.attributes?.groups) ? sensor.attributes.groups : [];
@@ -1574,10 +1594,14 @@ class FBMCompetitionCard extends HTMLElement {
         tr.append(this._el("td",t.posicion??"—","num"));
         const td = this._el("td");
         const btn = this._el("button",undefined,"team");
-        const crest = typeof t.escudo === "string" && /^https:\/\/(?:[\w-]+\.)*fbm\.es\//.test(t.escudo)
-          ? t.escudo : null;
+        const crest = this._verifiedCrest(t.escudo);
         if (crest) {
-          const img = this._el("img");img.src=crest;img.alt="Escudo de "+t.equipo;img.className="crest";btn.append(img);
+          const img = this._el("img");img.src=crest;img.alt="Escudo de "+t.equipo;
+          img.className="crest";img.loading="lazy";
+          img.addEventListener("error",()=>{
+            img.replaceWith(this._el("span","🏀"));
+          },{once:true});
+          btn.append(img);
         } else btn.append(this._el("span","🏀"));
         btn.append(this._el("span",t.equipo||"Equipo"));
         btn.disabled = !t.id;
