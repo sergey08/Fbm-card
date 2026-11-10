@@ -131,6 +131,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "team": candidate["name"],
                 "group": (
+                    f'{data["season_id"]} · '
                     f'{data.get("phase_name", "Fase")} · '
                     f'{data.get("group_name", "Grupo")} · '
                     f'{data["team_count"]} equipos'
