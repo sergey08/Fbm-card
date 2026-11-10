@@ -128,4 +128,25 @@ def safe_statistics_shape(payload: object, kind: str) -> dict:
             out["row_type"] = "array" if type(rows) is list else "other"
             if type(rows) is list:
                 out["count"] = len(rows)
+                if rows and type(rows[0]) is dict:
+                    # Field names/types only. Never return any cell values.
+                    allowed = (
+                        "idPartido", "IdPartido", "fechaPartido", "FechaPartido",
+                        "nombreEquipoRival", "NombreEquipoRival", "local", "Local",
+                        "puntos", "Puntos", "asistencia", "Asistencia",
+                        "faltaCometida", "FaltaCometida", "faltaRecibida", "FaltaRecibida",
+                        "rebotesTotal", "RebotesTotal", "rebotesDefensivos",
+                        "RebotesDefensivos", "rebotesOfensivos", "RebotesOfensivos",
+                        "recuperaciones", "Recuperaciones", "perdidas", "Perdidas",
+                        "valoracion", "Valoracion",
+                    )
+                    first = rows[0]
+                    out["first_row_fields"] = [k for k in allowed if k in first]
+                    out["first_row_types"] = {
+                        k: ("null" if first[k] is None else
+                            "bool" if type(first[k]) is bool else
+                            "number" if type(first[k]) in (int, float) else
+                            "string" if type(first[k]) is str else "other")
+                        for k in allowed if k in first
+                    }
     return out
