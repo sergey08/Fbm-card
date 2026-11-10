@@ -49,6 +49,8 @@ async def identify_competition(client, team_id: str, season_label: str | None = 
         raise ValueError("El equipo no pertenece al grupo")
     return {"status": "verified", "team_count": len(ids),
             "season_id": season, "phase_id": phase_id, "group_id": group_id,
+            "phase_name": identity.get("phase_name") or "Fase",
+            "group_name": identity.get("group_name") or "Grupo",
             "season_verified": True, "season_source": "official_team_search"}
 
 
