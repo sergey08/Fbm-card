@@ -333,6 +333,15 @@ class FBMCard extends HTMLElement {
     return match ? match[3] + "-" + match[2] + "-" + match[1] : value;
   }
 
+  _roundDateLabel(matches) {
+    const dates = [...new Set(matches.map(game => game?.fecha)
+      .filter(value => typeof value === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(value)))];
+    dates.sort((a, b) => this._fixtureDateKey(a).localeCompare(this._fixtureDateKey(b)));
+    if (!dates.length) return "";
+    if (dates.length === 1) return dates[0];
+    return dates[0] + " – " + dates[dates.length - 1];
+  }
+
   _fixedScheduleDates(state) {
     const today = new Date();
     const start = new Date(today);
@@ -665,7 +674,8 @@ class FBMCard extends HTMLElement {
               const optAll = this._element("option", "Todas las jornadas"); optAll.value = "all";
               selector.append(optAll);
               for (const number of rounds) {
-                const option = this._element("option", "Jornada " + number);
+                const dateText = this._roundDateLabel(all.filter(game => game.jornada === number));
+                const option = this._element("option", "Jornada " + number + (dateText ? " · " + dateText : ""));
                 option.value = String(number); selector.append(option);
               }
               selector.value = rounds.some(n => String(n) === state.matchRound) ? state.matchRound : "all";
