@@ -1,14 +1,35 @@
-"""Safe competition-selection operations for the Home Assistant options flow.
+"""Resolve FBM groups from official search labels and phase/group identifiers.
 
-Selecting a team follows the entire verified official season/phase/group.
-No player records or photos are persisted by selection.
+The FBM team search provides a visible season ("26/27"), while the group
+endpoint does not return a separate season ID. Do not invent one or query
+minor players merely to follow a competition.
 """
 from __future__ import annotations
 
+import re
 
-async def identify_competition(client, team_id: str) -> dict:
+_SEASON = re.compile(r"^(\d{2})/(\d{2})$")
+
+
+def official_season_label(label: str) -> str:
+    """Accept only an unambiguous consecutive-season label from FBM search."""
+    if type(label) is not str:
+        raise ValueError("Temporada oficial no válida")
+    value = label.strip()
+    match = _SEASON.fullmatch(value)
+    if not match or (int(match[1]) + 1) % 100 != int(match[2]):
+        raise ValueError("Temporada oficial no válida")
+    return value
+
+
+async def identify_competition(client, team_id: str, season_label: str | None = None) -> dict:
     if type(team_id) is not str or not team_id.strip() or len(team_id) > 512:
         raise ValueError("Equipo no válido")
+    if season_label is None:
+        # Older clients can still perform a non-persistent preview; following
+        # requires the official season string from the selected search result.
+        return {"status": "season_unverified", "team_count": 0}
+    season = official_season_label(season_label)
     identity = await client.async_team_group_identity(team_id)
     phase_id, group_id = identity.get("phase_id"), identity.get("group_id")
     if (type(phase_id) is not str or not phase_id
@@ -26,37 +47,30 @@ async def identify_competition(client, team_id: str) -> dict:
         ids.append(team)
     if team_id not in ids:
         raise ValueError("El equipo no pertenece al grupo")
-    # Group metadata alone is not sufficient: always corroborate the
-    # season through two distinct official player/team detail bindings.
-    evidence = await client.async_verify_group_season(ids)
-    season = evidence.get("season_id")
-    if evidence.get("season_verified") is not True or type(season) is not str or not season:
-        return {"status": "season_unverified", "team_count": len(ids),
-                "phase_id": phase_id, "group_id": group_id}
     return {"status": "verified", "team_count": len(ids),
             "season_id": season, "phase_id": phase_id, "group_id": group_id,
-            "season_verified": True}
+            "season_verified": True, "season_source": "official_team_search"}
 
 
 async def competition_season_diagnostic(client, team_id: str) -> dict:
-    """Metadata-only season cross-check with two teams, never return raw IDs.
-
-    This is deliberately distinct from follow/sync: it does not modify HA
-    configuration or download the whole group. Private player DTOs are kept
-    solely inside the existing adapter.
-    """
-    selected = await identify_competition(client, team_id)
-    return {
-        "status": selected["status"],
-        "group_verified": True,
-        "team_count": selected["team_count"],
-        "season_match_verified": selected["status"] == "verified",
-    }
+    """Optional legacy cross-team diagnostic, no player data or IDs returned."""
+    identity = await client.async_team_group_identity(team_id)
+    standings = await client.async_team_standings(team_id)
+    rows = standings.get("clasificacion") if type(standings) is dict else None
+    if not identity.get("phase_id") or not identity.get("group_id") or type(rows) is not list:
+        raise ValueError("Grupo no disponible")
+    ids = [row["id"] for row in rows if type(row) is dict
+           and type(row.get("id")) is str]
+    if len(ids) < 2:
+        raise ValueError("Grupo incompleto")
+    evidence = await client.async_verify_group_season(ids)
+    return {"status": "verified" if evidence.get("season_verified") is True else "season_unverified",
+            "group_verified": True, "team_count": len(ids),
+            "season_match_verified": evidence.get("season_verified") is True}
 
 
 def group_selection(competition: dict) -> dict:
-    """A verified identity suitable for CompetitionArchive.follow/unfollow."""
     if type(competition) is not dict or competition.get("status") != "verified":
-        raise ValueError("No se puede seguir una competición sin verificar")
+        raise ValueError("Competición sin temporada oficial")
     return {key: competition[key] for key in (
         "season_id", "phase_id", "group_id", "season_verified")}
