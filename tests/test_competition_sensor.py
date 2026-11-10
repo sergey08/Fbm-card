@@ -67,7 +67,7 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("PRIVATE_IMAGE", str(summary))
             self.assertNotIn("PRIVATE_VENUE", str(summary))
             self.assertEqual(summary["groups"][0]["ranking"], [{
-                "equipo": "Team", "posicion": 1, "ganados": 4, "perdidos": 0
+                "id": "team1", "equipo": "Team", "posicion": 1, "ganados": 4, "perdidos": 0
             }])
             self.assertEqual(summary["groups"][0]["recent_results"], [{
                 "local": "Team", "visitante": "Other", "fecha": "2026-11-01",
