@@ -89,6 +89,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # explicit consent in the native Configure → Automatic menu.
     auto_groups = entry.options.get("auto_groups") is True
     auto_players = entry.options.get("auto_players") is True
+    hass.data[DOMAIN][entry.entry_id]["auto_sync_flags"] = (
+        auto_groups, auto_players)
     if auto_groups:
         from .competition_auto_sync import CompetitionAutoUpdater
         service = CompetitionAutoUpdater(
@@ -99,7 +101,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN][entry.entry_id]["auto_updater"] = service
 
     async def _options_updated(hass, updated_entry):
-        await hass.config_entries.async_reload(updated_entry.entry_id)
+        # Following/unfollowing and manual refresh also save OptionsFlow,
+        # but they must not interrupt an existing FBM guest session or cards.
+        previous = hass.data.get(DOMAIN, {}).get(
+            updated_entry.entry_id, {}).get("auto_sync_flags")
+        desired = (
+            updated_entry.options.get("auto_groups") is True,
+            updated_entry.options.get("auto_players") is True)
+        if previous != desired:
+            await hass.config_entries.async_reload(updated_entry.entry_id)
 
     entry.async_on_unload(entry.add_update_listener(_options_updated))
     return True
