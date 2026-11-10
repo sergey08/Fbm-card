@@ -34,6 +34,7 @@ class CompetitionAutoUpdater:
         self._stopped = False
         self._group_lock = asyncio.Lock()
         self._player_lock = asyncio.Lock()
+        self._store_lock = asyncio.Lock()
 
     async def async_start(self, groups: bool, players: bool):
         if groups:
@@ -71,7 +72,12 @@ class CompetitionAutoUpdater:
         return state if type(state) is dict else {}
 
     async def _save_state(self, state):
-        await self.storage.async_save(state)
+        # Read/merge per-workstream cursor so concurrent timers cannot
+        # overwrite one another's state in Home Assistant's Store.
+        async with self._store_lock:
+            current = await self._read_state()
+            current.update(state)
+            await self.storage.async_save(current)
 
     async def _archive_and_groups(self):
         # Do not create DB when there is no followed group; all source
@@ -98,8 +104,7 @@ class CompetitionAutoUpdater:
             group = groups[index]
             # Advance even after a network failure so one group does not
             # permanently block others. Never follow automatically.
-            state["group_index"] = (index + 1) % len(groups)
-            await self._save_state(state)
+            await self._save_state({"group_index": (index + 1) % len(groups)})
             if self._stopped:
                 return
             now = date.today()
@@ -125,6 +130,14 @@ class CompetitionAutoUpdater:
             cursor = state.get("players", {})
             if type(cursor) is not dict:
                 cursor = {}
+            last = cursor.get("cycle_finished_at")
+            if type(last) is str:
+                try:
+                    completed = datetime.fromisoformat(last)
+                    if completed.tzinfo and datetime.now(timezone.utc) - completed < PLAYER_CYCLE_DELAY:
+                        return
+                except ValueError:
+                    pass
             group_index = int(cursor.get("group_index", 0)) % len(groups)
             selected = groups[group_index]
             identity = {**{k: selected[k] for k in
@@ -160,5 +173,4 @@ class CompetitionAutoUpdater:
             else:
                 cursor = {"group_index": 0, "team_index": 0, "offset": 0,
                           "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
-            state["players"] = cursor
-            await self._save_state(state)
+            await self._save_state({"players": cursor})
