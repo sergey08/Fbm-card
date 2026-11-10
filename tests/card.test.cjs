@@ -916,3 +916,102 @@ test("oculta estadísticas no disponibles pero muestra ceros y valoraciones nega
   }
   assert.ok(!statValues.includes("—"),"ninguna casilla debe mostrar guiones");
 });
+
+
+test("jornadas oficiales muestran enfrentamientos y permiten filtrar solo mi equipo", () => {
+  const {elements,sandbox}=loadCard();
+  class Elem {
+    constructor(tag){this.tag=tag;this.children=[];this.listeners={};this.textContent="";}
+    append(...children){this.children.push(...children);}
+    addEventListener(event,handler){this.listeners[event]=handler;}
+    setAttribute(name,value){this[name]=value;}
+  }
+  sandbox.document={createElement:tag=>new Elem(tag)};
+  const team={id:"t1",nombre:"Pinto Negro",club:"Pinto",categoria:"Alevín",temporada:"26/27"};
+  const card=new (elements.get("fbm-card"))();
+  card._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"gael",equipo_fijo:team};
+  card._hass={user:{id:"u"},callWS:async()=>({})};
+  card._render=()=>{};
+  const state=card._experimentalState();
+  state.entry="entry";state.status={sesion_vigente:true};
+  state.selected=team.id;state.tab="partidos";state.partidosTab="jornadas";
+  state.scheduleTeamId=team.id;state.scheduleEntryId=state.entry;state.showGroup=true;
+  state.schedule={jornada_actual:2,partidos:[
+    {id:"m1",jornada:1,fecha:"18/10/2026",local:"Pinto Negro",visitante:"Rival 1",marcador:{local:23,visitante:18}},
+    {id:"m2",jornada:1,fecha:"10/10/2026",local:"Rival 2",visitante:"Rival 3",marcador:null},
+    {id:"m3",jornada:2,fecha:"25/10/2026",local:"Rival 4",visitante:"Pinto Negro",marcador:{local:10,visitante:12}}
+  ]};
+  const flatten=node=>[node,...(node.children||[]).flatMap(flatten)];
+  const root=new Elem("card");card._renderExperimental(root);
+  const nodes=flatten(root);
+  assert.ok(nodes.some(n=>n.textContent==="3 enfrentamientos del grupo"));
+  assert.ok(nodes.some(n=>n.textContent==="23 – 18"));
+  const fixtures=nodes.filter(n=>n.className==="fbm-fixture");
+  assert.equal(fixtures.length,3);
+  assert.ok(flatten(fixtures[0]).some(n=>n.textContent==="Rival 2"),"fechas se ordenan día/mes/año");
+  const btn=nodes.find(n=>n.textContent==="Ver solo mi equipo");
+  assert.ok(btn);
+  btn.listeners.click();
+  assert.equal(state.showGroup,false);
+  const other=new Elem("card");card._renderExperimental(other);
+  const filtered=flatten(other);
+  assert.equal(filtered.filter(n=>n.className==="fbm-fixture").length,2);
+  assert.ok(filtered.some(n=>n.textContent==="2 partidos de tu equipo"));
+});
+
+test("la tarjeta fija consulta el calendario oficial y conserva identificadores independientes", async () => {
+  const {elements}=loadCard();
+  const team={id:"team-a",nombre:"Equipo",club:"Club",categoria:"Alevín",temporada:"26/27"};
+  const card=new (elements.get("fbm-card"))();
+  card._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"uno",equipo_fijo:team};
+  card._render=()=>{};
+  const calls=[];
+  card._hass={user:{id:"u"},callWS:async query=>{
+    calls.push(query);
+    return {jornada_actual:1,partidos:[{id:"p1",jornada:1,fecha:"10/10/2026",local:"Equipo",visitante:"Otro"}]};
+  }};
+  const state=card._experimentalState();
+  state.entry="entry";state.status={sesion_vigente:true};state.selected=team.id;
+  state.matchStart="2026-10-01";state.matchEnd="2026-12-31";
+  await card._experimentalAction("fixed_schedule");
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].type,"fbm/team/schedule");
+  assert.equal(calls[0].equipo,team.id);
+  assert.equal(calls[0].desde,"2026-10-01");
+  assert.equal(calls[0].hasta,"2026-12-31");
+  assert.equal(state.scheduleTeamId,team.id);
+  assert.equal(state.scheduleEntryId,"entry");
+  assert.equal(state.showGroup,true);
+  assert.equal(state.schedule.partidos.length,1);
+  state.selected="team-b";
+  assert.equal(card._fixedMatchesAvailable(state,"team-b"),false);
+});
+
+test("refresco periódico de 15 minutos solo para datos visibles ya consultados", async () => {
+  const {elements,sandbox}=loadCard();
+  const team={id:"team-a",nombre:"Equipo",club:"Club",categoria:"Alevín",temporada:"26/27"};
+  const card=new (elements.get("fbm-card"))();
+  card._config={modo_experimental:true,tipo_tarjeta:"equipo",equipo_fijo:team};
+  card._hass={callWS:async()=>({})};
+  card._restoreExperimentalTeam=()=>team;
+  const calls=[];
+  card._experimentalAction=async action=>calls.push(action);
+  const state=card._experimentalState();
+  state.entry="entry";state.selected=team.id;state.status={sesion_vigente:true};
+  state.tab="clasificacion";state.standings=[];
+  state.lastStandingsUpdate=Date.now()-16*60000;
+  await card._autoRefresh();
+  assert.deepEqual(calls,["standings"]);
+  calls.length=0;
+  state.lastStandingsUpdate=Date.now();
+  await card._autoRefresh();
+  assert.equal(calls.length,0);
+  state.tab="partidos";state.scheduleEntryId="entry";state.scheduleTeamId=team.id;
+  state.schedule={partidos:[]};state.lastScheduleUpdate=Date.now()-16*60000;
+  await card._autoRefresh();
+  assert.deepEqual(calls,["refresh_schedule"]);
+  calls.length=0;
+  sandbox.document={visibilityState:"hidden"};
+  await card._autoRefresh();
+  assert.equal(calls.length,0);
+});
