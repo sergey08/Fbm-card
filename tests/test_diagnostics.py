@@ -94,6 +94,18 @@ class SafeDiagnosticsTests(unittest.TestCase):
                 self.assertNotIn("SECRET", str(shape))
                 self.assertNotIn("imagenes.ashx", str(shape))
 
+    def test_nested_utf16le_magic_uses_only_fixed_categories(self):
+        import base64
+        png = bytes([137,80,78,71,13,10,26,10]) + b"private-photo-fixture"
+        encoded = base64.b64encode(png).decode().encode("utf-16le").hex()
+        result = mod._image_reference_shape(encoded)
+        self.assertEqual(result["utf16le_inner_magic"], "png")
+        self.assertNotIn("private", str(result))
+        identifier = base64.b64encode(b"private-player-identifier").decode()
+        shape = mod._image_reference_shape(identifier.encode("utf-16le").hex())
+        self.assertEqual(shape["utf16le_inner_magic"], "other")
+        self.assertNotIn("identifier", str(shape))
+
     def test_photo_format_probe_reports_structure_not_photo_contents(self):
         import base64
         opaque = base64.b64encode(b"<svg xmlns='http://www.w3.org/2000/svg'></svg>").decode()
