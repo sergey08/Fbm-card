@@ -20,6 +20,14 @@ class SafeDiagnosticsTests(unittest.TestCase):
         for value in ("sensitive-id","Private Name","private-image","secret-season"):
             self.assertNotIn(value,str(result))
 
+    def test_player_team_field_names_only(self):
+        data={"error":"","jugador":{"Id":"p","Nombre":"Person"},
+              "equipo":{"Id":"secret-team","Nombre":"Secret Team"}}
+        shape=mod.safe_player_detail_shape(data)
+        self.assertEqual(shape["team_fields"],["Id","Nombre"])
+        self.assertNotIn("secret-team",str(shape))
+        self.assertNotIn("Secret Team",str(shape))
+
     def test_roster_shape_never_returns_private_values(self):
         raw={"error":"secret session error", "key":"token", "misJugadores":[
             {"id":"veryprivateid","nombre":"Private Student","puntosTotales":18,
