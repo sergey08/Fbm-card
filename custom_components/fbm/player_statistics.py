@@ -108,3 +108,58 @@ def normalize_player_match_list(response: object) -> dict:
             record[output] = _number(row.get(source), signed=output == "valoracion")
         matches.append(record)
     return {"partidos": matches, "total": len(matches)}
+
+
+def diagnose_match_rows(response: object) -> dict:
+    """Count official field types and validation failures without exposing values."""
+    if type(response) is not dict or response.get("error") != "":
+        return {"status": "invalid_response"}
+    rows = response.get("listaDatosPartido")
+    if type(rows) is not list:
+        return {"status": "invalid_list"}
+    labels = {
+        "Partido inválido": "invalid_row",
+        "Identificador de partido ausente o ambiguo": "invalid_id_type",
+        "ID de partido ausente o repetido": "invalid_or_duplicate_id",
+        "Mezcla de formatos de estadísticas de partido": "mixed_casing",
+        "Dato de partido inválido": "invalid_text",
+        "Localía inválida": "invalid_home_flag",
+        "Estadística booleana inválida": "boolean_statistic",
+        "Estadística no numérica": "non_numeric_statistic",
+        "Estadística inválida": "invalid_number",
+        "Estadística negativa": "negative_statistic",
+    }
+    errors, types, seen_ids = {}, {}, set()
+    number_keys = tuple(_MATCH_NUMBERS) + tuple(k[0].upper() + k[1:] for k in _MATCH_NUMBERS)
+    for row in rows:
+        if type(row) is dict:
+            for field in number_keys:
+                if field not in row:
+                    continue
+                value = row[field]
+                kind = ("null" if value is None else
+                        "bool" if type(value) is bool else
+                        "int" if type(value) is int else
+                        "float" if type(value) is float else
+                        "empty" if type(value) is str and value == "" else
+                        "numeric_text" if type(value) is str and value.isascii()
+                        and value.lstrip("-").isdecimal() else
+                        "other_text" if type(value) is str else "other")
+                counts = types.setdefault(field, {})
+                counts[kind] = counts.get(kind, 0) + 1
+                if type(value) in (int, float) and value < 0 or (
+                    type(value) is str and value == "-1"):
+                    counts["negative_count"] = counts.get("negative_count", 0) + 1
+        try:
+            normalize_player_match_list({"error": "", "listaDatosPartido": [row]})
+        except PlayerStatisticsError as exc:
+            label = labels.get(str(exc), "other_validation")
+            errors[label] = errors.get(label, 0) + 1
+        if type(row) is dict:
+            match_id = row.get("IdPartido", row.get("idPartido"))
+            if type(match_id) is str:
+                if match_id in seen_ids:
+                    errors["duplicate_across_rows"] = errors.get("duplicate_across_rows", 0) + 1
+                seen_ids.add(match_id)
+    return {"status": "diagnosed", "total": len(rows),
+            "errors": errors, "statistic_types": types}
