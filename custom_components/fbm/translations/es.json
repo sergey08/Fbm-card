@@ -44,6 +44,13 @@
         "data": {
           "competicion": "Competición"
         }
+      },
+      "unfollow": {
+        "title": "Confirmar dejar de seguir",
+        "description": "¿Dejar de seguir el grupo {group}? Se conservarán todos los históricos.",
+        "data": {
+          "confirmar": "Confirmar"
+        }
       }
     },
     "error": {
