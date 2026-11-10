@@ -68,6 +68,22 @@ class PlayerStatsTests(unittest.TestCase):
         self.assertEqual(record["rebotes"],7)
         self.assertEqual(record["valoracion"],-2)
 
+    def test_private_safe_aggregate_match_diagnostics(self):
+        response={"error":"","listaDatosPartido":[
+            {"IdPartido":"private1","NombreEquipoRival":"Private Rival",
+             "Puntos":-1,"Asistencia":"--"},
+            {"IdPartido":"private2","Puntos":4,"Asistencia":"2"},
+            {"IdPartido":"private2","Puntos":4},
+        ]}
+        result=stats.diagnose_match_rows(response)
+        self.assertEqual(result["total"],3)
+        self.assertEqual(result["errors"]["duplicate_across_rows"],1)
+        self.assertEqual(result["errors"]["negative_statistic"],1)
+        self.assertEqual(result["errors"]["non_numeric_statistic"],1)
+        self.assertEqual(result["statistic_types"]["Puntos"]["negative_count"],1)
+        for value in ("private1","private2","Private Rival","--"):
+            self.assertNotIn(value,str(result))
+
     def test_reject_mixed_match_casing(self):
         with self.assertRaises(stats.PlayerStatisticsError):
             stats.normalize_player_match_list({"error":"","listaDatosPartido":[
