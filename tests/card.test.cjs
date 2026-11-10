@@ -528,7 +528,7 @@ test("error de registro avisa de posible procesamiento sin reintentar", async ()
   assert.doesNotMatch(state.message, /private/);
 });
 
-test("tarjeta experimental no hace peticiones al mostrarse y requiere pulsar estado", async () => {
+test("tarjeta experimental descubre estado automáticamente y permite reintentar conexión", async () => {
   const { elements, sandbox } = loadCard();
   class Element {
     constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; this.textContent = ""; }
@@ -545,10 +545,13 @@ test("tarjeta experimental no hace peticiones al mostrarse y requiere pulsar est
     calls.push(msg.type);
     return msg.type === "fbm/client/entries" ? { entries: ["entry"] } : { identidad_creada: false, candidato_guardado: false, sesion_en_memoria: false };
   } };
-  assert.equal(calls.length, 0);
-  const checkButton = card.shadowRoot.items[1].children.find(el => el.textContent === "Comprobar estado");
-  await checkButton.listeners.click();
+  await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(calls, ["fbm/client/entries", "fbm/client/status"]);
+  const retry = card.shadowRoot.items[1].children.find(el => el.textContent === "Reintentar conexión");
+  assert.ok(retry);
+  await retry.listeners.click();
+  assert.deepEqual(calls, ["fbm/client/entries", "fbm/client/status",
+    "fbm/client/entries", "fbm/client/status"]);
 });
 
 test("registro pendiente bloquea alta normal y exige recuperación explícita", async () => {
