@@ -143,15 +143,15 @@ def _image_reference_shape(value: object) -> dict:
     if result["text_form"] == "hex" and length % 2 == 0:
         try:
             decoded = bytes.fromhex(value[:min(length, 256)])
-            trimmed = decoded.lstrip(b"\\xef\\xbb\\xbf")
+            trimmed = decoded[3:] if decoded.startswith(bytes([239,187,191])) else decoded
             result["hex_decoded_kind"] = (
                 "png" if decoded.startswith(bytes([137,80,78,71,13,10,26,10])) else
                 "jpeg" if decoded.startswith(bytes([255,216,255])) else
                 "webp" if decoded.startswith(b"RIFF") and decoded[8:12] == b"WEBP" else
                 "utf8_url" if trimmed.startswith((b"http://", b"https://")) else
-                "utf16le_url" if decoded.startswith((b"h\\x00t\\x00t\\x00p\\x00", b"H\\x00T\\x00T\\x00P\\x00")) else
+                "utf16le_url" if decoded.startswith(("http".encode("utf-16le"), "HTTP".encode("utf-16le"))) else
                 "json" if trimmed.startswith((b"{", b"[")) else
-                "utf16le_json" if decoded.startswith((b"{\\x00", b"[\\x00")) else
+                "utf16le_json" if decoded.startswith(("{".encode("utf-16le"), "[".encode("utf-16le"))) else
                 "utf8_text" if decoded and all((32 <= x <= 126) or x in (9,10,13) for x in decoded) else
                 "utf16le_text" if len(decoded)>4 and sum(decoded[i] == 0 for i in range(1,len(decoded),2)) >= len(decoded)//4 else
                 "binary_or_encoded"
