@@ -55,6 +55,12 @@ class FBMCard extends HTMLElement {
     if (state.busy || !state.entry || !state.selected || state.status?.sesion_vigente !== true) return;
     const selected = this._restoreExperimentalTeam(state.entry);
     if (!selected || selected.id !== state.selected) return;
+    if (state.archivedData) {
+      // Re-read the local archive; never fan out remote FBM calls per card.
+      if (!state.lastArchiveCheck || Date.now() - state.lastArchiveCheck >= 5 * 60 * 1000)
+        await this._loadArchivedFixed();
+      return;
+    }
     const stale = timestamp => timestamp > 0 && Date.now() - timestamp >= 15 * 60 * 1000;
     if (state.tab === "partidos" && this._fixedMatchesAvailable(state, selected.id) &&
         stale(state.lastScheduleUpdate)) {
@@ -272,6 +278,34 @@ class FBMCard extends HTMLElement {
     await this._experimentalAction("status");
   }
 
+  async _loadArchivedFixed() {
+    const state = this._experimentalState();
+    const selected = this._restoreExperimentalTeam(state.entry);
+    if (!state.entry || !selected?.id || !this._hass?.callWS) return false;
+    const entryId = state.entry, teamId = selected.id;
+    let data;
+    try {
+      data = await this._hass.callWS({
+        type: "fbm/competition/team_snapshot", entry_id: entryId, equipo: teamId
+      });
+    } catch (_) { return false; }
+    if (state.entry !== entryId || state.selected !== teamId ||
+        data?.found !== true || !Array.isArray(data.standings?.clasificacion))
+      return false;
+    state.standings = data.standings.clasificacion;
+    state.lastStandingsUpdate = Date.now();
+    if (Array.isArray(data.fixtures?.partidos)) {
+      state.schedule = data.fixtures;
+      state.scheduleTeamId = teamId;
+      state.scheduleEntryId = entryId;
+      state.lastScheduleUpdate = Date.now();
+      state.showGroup = true;
+    }
+    state.archivedData = true;
+    state.lastArchiveCheck = Date.now();
+    return true;
+  }
+
   async _initializeFixed() {
     if (this._fixedInit || !this._hass?.callWS || this._config?.tipo_tarjeta !== "equipo") return;
     this._fixedInit = true;
@@ -286,7 +320,8 @@ class FBMCard extends HTMLElement {
       const saved = this._restoreExperimentalTeam(state.entry);
       if (saved) {
         state.teams = [saved]; state.selected = saved.id;
-        if (state.status.sesion_vigente) {
+        const archived = await this._loadArchivedFixed();
+        if (!archived && state.status.sesion_vigente) {
           const data = await this._hass.callWS({ type: "fbm/team/standings", entry_id: state.entry, equipo: saved.id });
           if (Array.isArray(data.clasificacion)) { state.standings = data.clasificacion; state.lastStandingsUpdate = Date.now(); }
         }
