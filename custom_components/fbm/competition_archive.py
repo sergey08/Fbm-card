@@ -8,6 +8,39 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import sqlite3
+from urllib.parse import urlsplit, parse_qs
+
+
+def _official_team_crest(value):
+    """Accept only a genuine full FBM crest URL, never opaque references."""
+    if type(value) is not str or not 0 < len(value) <= 1024:
+        return None
+    try:
+        url = urlsplit(value)
+        if (url.scheme != "https" or url.username or url.password
+                or url.port is not None or url.fragment):
+            return None
+        if url.hostname == "appaficionfbm.gesdeportiva.es":
+            if url.path.lower() != "/imagenes.ashx":
+                return None
+            params = parse_qs(url.query, keep_blank_values=True)
+            if (set(params) != {"tipo", "id"} or
+                    params["tipo"] != ["escudo"] or
+                    len(params["id"]) != 1 or
+                    not params["id"][0] or len(params["id"][0]) > 256 or
+                    not params["id"][0].isascii() or
+                    not params["id"][0].isalnum()):
+                return None
+            return value
+        if url.hostname in {"fbm.es", "www.fbm.es"}:
+            if not url.path.lower().endswith((".png", ".webp", ".jpg", ".jpeg")):
+                return None
+            if url.query:
+                return None
+            return value
+    except (ValueError, AttributeError):
+        return None
+    return None
 
 
 class CompetitionArchive:
@@ -246,8 +279,8 @@ class CompetitionArchive:
             if len(encoded.encode("utf-8")) > self.MAX_JSON_BYTES:
                 raise ValueError("Instantánea demasiado grande")
             return self._write_snapshot(key, source, subject, encoded, observed_at)
-        # Persist explicit normalized sporting fields only. This excludes
-        # photographs, image URLs, original DTO extras and future unknown fields.
+        # Persist normalized sporting fields. Only explicit, verified official
+        # club-crest URLs may be retained; exclude player photos and raw DTOs.
         approved = {
             "standings": {"id", "equipo", "posicion", "jugados", "ganados",
                           "perdidos", "puntos"},
@@ -264,7 +297,12 @@ class CompetitionArchive:
         for row in payload[output_key]:
             if type(row) is not dict:
                 raise ValueError("Registro deportivo inválido")
-            clean.append({k: v for k, v in row.items() if k in approved})
+            item = {k: v for k, v in row.items() if k in approved}
+            if source == "standings":
+                crest = _official_team_crest(row.get("escudo"))
+                if crest:
+                    item["escudo"] = crest
+            clean.append(item)
         payload = {output_key: clean}
         encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
         if len(encoded.encode("utf-8")) > self.MAX_JSON_BYTES:
