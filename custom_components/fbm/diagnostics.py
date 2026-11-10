@@ -140,6 +140,24 @@ def _image_reference_shape(value: object) -> dict:
         "base64" if re.fullmatch(r"[A-Za-z0-9+/_=-]+", value) else
         "other"
     )
+    if result["text_form"] == "hex" and length % 2 == 0:
+        try:
+            decoded = bytes.fromhex(value[:min(length, 256)])
+            trimmed = decoded.lstrip(b"\\xef\\xbb\\xbf")
+            result["hex_decoded_kind"] = (
+                "png" if decoded.startswith(bytes([137,80,78,71,13,10,26,10])) else
+                "jpeg" if decoded.startswith(bytes([255,216,255])) else
+                "webp" if decoded.startswith(b"RIFF") and decoded[8:12] == b"WEBP" else
+                "utf8_url" if trimmed.startswith((b"http://", b"https://")) else
+                "utf16le_url" if decoded.startswith((b"h\\x00t\\x00t\\x00p\\x00", b"H\\x00T\\x00T\\x00P\\x00")) else
+                "json" if trimmed.startswith((b"{", b"[")) else
+                "utf16le_json" if decoded.startswith((b"{\\x00", b"[\\x00")) else
+                "utf8_text" if decoded and all((32 <= x <= 126) or x in (9,10,13) for x in decoded) else
+                "utf16le_text" if len(decoded)>4 and sum(decoded[i] == 0 for i in range(1,len(decoded),2)) >= len(decoded)//4 else
+                "binary_or_encoded"
+            )
+        except ValueError:
+            result["hex_decoded_kind"] = "invalid"
     candidate = value
     if value.lower().startswith("data:image/") and ";base64," in value[:100]:
         candidate = value.split(";base64,", 1)[1]
