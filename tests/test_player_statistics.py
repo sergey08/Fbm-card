@@ -84,7 +84,7 @@ class PlayerStatsTests(unittest.TestCase):
         response={"error":"","listaDatosPartido":[
             {"IdPartido":"private1","NombreEquipoRival":"Private Rival",
              "Puntos":-1,"Asistencia":"--"},
-            {"IdPartido":"private2","Puntos":4,"Asistencia":"--"},
+            {"IdPartido":"private2","Puntos":4,"Asistencia":"unknown"},
             {"IdPartido":"private2","Puntos":4},
         ]}
         result=stats.diagnose_match_rows(response)
