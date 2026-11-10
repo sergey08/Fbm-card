@@ -28,6 +28,17 @@ class SafeDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("secret-team",str(shape))
         self.assertNotIn("Secret Team",str(shape))
 
+    def test_match_field_shape_without_names_or_stat_values(self):
+        payload={"error":"","listaDatosPartido":[
+            {"IdPartido":"private-match","Puntos":42,
+             "NombreEquipoRival":"Private Club","FaltaCometida":3}]}
+        shape=mod.safe_statistics_shape(payload,"matches")
+        self.assertEqual(shape["count"],1)
+        self.assertIn("IdPartido",shape["first_row_fields"])
+        self.assertEqual(shape["first_row_types"]["Puntos"],"number")
+        for private in ("private-match","Private Club","42"):
+            self.assertNotIn(private,str(shape))
+
     def test_stats_shape_never_returns_private_values(self):
         response={"error":"","puntosTotalesJugador":19,"key":"secret",
                   "listaDatosPartido":[{"idPartido":"private-id","puntos":5}]}
