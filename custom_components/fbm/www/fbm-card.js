@@ -151,7 +151,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", playerDetail: null, playerDetailTeamId: "", playerDetailPlayerId: "", playerStats: null, playerStatsTeamId: "", playerStatsPlayerId: "", playerStatsEntryId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", scheduleTeamId: "", scheduleEntryId: "", matchRound: "all", matchStart: "", matchEnd: "", lastScheduleUpdate: 0, lastStandingsUpdate: 0, lastPlayersUpdate: 0, message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", playerDetail: null, playerDetailTeamId: "", playerDetailPlayerId: "", playerStats: null, playerStatsTeamId: "", playerStatsPlayerId: "", playerStatsEntryId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", scheduleTeamId: "", scheduleEntryId: "", matchRound: "all", matchStart: "", matchEnd: "", lastScheduleUpdate: 0, lastStandingsUpdate: 0, lastPlayersUpdate: 0, photoDiagnostic: null, message: "", busy: false };
   }
 
   _experimentalPreferenceKey(entryId) {
@@ -511,7 +511,7 @@ class FBMCard extends HTMLElement {
           state.lastScheduleUpdate = Date.now();
         } else if (action === "players" || action === "refresh_players") {
           if (!state.selected) throw new Error("Elige un equipo.");
-          if (action !== "refresh_players") { state.players = null; state.playersTeamId = ""; state.playersEntryId = ""; }
+          if (action !== "refresh_players") { state.players = null; state.playersTeamId = ""; state.playersEntryId = ""; state.photoDiagnostic = null; }
           remoteAttempted = true;
           const selectedTeam = state.selected, selectedEntry = state.entry;
           const data = await this._hass.callWS({ type: "fbm/team/players", ...common, equipo: selectedTeam });
@@ -526,6 +526,34 @@ class FBMCard extends HTMLElement {
           }
           if (action !== "refresh_players")
             state.message = data.jugadores.length ? "Plantilla consultada desde FBM." : "FBM devolvió una plantilla vacía para este equipo.";
+        } else if (action === "photo_diagnostic") {
+          if (this._config?.tipo_tarjeta !== "equipo" || !state.selected ||
+              state.status?.sesion_vigente !== true) throw new Error("Equipo o sesión no disponible.");
+          const selectedTeam = state.selected, selectedEntry = state.entry;
+          state.photoDiagnostic = null;
+          remoteAttempted = true;
+          const data = await this._hass.callWS({
+            type: "fbm/team/diagnostic", ...common, equipo: selectedTeam,
+            kind: "roster", desde: "", hasta: ""
+          });
+          if (state.selected !== selectedTeam || state.entry !== selectedEntry) return;
+          // Never display raw responses or identifiers. Show only allowlisted
+          // format metadata already sanitized by the backend diagnostic.
+          const info = data?.shape?.player_photo_format || {};
+          const allowed = {
+            kind: ["null","other","empty","https_url","http_url","inline_data","relative_path","image_filename","opaque_reference"],
+            length_band: ["0","1-64","65-256","257-1024","1025-16384","16385+"],
+            text_form: ["json","xml","html","absolute_url","relative_url","hex","base64","other"],
+            hex_decoded_kind: ["png","jpeg","webp","utf8_url","utf16le_url","json","utf16le_json","utf8_text","utf16le_text","binary_or_encoded","invalid"],
+            base64_magic: ["png","jpeg","webp","gif","other","invalid"],
+            decoded_text_form: ["xml","json","url","html","other"]
+          };
+          const parts = Object.entries(allowed)
+            .filter(([key, values]) => typeof info[key] === "string" && values.includes(info[key]))
+            .map(([key]) => key + "=" + info[key]);
+          state.photoDiagnostic = data?.ok === true
+            ? (parts.length ? parts.join(" · ") : "FBM no ha devuelto un formato de fotografía reconocible.")
+            : "Diagnóstico no disponible: revisa la sesión y vuelve a consultar.";
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
           remoteAttempted = true;
@@ -735,6 +763,9 @@ class FBMCard extends HTMLElement {
         }
         if (state.tab === "jugadores") {
           button("Actualizar plantilla", "players", connected && !!pinned?.id);
+          button("Diagnosticar fotos", "photo_diagnostic", connected && !!pinned?.id);
+          if (state.photoDiagnostic) card.append(this._element("p",
+            "Formato de fotografía (sin datos personales): " + state.photoDiagnostic, "fbm-player-caption"));
           const roster = state.playersEntryId === state.entry && state.playersTeamId === pinned?.id
             ? state.players : null;
           if (!Array.isArray(roster)) {

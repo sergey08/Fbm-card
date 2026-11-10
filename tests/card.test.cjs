@@ -1027,3 +1027,33 @@ test("el selector omite la fecha cuando no consta oficialmente", () => {
     {fecha:"09/11/2026"}, {fecha:"07/11/2026"}, {fecha:"08/11/2026"}
   ]),"07/11/2026 – 09/11/2026");
 });
+
+test("diagnóstico de foto solo muestra categorías permitidas sin datos privados", async () => {
+  const {elements}=loadCard();
+  const card=new (elements.get("fbm-card"))();
+  card._config={modo_experimental:true,tipo_tarjeta:"equipo"};
+  card._render=()=>{};
+  const state=card._experimentalState();
+  state.entry="entry";state.selected="team";state.status={sesion_vigente:true};
+  const calls=[];
+  card._hass={callWS:async req=>{
+    calls.push(req);
+    return {ok:true,shape:{player_photo_format:{
+      kind:"opaque_reference",length_band:"257-1024",text_form:"hex",
+      hex_decoded_kind:"utf16le_url",private_value:"SECRET-PLAYER-URL"
+    }}};
+  }};
+  await card._experimentalAction("photo_diagnostic");
+  assert.equal(calls[0].type,"fbm/team/diagnostic");
+  assert.equal(calls[0].kind,"roster");
+  assert.equal(calls[0].equipo,"team");
+  assert.match(state.photoDiagnostic,/hex_decoded_kind=utf16le_url/);
+  assert.ok(!state.photoDiagnostic.includes("SECRET"));
+  state.photoDiagnostic=null;
+  card._hass.callWS=async()=>({ok:true,shape:{player_photo_format:{
+    kind:"opaque_reference",text_form:"<private data>",base64_magic:"PRIVATE"
+  }}});
+  await card._experimentalAction("photo_diagnostic");
+  assert.ok(!state.photoDiagnostic.includes("PRIVATE"));
+  assert.ok(!state.photoDiagnostic.includes("<private"));
+});

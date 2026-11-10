@@ -1,6 +1,6 @@
 # FBM Card — Madrid Basketball Federation
 
-Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current candidate: 0.2.0b11 (beta).** It is not an official FBM product.
+Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current candidate: 0.2.0b12 (beta).** It is not an official FBM product.
 
 ## Features
 - Search FBM teams and save multiple favorites.
@@ -39,11 +39,12 @@ equipo_fijo:
 ```
 Replace the sample fields using the configuration copied by the search card. Teams saved only in browser storage may not sync between devices.
 
-## 0.2.0b11 changes
+## 0.2.0b12 changes
+- Adds an explicit **Diagnosticar fotos** action in the Players tab to inspect safe, allowlisted photo-format metadata from the official backend; no photo, URL, identifier or secret is displayed.
 - Accept **hex-encoded image bytes** in the same strict PNG/JPEG/WebP validator already used for Base64 images; reject encoded URLs and opaque identifiers.
 - Add regression tests for valid image signatures and invalid references.
 - No changes to crests, fixtures, standings, favorites or session behavior.
-- This is a **compatibility improvement, not confirmation** that live FBM player photos use this format. If photos still do not display, the image reference must be diagnosed using metadata-only tools, not guessed endpoints.
+- The hex image compatibility was introduced in 0.2.0b11 and did not resolve the observed missing player photographs. This diagnostic release is **not confirmation** that live FBM player photos use this format. If photos still do not display, the image reference must be diagnosed using metadata-only tools, not guessed endpoints.
 
 ## Security and development
 Photos and account/device secrets must not be posted in issues or diagnostics. The integration handles the guest identity separately and does not create a new identity per card. See [GitHub Actions](https://github.com/sergey08/Fbm-card/actions) for automated tests. Functional validation in Home Assistant is separate from automated CI. The project is experimental, unofficial and unaffiliated with FBM.
@@ -52,7 +53,7 @@ Photos and account/device secrets must not be posted in issues or diagnostics. T
 
 # FBM Card — Federación de Baloncesto de Madrid
 
-Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión candidata actual: 0.2.0b11 (beta).** No es un producto oficial de la Federación.
+Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión candidata actual: 0.2.0b12 (beta).** No es un producto oficial de la Federación.
 
 ## Funciones
 - Búsqueda de equipos FBM y varios favoritos.
@@ -91,11 +92,12 @@ equipo_fijo:
 ```
 Sustituye los valores del ejemplo con la configuración copiada desde el buscador. Las selecciones guardadas solo en el navegador pueden no sincronizarse entre dispositivos.
 
-## Cambios 0.2.0b11
+## Cambios 0.2.0b12
+- Nueva acción **Diagnosticar fotos** en la pestaña Jugadores: muestra únicamente metadatos seguros y autorizados del formato de imagen recibido de FBM, nunca fotos, URLs, identificadores ni secretos.
 - Se admiten **bytes de imagen codificados en hexadecimal** usando el mismo validador estricto PNG/JPEG/WebP que ya admitía Base64. Se rechazan URLs e identificadores opacos codificados.
 - Nuevas pruebas de regresión con cabeceras de imagen válidas y referencias inválidas.
 - Sin cambios en escudos, partidos, clasificaciones, favoritos ni sesiones.
-- Es una **mejora de compatibilidad, no una confirmación** de que las fotos reales de FBM empleen este formato. Si continúan ausentes, hay que diagnosticar el formato de la referencia mediante metadatos, sin inventar endpoints.
+- La compatibilidad hexadecimal se incorporó en 0.2.0b11, pero no resolvió las fotografías ausentes observadas. Esta versión de diagnóstico **no confirma** de que las fotos reales de FBM empleen este formato. Si continúan ausentes, hay que diagnosticar el formato de la referencia mediante metadatos, sin inventar endpoints.
 
 ## Seguridad y desarrollo
 No publiques fotos ni secretos de la cuenta/dispositivo en incidencias ni diagnósticos. La integración gestiona una sola identidad invitada compartida, sin crear otra por tarjeta. Consulta las [pruebas de GitHub Actions](https://github.com/sergey08/Fbm-card/actions). La validación funcional real en Home Assistant es distinta de las pruebas automáticas. Proyecto experimental, no oficial y sin afiliación con FBM.
