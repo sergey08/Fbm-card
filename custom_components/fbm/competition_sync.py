@@ -92,6 +92,10 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     errors = 0
     if fetch_rosters:
         for tid in team_ids:
+            # The user may have stopped following while the earlier remote
+            # calls were running. Do not request another player's record.
+            if not await asyncio.to_thread(archive.is_followed, group):
+                return {"status": "not_followed", "saved": False}
             try:
                 response = await client.async_team_roster(tid)
                 if type(response) is not dict or type(response.get("jugadores")) is not list:
@@ -101,8 +105,12 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
                 errors += 1
             await asyncio.sleep(0.3)
 
-    # Atomicity per snapshot: no partial invalid DTO is written. Last-good
-    # snapshots remain available when an individual roster request fails.
+    # The explicit follow can be revoked during the requests. Check again
+    # immediately before persistence to honor a stop-following action.
+    if not await asyncio.to_thread(archive.is_followed, group):
+        return {"status": "not_followed", "saved": False}
+    # Each snapshot is transactional; an individual roster failure preserves
+    # the last-good record rather than erasing it.
     results = {}
     for source, subject, data in (
             ("standings", "", standings), ("fixtures", "", fixtures),
@@ -110,8 +118,9 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         results[source + (":" + subject if subject else "")] = await asyncio.to_thread(
             archive.record, group, source, data, subject=subject)
     return {
-        "status": "partial" if errors else "ok",
-        "saved": True, "team_count": len(team_ids),
+        "status": "not_followed" if not await asyncio.to_thread(
+            archive.is_followed, group) else ("partial" if errors else "ok"),
+        "saved": bool(any(results.values())), "team_count": len(team_ids),
         "fixture_count": len(fixtures["partidos"]),
         "rosters_saved": len(rosters), "roster_errors": errors,
         "records_written": sum(bool(v) for v in results.values()),
