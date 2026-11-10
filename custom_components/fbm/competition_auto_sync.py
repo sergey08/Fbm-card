@@ -35,6 +35,13 @@ class CompetitionAutoUpdater:
         self._group_lock = asyncio.Lock()
         self._player_lock = asyncio.Lock()
         self._store_lock = asyncio.Lock()
+        self.health = {"groups": {"status": "pending", "last_run": None},
+                       "players": {"status": "pending", "last_run": None}}
+
+    def _mark(self, kind, status):
+        # Safe, in-memory diagnostics: never expose players or API payloads.
+        self.health[kind] = {"status": status,
+                             "last_run": datetime.now(timezone.utc).isoformat()}
 
     async def async_start(self, groups: bool, players: bool):
         if groups:
@@ -98,6 +105,7 @@ class CompetitionAutoUpdater:
                 return
             archive, groups = await self._archive_and_groups()
             if not groups:
+                self._mark("groups", "no_followed_groups")
                 return
             state = await self._read_state()
             index = int(state.get("group_index", 0)) % len(groups)
@@ -109,14 +117,16 @@ class CompetitionAutoUpdater:
                 return
             now = date.today()
             try:
-                await sync_group(
+                response = await sync_group(
                     self.client, archive, group["anchor_team_id"],
                     now - timedelta(days=45), now + timedelta(days=60),
                     fetch_rosters=False,
                     expected_competition={k: group[k] for k in
                                           ("season_id", "phase_id", "group_id")})
+                self._mark("groups", "ok" if response.get("status") == "ok" else "failed")
             except (OSError, ValueError, RuntimeError):
                 # Keep last-good archived snapshot. No auto-enrollment.
+                self._mark("groups", "failed")
                 return
 
     async def _run_players(self):
@@ -125,6 +135,7 @@ class CompetitionAutoUpdater:
                 return
             archive, groups = await self._archive_and_groups()
             if not groups:
+                self._mark("players", "no_followed_groups")
                 return
             state = await self._read_state()
             cursor = state.get("players", {})
@@ -150,6 +161,7 @@ class CompetitionAutoUpdater:
             team_ids = [row.get("id") for row in rows if type(row) is dict
                         and type(row.get("id")) is str][:20]
             if not team_ids:
+                self._mark("players", "no_standings")
                 return
             team_index = int(cursor.get("team_index", 0)) % len(team_ids)
             offset = max(0, int(cursor.get("offset", 0)))
@@ -159,6 +171,7 @@ class CompetitionAutoUpdater:
                 self.client, archive, identity, team_ids[team_index],
                 offset=offset, limit=5)
             if response.get("status") not in ("ok", "partial", "no_roster"):
+                self._mark("players", "failed")
                 return
             if response.get("next_offset") is not None:
                 cursor = {"group_index": group_index,
@@ -174,3 +187,4 @@ class CompetitionAutoUpdater:
                 cursor = {"group_index": 0, "team_index": 0, "offset": 0,
                           "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
             await self._save_state({"players": cursor})
+            self._mark("players", response["status"])
