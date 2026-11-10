@@ -16,7 +16,8 @@
         "title": "Gestor de competiciones FBM",
         "menu_options": {
           "search": "Buscar equipo para seguir competición",
-          "manage": "Dejar de seguir una competición"
+          "manage": "Dejar de seguir una competición",
+          "refresh": "Actualizar una competición seguida"
         }
       },
       "search": {
@@ -51,6 +52,21 @@
         "data": {
           "confirmar": "Confirmar"
         }
+      },
+      "refresh": {
+        "title": "Elegir competición para actualizar",
+        "description": "Solo aparecen grupos previamente seleccionados con equipo de referencia oficial.",
+        "data": {
+          "competicion": "Competición"
+        }
+      },
+      "refresh_confirm": {
+        "title": "Confirmar actualización de competición",
+        "description": "Grupo: {group}. Actualización manual de clasificación y partidos. La descarga de plantillas es opcional y está desactivada inicialmente.",
+        "data": {
+          "confirmar": "Confirmar actualización",
+          "incluir_plantillas": "Descargar también plantillas y estadísticas disponibles"
+        }
       }
     },
     "error": {
@@ -59,10 +75,14 @@
       "cannot_connect": "No se pudo consultar FBM",
       "invalid_selection": "Selección no válida",
       "cannot_verify": "No se pudo verificar la competición",
-      "season_unverified": "Temporada todavía no verificada; no se guardan datos"
+      "season_unverified": "Temporada todavía no verificada; no se guardan datos",
+      "not_followed": "La competición ya no está seguida",
+      "competition_changed": "La fase, el grupo o la temporada han cambiado. Selecciona la nueva competición desde el buscador.",
+      "cannot_refresh": "No se pudo actualizar la competición"
     },
     "abort": {
-      "none_followed": "No hay competiciones seguidas"
+      "none_followed": "No hay competiciones seguidas",
+      "no_refreshable_groups": "No hay competiciones con equipo de referencia verificable; vuelve a seleccionarlas"
     }
   }
 }
