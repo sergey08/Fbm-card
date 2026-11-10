@@ -28,6 +28,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
     def __init__(self):
         self._results = {}
         self._candidate = None
+        self._remove_candidate = None
 
     def _entry(self):
         record = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
@@ -150,11 +151,31 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                     step_id="manage",
                     data_schema=probatio.Schema({probatio.Required("competicion"): probatio.In(options)}),
                     errors={"base": "invalid_selection"})
-            chosen = groups[int(selected)]
-            await self.hass.async_add_executor_job(
-                archive.unfollow, {**chosen, "season_verified": True})
-            # Historic snapshots are preserved.
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+            self._remove_candidate = groups[int(selected)]
+            return await self.async_step_unfollow()
         return self.async_show_form(
             step_id="manage",
             data_schema=probatio.Schema({probatio.Required("competicion"): probatio.In(options)}))
+
+    async def async_step_unfollow(self, user_input=None):
+        """Explicit confirmation prevents accidental un-following."""
+        import probatio
+        chosen = self._remove_candidate
+        if chosen is None:
+            return await self.async_step_manage()
+        if user_input is not None and user_input.get("confirmar") is True:
+            entry = self._entry()
+            archive = await self.hass.async_add_executor_job(
+                entry["competitions_archive_factory"],
+                entry["competitions_sqlite_path"])
+            await self.hass.async_add_executor_job(
+                archive.unfollow, {**chosen, "season_verified": True})
+            # Historical snapshots are retained after stopping updates.
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+        return self.async_show_form(
+            step_id="unfollow",
+            data_schema=probatio.Schema({
+                probatio.Required("confirmar", default=False): bool}),
+            description_placeholders={
+                "group": " / ".join((chosen["season_id"], chosen["phase_id"],
+                                     chosen["group_id"]))})
