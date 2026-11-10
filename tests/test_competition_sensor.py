@@ -54,7 +54,7 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             archive.record(identity, "roster", {"jugadores": [
                 {"id": "player", "nombre": "PRIVATE_CHILD", "foto": "PRIVATE_IMAGE"}]},
                 subject="team1")
-            summary = Sensor._read_competition_summary(path, Archive)
+            summary = Sensor._read_competition_summary(path)
             self.assertEqual(summary["count"], 1)
             self.assertEqual(summary["groups"][0]["teams"], 1)
             self.assertEqual(summary["groups"][0]["matches"], 1)
