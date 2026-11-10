@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
-from .competition_sync import sync_group
+from .competition_sync import sync_group, preview_group
 import probatio
 from homeassistant.components import websocket_api
 
@@ -308,6 +308,31 @@ async def ws_standings(hass, connection, msg):
 
 
 
+async def _preview_competition(hass, msg):
+    client = _client(hass, msg["entry_id"])
+    return await preview_group(
+        client, msg["equipo"],
+        date.fromisoformat(msg["desde"]), date.fromisoformat(msg["hasta"]))
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/preview",
+    probatio.Required("entry_id"): str,
+    probatio.Required("equipo"): str,
+    probatio.Required("desde"): str,
+    probatio.Required("hasta"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_preview(hass, connection, msg):
+    try:
+        result = await _preview_competition(hass, msg)
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudo consultar el grupo completo.")
+        return
+    connection.send_result(msg["id"], result)
+
+
 async def _sync_competition(hass, msg):
     entry_id = msg["entry_id"]
     client = _client(hass, entry_id)
@@ -386,7 +411,7 @@ async def ws_competition_latest(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_latest):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_latest, ws_competition_preview):
         websocket_api.async_register_command(hass, command)
 
 
