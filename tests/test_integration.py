@@ -51,7 +51,7 @@ class IdentitySetupTests(unittest.TestCase):
         hass = MagicMock()
         hass.data = {}
         hass.config_entries.async_forward_entry_setups = AsyncMock()
-        entry = types.SimpleNamespace(entry_id='example')
+        entry = types.SimpleNamespace(entry_id='example', options={},\n            add_update_listener=lambda cb: lambda: None,\n            async_on_unload=lambda action: None)
         store = MagicMock()
         with patch.object(fbm, 'Store', return_value=store) as factory:
             coro = fbm.async_setup_entry(hass, entry)
