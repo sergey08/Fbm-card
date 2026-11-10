@@ -10,6 +10,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import types
+import tempfile
 
 import probatio
 from homeassistant import config_entries
@@ -52,6 +53,98 @@ async def run():
     bad_confirm = await flow.async_step_confirm()
     assert bad_confirm["type"] == "form"
     assert bad_confirm["step_id"] == "search"
+    # Exercise the actual Home Assistant flow result classes and Probatio
+    # schemas with a fake FBM transport and a temporary real SQLite archive.
+    # No test account, network request, deployment or production mutations.
+    from datetime import date
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        f"{PACKAGE}.competition_archive", ROOT / "competition_archive.py"
+    )
+    archive_module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = archive_module
+    spec.loader.exec_module(archive_module)
+    Archive = archive_module.CompetitionArchive
+
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def async_search_teams(self, query, skip):
+            self.calls.append("search")
+            return [{"id": "pinto", "nombre": "Equipo ficticio",
+                     "categoria": "Alevin", "temporada": "26/27"}]
+
+        async def async_team_group_identity(self, team_id):
+            self.calls.append("identity")
+            return {"phase_id": "phase", "group_id": "group",
+                    "season_verified": False}
+
+        async def async_team_standings(self, team_id):
+            self.calls.append("standings")
+            return {"clasificacion": [{"id": "pinto"}, {"id": "rival"}]}
+
+        async def async_verify_group_season(self, team_ids):
+            self.calls.append("verify")
+            return {"season_verified": True, "season_id": "official-season"}
+
+        async def async_team_schedule(self, team_id, start, end):
+            self.calls.append("schedule")
+            return {"partidos": [{"id": "m1", "local": "A", "visitante": "B"}]}
+
+        async def async_team_roster(self, team_id):
+            self.calls.append("roster")
+            return {"jugadores": [{"id": "player", "nombre": "No real"}]}
+
+    class FakeHass:
+        def __init__(self, db_path, client):
+            self.data = {"fbm": {"test-entry": {
+                "cliente_independiente": client,
+                "competitions_sqlite_path": str(db_path),
+                "competitions_archive_factory": Archive,
+            }}}
+
+        async def async_add_executor_job(self, callback, *args):
+            return callback(*args)
+
+    with tempfile.TemporaryDirectory() as folder:
+        db = Path(folder) / "competition.sqlite"
+        client = FakeClient()
+        flow.hass = FakeHass(db, client)
+        flow.config_entry = types.SimpleNamespace(
+            entry_id="test-entry", options={})
+        search = await flow.async_step_search({"texto": "pinto"})
+        assert search["step_id"] == "select", search
+        select = await flow.async_step_select({"equipo": "pinto"})
+        assert select["step_id"] == "confirm", select
+        assert not db.exists(), "preview must not persist without consent"
+        followed = await flow.async_step_confirm({"confirmar": True})
+        assert followed["type"] == "create_entry", followed
+        assert Archive(str(db)).followed_with_anchor()[0]["anchor_team_id"] == "pinto"
+
+        offered = await flow.async_step_refresh()
+        assert offered["step_id"] == "refresh", offered
+        choice = await flow.async_step_refresh({"competicion": "0"})
+        assert choice["step_id"] == "refresh_confirm", choice
+        assert "roster" not in client.calls
+        refreshed = await flow.async_step_refresh_confirm({"confirmar": True})
+        assert refreshed["type"] == "create_entry", refreshed
+        assert "schedule" in client.calls
+        assert "roster" not in client.calls
+        identity = {"season_verified": True, "season_id": "official-season",
+                    "phase_id": "phase", "group_id": "group"}
+        assert Archive(str(db)).latest(identity, "fixtures") is not None
+
+        listed = await flow.async_step_manage()
+        assert listed["step_id"] == "manage", listed
+        to_unfollow = await flow.async_step_manage({"competicion": "0"})
+        assert to_unfollow["step_id"] == "unfollow", to_unfollow
+        stopped = await flow.async_step_unfollow({"confirmar": True})
+        assert stopped["type"] == "create_entry", stopped
+        assert not Archive(str(db)).followed()
+        assert Archive(str(db)).latest(identity, "fixtures") is not None
+    print("PASS: actual HA OptionsFlow search/follow/refresh/unfollow + temporary SQLite")
     print("PASS: real HA OptionsFlow factory/menu and Probatio form validation")
 
 
