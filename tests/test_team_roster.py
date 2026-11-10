@@ -37,6 +37,20 @@ class RosterTests(unittest.TestCase):
             mod.normalize_team_roster({"error": "", "misjugadores": [],
                                        "misJugadores": []})
 
+    def test_safe_diagnostic_only_reports_aggregate_types_and_errors(self):
+        response={"error":"","misjugadores":[
+            {"Id":"private","Nombre":"Private Name","PartidosJugados":3.0,
+             "PuntosTotales":12,"MediaPuntos":4.0},
+            {"Id":"private2","Nombre":"Private Name Two","PartidosJugados":2,
+             "PuntosTotales":9,"MediaPuntos":3.5},
+        ]}
+        result=mod.diagnose_roster_rows(response)
+        self.assertEqual(result["total"],2)
+        self.assertEqual(result["validation_errors"],{"invalid_integer":1})
+        self.assertEqual(result["numeric_types"]["PartidosJugados"],{"float":1,"int":1})
+        for private in ("private", "Private Name", "private2"):
+            self.assertNotIn(private,str(result))
+
     def test_live_pascalcase_roster_fields(self):
         response = {"error": "", "misjugadores": [
             {"Id": "official-id", "Nombre": "Jugador de prueba",
