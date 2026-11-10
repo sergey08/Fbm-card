@@ -75,10 +75,7 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
                     result["player_photo_reference"] = _image_reference_kind(row["Foto"])
                 if "Foto" in row and type(row["Foto"]) is str:
                     value = row["Foto"]
-                    result["player_photo_length_band"] = (
-                        "0" if not value else "1-16" if len(value) <= 16 else
-                        "17-64" if len(value) <= 64 else "65-256" if len(value) <= 256 else "257+"
-                    )
+                    result["player_photo_format"] = _image_reference_shape(value)
         elif name in payload:
             result[name + "_type"] = type(v).__name__ if type(v) in (str, dict, int, bool, type(None)) else "other"
     if kind == "schedule":
@@ -92,7 +89,7 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
                      "imgEquipoVisitante", "escudoEquipoLocal", "escudoEquipoVisitante")
             result["match_image_fields"] = [key for key in names if key in first]
             result["match_image_types"] = {
-                key: _image_reference_kind(first[key]) for key in names if key in first
+                key: _image_reference_shape(first[key]) for key in names if key in first
             }
     return result
 
@@ -116,6 +113,39 @@ def _image_reference_kind(value: object) -> str:
     if value.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
         return "image_filename"
     return "opaque_reference"
+
+
+def _image_reference_shape(value: object) -> dict:
+    """Only type, length band and decoded file signature; never return image IDs."""
+    import base64
+    import binascii
+    import re
+    if type(value) is not str:
+        return {"kind": _image_reference_kind(value)}
+    value = value.strip()
+    length = len(value)
+    band = ("0" if length == 0 else "1-64" if length <= 64 else
+            "65-256" if length <= 256 else "257-1024" if length <= 1024 else
+            "1025-16384" if length <= 16384 else "16385+")
+    result = {"kind": _image_reference_kind(value), "length_band": band}
+    if not value or length > 400000:
+        return result
+    candidate = value
+    if value.lower().startswith("data:image/") and ";base64," in value[:100]:
+        candidate = value.split(";base64,", 1)[1]
+    if re.fullmatch(r"[a-zA-Z0-9+/=_-]+", candidate) and len(candidate) > 12:
+        try:
+            sample = candidate[:64].replace("-", "+").replace("_", "/")
+            prefix = base64.b64decode(sample + "=" * ((-len(sample)) % 4))
+            signature = ("png" if prefix.startswith(bytes([137,80,78,71,13,10,26,10])) else
+                         "jpeg" if prefix.startswith(bytes([255,216,255])) else
+                         "webp" if prefix.startswith(b"RIFF") and prefix[8:12] == b"WEBP" else
+                         "gif" if prefix.startswith((b"GIF87a", b"GIF89a")) else
+                         "other")
+            result["base64_magic"] = signature
+        except (ValueError, binascii.Error):
+            result["base64_magic"] = "invalid"
+    return result
 
 
 def safe_player_detail_shape(payload: object) -> dict:
@@ -143,7 +173,7 @@ def safe_player_detail_shape(payload: object) -> dict:
             if type(item) is dict:
                 result["player_fields"] = [k for k in player_fields if k in item]
                 result["photo_fields"] = {
-                    k: _image_reference_kind(item[k]) for k in
+                    k: _image_reference_shape(item[k]) for k in
                     ("Foto", "foto", "IdJugadorFoto", "idJugadorFoto") if k in item
                 }
     for key in ("equipo", "Equipo"):
