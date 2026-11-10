@@ -37,6 +37,12 @@ Direct **search by competition name without any team** is reserved for a later s
 
 A manual synchronization checks that the group is still followed before each roster request and again before writing snapshots. If a user stops following during a long request, it returns `not_followed`, does not request any additional player roster and does not persist the in-flight batch. Retrying an unchanged competition remains a successful operation with `records_written=0`; unchanged snapshots are deduplicated. This behavior is covered by synthetic offline tests, not live FBM deployment.
 
+### Opt-in scheduled competition and player refresh (DEV)
+
+The **Configure → Automatic refresh** options expose two separate Boolean switches, both **off by default**: group standings/fixtures and archived player statistics. Player refresh requires group refresh. Group work runs on a native HA four-hour interval, **at most one already followed group** per tick, fetching standings and a bounded fixture window (45 days before to 60 days after). It never auto-follows groups or downloads new rosters. Player work runs every two hours, at most **five players from one already archived team roster** per tick, and pauses at least 24 hours after completing a whole cycle. Position is persisted through Home Assistant Store across restarts; no player list or names are stored in the cursor.
+
+The native HA timer unsubscribes and in-flight tasks are cancelled on config-entry unload; disabling either option updates the scheduler through a controlled config-entry reload. Follow/unfollow or manual refresh does not trigger an unnecessary reload of existing cards. A removed group is skipped; a moved phase/group is rejected. The regular HA competition sensor stays team-only; no personal statistics are exposed in its attributes. Initial validation is offline and with real HA Core classes, **not yet with the scheduler enabled against live FBM**.
+
 ### Bounded individual match-statistics batches (DEV)
 
 After an administrator explicitly requests roster download, the integration can fetch individual sporting statistics in **separate batches of at most five players per team** with at least 0.5 s between successful or failed requests. The admin-only WebSocket command `fbm/competition/player_stats_batch` accepts `entry_id`, `season_id`, `phase_id`, `group_id`, `equipo`, `offset`, `limit` (1–5). It reads player IDs from the already archived roster of the explicitly followed competition; it refuses unknown teams, unselected groups and unverified player-team response bindings. Responses return counts and `next_offset`, never player names or details.
@@ -122,6 +128,12 @@ Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home
 ### Cancelación durante la descarga y actualización sin cambios (DEV)
 
 La sincronización manual comprueba que el grupo sigue seleccionado antes de consultar la plantilla de cada equipo y de nuevo antes de guardar instantáneas. Si se deja de seguir durante una descarga, devuelve `not_followed`, no consulta más plantillas ni guarda ese lote. Una actualización sin cambios se considera correcta, con `records_written=0`, y no crea duplicados. Comprobado con pruebas offline; falta validación funcional en HA.
+
+### Actualización periódica voluntaria de competiciones y jugadores (DEV)
+
+En **Configurar → Actualización automática** hay dos interruptores separados, **desactivados por defecto**: actualización de clasificación/calendario y estadísticas de jugadores previamente archivados. Para habilitar los jugadores hay que activar también los grupos. Los resultados se consultan cada cuatro horas, **un solo grupo ya seguido por ejecución**, con ventana de 45 días antes y 60 días después; no se crean seguimientos ni se descargan nuevas plantillas automáticamente. Las estadísticas se consultan cada dos horas, un **único lote de hasta cinco jugadores** de una plantilla ya archivada, con pausa de al menos 24 horas al terminar una ronda completa. La posición de la ronda se guarda en Home Assistant Store para conservarla tras reinicios, sin almacenar nombres de menores en el cursor.
+
+Los temporizadores nativos se cancelan y las tareas se detienen al descargar la integración; al cambiar las opciones se aplica una recarga controlada. Seguir/dejar de seguir o actualizar manualmente una competición no recarga innecesariamente las tarjetas. Los grupos retirados se omiten y los cambios de fase detienen la sincronización. El sensor normal de HA continúa mostrando solo datos de equipos. **Estas funciones aún no se han probado activadas contra FBM real**, solamente con pruebas aisladas y clases reales de HA.
 
 ### Lotes limitados de estadísticas individuales (DEV)
 
