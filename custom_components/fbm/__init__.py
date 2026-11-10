@@ -16,6 +16,7 @@ from .query_cache import QueryCache
 from .independent_identity import IndependentIdentityStore
 from .independent_client import IndependentClient
 from .followed_groups_store import FollowedGroups
+from .competition_archive import CompetitionArchive
 from .websocket import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,6 +78,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # No requests, new groups or filesystem mutations are triggered here.
         "grupos_sqlite_path": hass.config.path(f"fbm_groups_{entry.entry_id}.sqlite"),
         "grupos_store_factory": FollowedGroups,
+        "competitions_sqlite_path": hass.config.path(f"fbm_competitions_{entry.entry_id}.sqlite"),
+        "competitions_archive_factory": CompetitionArchive,
     }
     # Existing-device access only; no registration or identity replacement.
     restored = await client.async_restore()
