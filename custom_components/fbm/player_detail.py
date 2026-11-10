@@ -113,7 +113,7 @@ def normalize_player_detail(response: object, requested_player_id: str) -> dict:
         elif value is not None:
             if type(value) not in (int, float) or not math.isfinite(value):
                 raise PlayerDetailError("Estadística deportiva inválida")
-            if target == "puntos_totales" and type(value) is int and value == -1:
+            if mapping is variants[1] and target == "puntos_totales" and type(value) is int and value == -1:
                 value = None
             elif value < 0 or value >= 1000000:
                 raise PlayerDetailError("Estadística deportiva inválida")
