@@ -40,7 +40,8 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
         return {"type": type(payload).__name__ if type(payload) in (list, str, int, bool, type(None)) else "other"}
     # Field names only; accept identifier-like ASCII keys, never arbitrary values.
     safe_keys = sorted(k for k in payload if isinstance(k, str)
-                       and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,39}", k))[:40]
+                       and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,39}", k)
+                       and k.lower() not in {"key", "authorization", "token", "id_dispositivo", "uid", "password", "secret", "cookie", "session"})[:40]
     result = {
         "top_level_keys": safe_keys,
         "type": "object",
