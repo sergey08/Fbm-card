@@ -189,6 +189,28 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["type"], "create_entry")
         self.assertEqual(self.client.calls.count("roster"), 2)
 
+    async def test_refresh_cannot_cross_into_new_phase_or_group(self):
+        await self.flow.async_step_search({"texto": "pinto"})
+        await self.flow.async_step_select({"equipo": "team-A"})
+        await self.flow.async_step_confirm({"confirmar": True})
+        async def new_phase(team):
+            self.client.calls.append("identity")
+            return {"phase_id": "another-phase", "group_id": "another-group",
+                    "season_verified": False}
+        self.client.async_team_group_identity = new_phase
+        self.client.calls.clear()
+        await self.flow.async_step_refresh({"competicion": "0"})
+        response = await self.flow.async_step_refresh_confirm({
+            "confirmar": True, "incluir_plantillas": True})
+        self.assertEqual(response["type"], "form")
+        self.assertEqual(response["errors"]["base"], "competition_changed")
+        self.assertNotIn("schedule", self.client.calls)
+        self.assertNotIn("roster", self.client.calls)
+        selected = {"season_verified": True, "season_id": "verified-season",
+                    "phase_id": "phase", "group_id": "group"}
+        self.assertTrue(Archive(str(self.path)).is_followed(selected))
+        self.assertIsNone(Archive(str(self.path)).latest(selected, "fixtures"))
+
     async def test_manual_refresh_requires_existing_follow_and_anchor(self):
         self.assertEqual((await self.flow.async_step_refresh())["reason"], "none_followed")
         self.assertFalse(self.path.exists())
