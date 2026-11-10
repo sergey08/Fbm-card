@@ -50,6 +50,9 @@ class OptionsFlow:
 entries.ConfigFlow = ConfigFlow
 entries.OptionsFlow = OptionsFlow
 ha.config_entries = entries
+core = sys.modules.setdefault(
+    "homeassistant.core", types.ModuleType("homeassistant.core"))
+core.callback = lambda fn: fn
 
 probatio = sys.modules.setdefault("probatio", types.ModuleType("probatio"))
 probatio.Required = lambda name, default=None: name
@@ -127,6 +130,9 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         result = await self.flow.async_step_confirm({"confirmar": True})
         self.assertEqual(result["type"], "create_entry")
         self.assertEqual(len(Archive(str(self.path)).followed()), 1)
+        self.assertEqual(
+            Archive(str(self.path)).followed_with_anchor()[0]["anchor_team_id"],
+            "team-A")
         selection = {"season_id": "verified-season", "phase_id": "phase",
                      "group_id": "group", "season_verified": True}
         Archive(str(self.path)).record(
