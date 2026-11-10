@@ -37,6 +37,32 @@ class RosterTests(unittest.TestCase):
             mod.normalize_team_roster({"error": "", "misjugadores": [],
                                        "misJugadores": []})
 
+    def test_live_pascalcase_roster_fields(self):
+        response = {"error": "", "misjugadores": [
+            {"Id": "official-id", "Nombre": "Jugador de prueba",
+             "NombreEquipo": "Tercer Tiempo", "Temporada": "26/27",
+             "PartidosJugados": 4, "PuntosTotales": 31,
+             "MediaPuntos": 7.75, "PuntosPorPartido": 7.75,
+             "MinutosPorPartido": 11.2, "Foto": "private-picture", "Club": "private"}]}
+        result = mod.normalize_team_roster(response)
+        self.assertEqual(result["total"], 1)
+        player = result["jugadores"][0]
+        self.assertEqual(player["id"], "official-id")
+        self.assertEqual(player["nombre"], "Jugador de prueba")
+        self.assertEqual(player["puntos_totales"], 31)
+        self.assertEqual(player["media_puntos"], 7.75)
+        self.assertEqual(player["minutos_por_partido"], 11.2)
+        self.assertNotIn("Foto", player)
+        self.assertNotIn("Club", player)
+
+    def test_mixed_pascal_and_camelcase_rejected(self):
+        with self.assertRaises(mod.PlayerRosterError):
+            mod.normalize_team_roster({"error":"", "misjugadores":[
+                {"Id":"one","Nombre":"Example","puntosTotales": 12}]})
+        with self.assertRaises(mod.PlayerRosterError):
+            mod.normalize_team_roster({"error":"", "misjugadores":[
+                {"Id":"one","Nombre":"Example","MediaPuntos": True}]})
+
     def test_stats_missing_not_fabricated(self):
         result = mod.normalize_team_roster({"error": "", "misJugadores": [
             {"id": "b", "nombre": "Ejemplo"}
