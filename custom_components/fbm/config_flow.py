@@ -55,7 +55,34 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
-            step_id="init", menu_options=["search", "manage", "refresh"])
+            step_id="init", menu_options=["search", "manage", "refresh", "automatic"])
+
+    async def async_step_automatic(self, user_input=None):
+        """Explicit opt-in to scheduled sync; both switches default to off."""
+        import probatio
+        saved = self.config_entry.options
+        if user_input is not None:
+            groups = user_input.get("auto_groups") is True
+            players = user_input.get("auto_players") is True
+            # Individual player queries require active group syncing.
+            if players and not groups:
+                return self.async_show_form(
+                    step_id="automatic", errors={"base": "auto_requires_groups"},
+                    data_schema=probatio.Schema({
+                        probatio.Required("auto_groups", default=False): bool,
+                        probatio.Required("auto_players", default=False): bool,
+                    }))
+            return self.async_create_entry(
+                title="", data={**saved, "auto_groups": groups,
+                                "auto_players": players})
+        return self.async_show_form(
+            step_id="automatic",
+            data_schema=probatio.Schema({
+                probatio.Required("auto_groups",
+                                  default=saved.get("auto_groups") is True): bool,
+                probatio.Required("auto_players",
+                                  default=saved.get("auto_players") is True): bool,
+            }))
 
     async def async_step_search(self, user_input=None):
         import probatio
