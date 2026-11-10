@@ -31,6 +31,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
         self._results = {}
         self._candidate = None
         self._remove_candidate = None
+        self._refresh_candidate = None
 
     def _entry(self):
         record = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
@@ -40,7 +41,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
-            step_id="init", menu_options=["search", "manage"])
+            step_id="init", menu_options=["search", "manage", "refresh"])
 
     async def async_step_search(self, user_input=None):
         import probatio
@@ -159,6 +160,87 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="manage",
             data_schema=probatio.Schema({probatio.Required("competicion"): probatio.In(options)}))
+
+    async def async_step_refresh(self, user_input=None):
+        """Choose a previously followed competition for a manual refresh."""
+        from pathlib import Path
+        import probatio
+
+        entry = self._entry()
+        archive_path = entry["competitions_sqlite_path"]
+        if not await self.hass.async_add_executor_job(Path(archive_path).is_file):
+            return self.async_abort(reason="none_followed")
+        archive = await self.hass.async_add_executor_job(
+            entry["competitions_archive_factory"], archive_path)
+        groups = await self.hass.async_add_executor_job(archive.followed_with_anchor)
+        # Old DEV archives may lack an anchor: require re-selection, do not
+        # guess the team from a display label or arbitrary competition member.
+        choices = {
+            str(i): " · ".join((g["season_id"], g["phase_id"], g["group_id"]))
+            for i, g in enumerate(groups) if g.get("anchor_team_id")
+        }
+        if not choices:
+            return self.async_abort(reason="no_refreshable_groups")
+        if user_input is not None:
+            selected = user_input.get("competicion")
+            if selected in choices:
+                self._refresh_candidate = groups[int(selected)]
+                return await self.async_step_refresh_confirm()
+            return self.async_show_form(
+                step_id="refresh",
+                data_schema=probatio.Schema({
+                    probatio.Required("competicion"): probatio.In(choices)}),
+                errors={"base": "invalid_selection"})
+        return self.async_show_form(
+            step_id="refresh",
+            data_schema=probatio.Schema({
+                probatio.Required("competicion"): probatio.In(choices)}))
+
+    async def async_step_refresh_confirm(self, user_input=None):
+        """Only a second explicit confirmation can fetch competition data."""
+        from datetime import date, timedelta
+        import probatio
+
+        selected = self._refresh_candidate
+        if not selected:
+            return await self.async_step_refresh()
+        errors = {}
+        if user_input is not None and user_input.get("confirmar") is True:
+            from .competition_sync import sync_group
+            begin = date.today() - timedelta(days=45)
+            end = date.today() + timedelta(days=60)
+            entry = self._entry()
+            try:
+                archive = await self.hass.async_add_executor_job(
+                    entry["competitions_archive_factory"],
+                    entry["competitions_sqlite_path"])
+                result = await sync_group(
+                    entry["cliente_independiente"], archive,
+                    selected["anchor_team_id"], begin, end,
+                    fetch_rosters=user_input.get("incluir_plantillas") is True)
+                if result.get("status") not in ("ok", "partial") or not result.get("saved"):
+                    errors["base"] = result.get("status", "cannot_refresh")
+                elif result.get("competition") != {
+                    key: selected[key] for key in
+                    ("season_id", "phase_id", "group_id")
+                }:
+                    errors["base"] = "competition_changed"
+                else:
+                    return self.async_create_entry(
+                        title="", data=dict(self.config_entry.options))
+            except Exception:
+                errors["base"] = "cannot_refresh"
+        return self.async_show_form(
+            step_id="refresh_confirm",
+            data_schema=probatio.Schema({
+                probatio.Required("confirmar", default=False): bool,
+                probatio.Required("incluir_plantillas", default=False): bool,
+            }),
+            description_placeholders={
+                "group": " / ".join(
+                    selected[k] for k in ("season_id", "phase_id", "group_id"))
+            },
+            errors=errors)
 
     async def async_step_unfollow(self, user_input=None):
         """Explicit confirmation prevents accidental un-following."""
