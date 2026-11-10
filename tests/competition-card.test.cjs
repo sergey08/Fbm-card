@@ -19,7 +19,7 @@ function card() {
   const registry=new Map();
   const context={HTMLElement:E,document:{createElement:t=>new E(t)},
     customElements:{define:(k,v)=>registry.set(k,v),get:k=>registry.get(k)},
-    window:{customCards:[]},console};
+    window:{customCards:[]},console,URL};
   vm.runInNewContext(source,context);
   return new (registry.get("fbm-competition-card"))();
 }
