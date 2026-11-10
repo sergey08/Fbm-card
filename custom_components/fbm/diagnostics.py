@@ -105,3 +105,27 @@ def safe_player_detail_shape(payload: object) -> dict:
             if type(payload[key]) is dict:
                 result["team_fields"] = [k for k in ("id", "Id", "nombre", "Nombre") if k in payload[key]]
     return result
+
+
+def safe_statistics_shape(payload: object, kind: str) -> dict:
+    """Only shape/type metadata for known APK stats fields, never raw values."""
+    if type(payload) is not dict:
+        return {"type": "non_object"}
+    fields = (
+        ("error", "resultado", "ruta", "opcion", "puntosTotalesJugador",
+         "puntosMediaJugador", "asistenciasTotalesJugador",
+         "faltasCometidasTotalesJugador", "rebotesTotalesJugador",
+         "mostrarDatosEstadisticosAmpliados")
+        if kind == "global" else
+        ("error", "resultado", "ruta", "opcion", "listaDatosPartido",
+         "ListaDatosPartido", "listaDatosPartidos")
+    )
+    out = {"type": "object", "recognized": [k for k in fields if k in payload],
+           "error_empty": payload.get("error") == ""}
+    for key in ("listaDatosPartido", "ListaDatosPartido", "listaDatosPartidos"):
+        if key in payload:
+            rows = payload[key]
+            out["row_type"] = "array" if type(rows) is list else "other"
+            if type(rows) is list:
+                out["count"] = len(rows)
+    return out
