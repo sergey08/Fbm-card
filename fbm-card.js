@@ -6,15 +6,18 @@ class FBMCard extends HTMLElement {
     const newTeam = config.equipo_fijo?.id;
     const changed = !!this._config && (this._config.modo_experimental !== config.modo_experimental ||
       this._config.id_tarjeta !== config.id_tarjeta || this._config.tipo_tarjeta !== config.tipo_tarjeta || priorTeam !== newTeam);
-    if (changed) { this._experimental = null; this._fixedInit = false; }
+    if (changed) { this._experimental = null; this._fixedInit = false; this._searchInit = false; }
     if (config.tipo_tarjeta && !["busqueda", "equipo"].includes(config.tipo_tarjeta)) throw new Error("Tipo de tarjeta inválido");
     if (config.tipo_tarjeta === "equipo" && !config.equipo_fijo && !config.id_tarjeta) {
       throw new Error("Cada tarjeta de equipo necesita un id_tarjeta distinto para guardar su elección.");
     }
     this._config = { ...config };
     this._render();
-    if (this._hass && config.modo_experimental === true && config.tipo_tarjeta === "equipo" && (!this._fixedInit || changed)) {
-      Promise.resolve().then(() => this._initializeFixed());
+    if (this._hass && config.modo_experimental === true) {
+      if (config.tipo_tarjeta === "equipo" && (!this._fixedInit || changed))
+        Promise.resolve().then(() => this._initializeFixed());
+      else if (config.tipo_tarjeta !== "equipo" && (!this._searchInit || changed))
+        Promise.resolve().then(() => this._initializeSearch());
     }
   }
   set hass(hass) {
@@ -22,9 +25,14 @@ class FBMCard extends HTMLElement {
     const userChanged = hadHass && this._hass.user?.id !== hass?.user?.id;
     if (userChanged) this._experimental = null;
     this._hass = hass;
-    if (this._config?.modo_experimental === true && this._config.tipo_tarjeta === "equipo" && (!hadHass || userChanged)) {
-      this._fixedInit = false;
-      Promise.resolve().then(() => this._initializeFixed());
+    if (this._config?.modo_experimental === true && (!hadHass || userChanged)) {
+      if (this._config.tipo_tarjeta === "equipo") {
+        this._fixedInit = false;
+        Promise.resolve().then(() => this._initializeFixed());
+      } else {
+        this._searchInit = false;
+        Promise.resolve().then(() => this._initializeSearch());
+      }
     }
     // HA asigna hass con frecuencia. No reconstruir inputs activos en modo experimental:
     // reemplazar el DOM en cada actualización elimina el foco y bloquea la escritura.
@@ -253,6 +261,15 @@ class FBMCard extends HTMLElement {
       const value = JSON.parse(window.localStorage?.getItem(key) || "null");
       return this._experimentalTeamIsValid(value) ? value : null;
     } catch (_) { return null; }
+  }
+
+  async _initializeSearch() {
+    if (this._searchInit || !this._hass?.callWS ||
+        this._config?.modo_experimental !== true ||
+        this._config?.tipo_tarjeta === "equipo") return;
+    this._searchInit = true;
+    // Discover the existing FBM session without registering a new device.
+    await this._experimentalAction("status");
   }
 
   async _initializeFixed() {
@@ -594,7 +611,9 @@ class FBMCard extends HTMLElement {
       el.addEventListener("input", event => { state[key] = event.target.value; });
       label.append(el); card.append(label);
     };
-    button("Comprobar estado", "status", !!this._hass?.callWS);
+    // Session discovery is automatic; expose manual retry only when needed.
+    if (!state.status || state.status.sesion_vigente !== true)
+      button("Reintentar conexión", "status", !!this._hass?.callWS);
     if (state.status) {
       const connected = state.status.sesion_vigente === true;
       const sessionText = connected ? "vigente en la última comprobación local" : (state.status.sesion_en_memoria ? "necesita reconexión" : "sin conectar");
@@ -648,7 +667,20 @@ class FBMCard extends HTMLElement {
           const tab = this._element("button", title);
           tab.type = "button"; tab.className = "fbm-tab";
           tab.setAttribute("aria-pressed", String((state.tab || "clasificacion") === name));
-          tab.addEventListener("click", () => { state.tab = name; this._render(); if (name === "partidos" && connected && !this._fixedMatchesAvailable(state, pinned.id)) this._experimentalAction("fixed_schedule"); });
+          tab.addEventListener("click", () => {
+            state.tab = name; this._render();
+            if (!connected || !pinned?.id || state.busy) return;
+            if (name === "partidos" && !this._fixedMatchesAvailable(state, pinned.id))
+              void this._experimentalAction("fixed_schedule");
+            if (name === "jugadores") {
+              const cached = state.playersEntryId === state.entry &&
+                state.playersTeamId === pinned.id && Array.isArray(state.players);
+              const stale = !state.lastPlayersUpdate ||
+                Date.now() - state.lastPlayersUpdate >= 15 * 60 * 1000;
+              if (!cached || stale)
+                void this._experimentalAction(cached ? "refresh_players" : "players");
+            }
+          });
           tabs.append(tab);
         }
         card.append(tabs);
@@ -766,8 +798,12 @@ class FBMCard extends HTMLElement {
           }
         }
         if (state.tab === "jugadores") {
-          button("Actualizar plantilla", "players", connected && !!pinned?.id);
-          button("Diagnosticar fotos", "photo_diagnostic", connected && !!pinned?.id);
+          // Opening this tab refreshes stale/missing rosters automatically.
+          // Keep an explicit retry only for failed or unavailable data.
+          if (!Array.isArray(state.players) && !state.busy)
+            button("Reintentar plantilla", "players", connected && !!pinned?.id);
+          if (this._config.mostrar_diagnostico === true)
+            button("Diagnosticar fotos", "photo_diagnostic", connected && !!pinned?.id);
           if (state.photoDiagnostic) card.append(this._element("p",
             "Formato de fotografía (sin datos personales): " + state.photoDiagnostic, "fbm-player-caption"));
           const roster = state.playersEntryId === state.entry && state.playersTeamId === pinned?.id
