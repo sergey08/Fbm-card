@@ -73,6 +73,12 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
                     for k in keys_only}
                 if "Foto" in row:
                     result["player_photo_reference"] = _image_reference_kind(row["Foto"])
+                if "Foto" in row and type(row["Foto"]) is str:
+                    value = row["Foto"]
+                    result["player_photo_length_band"] = (
+                        "0" if not value else "1-16" if len(value) <= 16 else
+                        "17-64" if len(value) <= 64 else "65-256" if len(value) <= 256 else "257+"
+                    )
         elif name in payload:
             result[name + "_type"] = type(v).__name__ if type(v) in (str, dict, int, bool, type(None)) else "other"
     if kind == "schedule":
@@ -81,7 +87,9 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
             first = matches[0]
             names = ("EscudoLocal", "EscudoVisitante", "escudoLocal",
                      "escudoVisitante", "IdEquipoLocal", "IdEquipoVisitante",
-                     "idEquipoLocal", "idEquipoVisitante", "LogoLocal", "LogoVisitante")
+                     "idEquipoLocal", "idEquipoVisitante", "LogoLocal", "LogoVisitante",
+                     "ImgEquipoLocal", "ImgEquipoVisitante", "imgEquipoLocal",
+                     "imgEquipoVisitante", "escudoEquipoLocal", "escudoEquipoVisitante")
             result["match_image_fields"] = [key for key in names if key in first]
             result["match_image_types"] = {
                 key: _image_reference_kind(first[key]) for key in names if key in first
@@ -103,6 +111,10 @@ def _image_reference_kind(value: object) -> str:
         return "http_url"
     if value.startswith("data:"):
         return "inline_data"
+    if value.startswith("/"):
+        return "relative_path"
+    if value.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+        return "image_filename"
     return "opaque_reference"
 
 
