@@ -50,6 +50,9 @@ async def run():
     assert invalid_search["errors"]["base"] == "invalid_search"
     assert isinstance(invalid_search["data_schema"], probatio.Schema)
 
+    # The actual 2026.11 schema must accept an explicitly enabled
+    # group+player opt-in, but neither should start from an ordinary menu.
+    assert "automatic" in menu["menu_options"]
     bad_confirm = await flow.async_step_confirm()
     assert bad_confirm["type"] == "form"
     assert bad_confirm["step_id"] == "search"
@@ -137,6 +140,27 @@ async def run():
         followed = await flow.async_step_confirm({"confirmar": True})
         assert followed["type"] == "create_entry", followed
         assert Archive(str(db)).followed_with_anchor()[0]["anchor_team_id"] == "pinto"
+
+        settings = await flow.async_step_automatic()
+        assert settings["step_id"] == "automatic"
+        assert isinstance(settings["data_schema"], probatio.Schema)
+        blocked = await flow.async_step_automatic(
+            {"auto_groups": False, "auto_players": True})
+        assert blocked["errors"]["base"] == "auto_requires_groups"
+        opted_in = await flow.async_step_automatic(
+            {"auto_groups": True, "auto_players": True})
+        assert opted_in["type"] == "create_entry"
+        assert opted_in["data"] == {
+            "auto_groups": True, "auto_players": True}
+        scheduler_spec = importlib.util.spec_from_file_location(
+            f"{PACKAGE}.competition_auto_sync",
+            ROOT / "competition_auto_sync.py")
+        scheduler = importlib.util.module_from_spec(scheduler_spec)
+        sys.modules[scheduler_spec.name] = scheduler
+        scheduler_spec.loader.exec_module(scheduler)
+        assert scheduler.GROUP_INTERVAL.total_seconds() == 4 * 3600
+        assert scheduler.PLAYER_INTERVAL.total_seconds() == 2 * 3600
+        assert scheduler.PLAYER_CYCLE_DELAY.total_seconds() == 24 * 3600
 
         offered = await flow.async_step_refresh()
         assert offered["step_id"] == "refresh", offered
