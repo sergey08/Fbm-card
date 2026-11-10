@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date
 from .competition_sync import sync_group, preview_group
 from .competition_analysis import competition_analysis
+from .competition_manager import competition_season_diagnostic
 import probatio
 from homeassistant.components import websocket_api
 
@@ -461,8 +462,27 @@ async def ws_competition_analysis(hass, connection, msg):
     connection.send_result(msg["id"], report)
 
 
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/verify_season",
+    probatio.Required("entry_id"): str,
+    probatio.Required("equipo"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_verify_season(hass, connection, msg):
+    """Report only whether 2 independent official team details agree on season."""
+    try:
+        client = _client(hass, msg["entry_id"])
+        result = await competition_season_diagnostic(client, msg["equipo"])
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudo verificar la temporada de la competición.")
+        return
+    connection.send_result(msg["id"], result)
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_latest, ws_competition_preview, ws_competition_analysis):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_verify_season):
         websocket_api.async_register_command(hass, command)
 
 
