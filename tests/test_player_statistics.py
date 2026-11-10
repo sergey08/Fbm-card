@@ -68,6 +68,18 @@ class PlayerStatsTests(unittest.TestCase):
         self.assertEqual(record["rebotes"],7)
         self.assertEqual(record["valoracion"],-2)
 
+    def test_non_numeric_text_patterns_are_aggregated_without_values(self):
+        response={"error":"","listaDatosPartido":[
+            {"IdPartido":"id-1","Asistencia":"—","RebotesTotal":"N/D","Perdidas":"  "},
+            {"IdPartido":"id-2","Asistencia":"0,5","RebotesTotal":"dato interno"}
+        ]}
+        shape=stats.diagnose_match_rows(response)
+        self.assertEqual(shape["statistic_types"]["Asistencia"]["text_patterns"]["dash_placeholder"],1)
+        self.assertEqual(shape["statistic_types"]["Asistencia"]["text_patterns"]["decimal_separator"],1)
+        self.assertEqual(shape["statistic_types"]["RebotesTotal"]["text_patterns"]["unavailable_label"],1)
+        for private in ("id-1","id-2","dato interno","N/D","0,5"):
+            self.assertNotIn(private,str(shape))
+
     def test_private_safe_aggregate_match_diagnostics(self):
         response={"error":"","listaDatosPartido":[
             {"IdPartido":"private1","NombreEquipoRival":"Private Rival",
