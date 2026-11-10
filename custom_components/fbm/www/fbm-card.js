@@ -782,7 +782,7 @@ class FBMCard extends HTMLElement {
             for (const [field, numeric] of [["posicion",true], ["equipo",false], ["jugados",true],
                                             ["ganados",true], ["perdidos",true], ["puntos",true]]) {
               const cell = this._element("td", team[field] ?? "—", numeric ? "num" : "");
-              if (field === "equipo") cell.classList.add("fbm-standing-name");
+              if (field === "equipo") cell.className = "fbm-standing-name";
               row.append(cell);
             }
             body.append(row);
