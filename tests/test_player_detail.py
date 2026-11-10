@@ -60,6 +60,16 @@ class PlayerDetailTests(unittest.TestCase):
         self.assertNotIn("Foto",result)
         self.assertNotIn("private-image",str(result))
 
+    def test_verified_photo_reference_on_detail(self):
+        reference = ("AbCd1234+/_=" * 16).encode("utf-16le").hex()
+        payload = {"error": "", "jugador": {
+            "Id": "p1", "Nombre": "Jugador de prueba", "Foto": reference}}
+        result = mod.normalize_player_detail(payload, "p1")["jugador"]
+        self.assertEqual(
+            result["foto"],
+            "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=jugador&id=" + reference
+        )
+
     def test_mixed_detail_case_and_mismatched_id_rejected(self):
         for response in (
             {"error":"","jugador":{"Id":"p1","Nombre":"Player","puntosTotales":2}},
