@@ -42,6 +42,18 @@ class CompetitionManagerTests(unittest.TestCase):
             "group_id": "g", "season_verified": True})
         self.assertEqual(client.calls, ["identity", "standings", "verify"])
 
+    def test_diagnostic_only_returns_flags_not_private_ids(self):
+        success = asyncio.run(
+            mod.competition_season_diagnostic(OfficialTeamClient(), "a"))
+        self.assertEqual(success, {
+            "status": "verified", "group_verified": True,
+            "team_count": 2, "season_match_verified": True})
+        self.assertNotIn("official-season", repr(success))
+        missing = asyncio.run(mod.competition_season_diagnostic(
+            OfficialTeamClient(season=None), "a"))
+        self.assertFalse(missing["season_match_verified"])
+        self.assertNotIn("season_id", missing)
+
     def test_no_follow_without_official_season(self):
         result = asyncio.run(mod.identify_competition(OfficialTeamClient(season=None), "a"))
         self.assertEqual(result["status"], "season_unverified")
