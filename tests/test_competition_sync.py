@@ -92,6 +92,8 @@ class CompetitionTests(unittest.TestCase):
             return {"season_verified": True, "season_id": "official-season",
                     "season_evidence_status": "two_team_official_detail"}
         client.async_verify_group_season = confirm
+        self.store.follow({"season_verified": True, "season_id": "official-season",
+                           "phase_id": "phase1", "group_id": "group1"})
         result = asyncio.run(sync_group(client, self.store, "a",
                                         date(2026,10,1), date(2026,11,1),
                                         fetch_rosters=False))
@@ -108,6 +110,7 @@ class CompetitionTests(unittest.TestCase):
 
     def test_full_group_deduped_and_photos_removed(self):
         client = FakeClient()
+        self.store.follow(identity())
         async def sync():
             return await sync_group(client, self.store, "a",
                                     date(2026, 10, 1), date(2026, 11, 1))
@@ -122,6 +125,16 @@ class CompetitionTests(unittest.TestCase):
         self.assertNotIn("private-photo", str(saved))
         reopened = Archive(self.store.path)
         self.assertEqual(reopened.latest(identity(), "fixtures")["payload"]["partidos"][0]["id"], "m1")
+
+    def test_unselected_competition_cannot_download_or_save_rosters(self):
+        client = FakeClient()
+        result = asyncio.run(sync_group(client, self.store, "a",
+                                        date(2026, 10, 1), date(2026, 11, 1)))
+        self.assertEqual(result["status"], "not_followed")
+        self.assertFalse(result["saved"])
+        self.assertFalse(any(action in ("roster", "schedule")
+                             for action, _ in client.calls))
+        self.assertEqual(self.store.followed(), [])
 
     def test_images_and_unknown_fields_never_enter_archive(self):
         self.store.follow(identity())
