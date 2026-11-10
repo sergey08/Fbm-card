@@ -123,6 +123,20 @@ async def _player_statistics(client, msg):
     return await client.async_player_statistics(player_id, team_id)
 
 
+async def _diagnostic(client, msg):
+    kind = msg["kind"]
+    team_id = msg["equipo"]
+    if type(kind) is not str or kind not in ("schedule", "roster"):
+        raise ValueError("Diagnóstico no permitido")
+    if type(team_id) is not str or not team_id.strip() or len(team_id) > 512:
+        raise ValueError("Equipo no válido")
+    if kind == "schedule":
+        first = date.fromisoformat(msg["desde"])
+        last = date.fromisoformat(msg["hasta"])
+        return await client.async_team_diagnostic(team_id, kind, first, last)
+    return await client.async_team_diagnostic(team_id, kind)
+
+
 async def _standings(client, msg):
     team_id = msg["equipo"]
     if not isinstance(team_id, str) or not team_id.strip() or len(team_id) > 512:
@@ -249,6 +263,13 @@ async def ws_player_stats(hass, connection, msg):
     await _dispatch(hass, connection, msg, _player_statistics)
 
 
+@websocket_api.websocket_command({"type": "fbm/team/diagnostic", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("kind"): str, probatio.Optional("desde"): str, probatio.Optional("hasta"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_diagnostic(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _diagnostic)
+
+
 @websocket_api.websocket_command({"type": "fbm/team/standings", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -257,7 +278,7 @@ async def ws_standings(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic):
         websocket_api.async_register_command(hass, command)
 
 
