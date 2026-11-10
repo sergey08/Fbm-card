@@ -8,7 +8,8 @@ import unicodedata
 
 
 def competition_analysis(standings: dict, fixtures: dict,
-                         rosters: dict[str, dict] | None = None) -> dict:
+                         rosters: dict[str, dict] | None = None,
+                         individual_stats: dict[str, dict] | None = None) -> dict:
     """Compare all group participants from latest official normalized data.
 
     Counts from standings are authoritative; fixture calculations only use
@@ -103,6 +104,36 @@ def competition_analysis(standings: dict, fixtures: dict,
             leaders.append({"jugador_id": ident, "jugador": name,
                             "equipo_id": team["id"], "equipo": team["nombre"],
                             "puntos_totales": points})
+    # Optional per-match data supplements absent global totals. Only
+    # aggregate explicit numeric points and report how many matches actually
+    # supplied a score, never interpret null as a zero.
+    individual_stats = individual_stats or {}
+    covered = 0
+    for team in teams:
+        members = (rosters.get(team["id"]) or {}).get("jugadores", [])
+        for member in members:
+            player_id = member.get("id") if type(member) is dict else None
+            if type(player_id) is not str:
+                continue
+            record = individual_stats.get(player_id)
+            matches = record.get("partidos") if type(record) is dict else None
+            if type(matches) is not list:
+                continue
+            explicit = [m["puntos"] for m in matches
+                        if type(m) is dict and type(m.get("puntos")) is int
+                        and m["puntos"] >= 0]
+            if not explicit:
+                continue
+            covered += 1
+            if any(row["jugador_id"] == player_id for row in leaders):
+                continue
+            leaders.append({
+                "jugador_id": player_id, "jugador": member.get("nombre"),
+                "equipo_id": team["id"], "equipo": team["nombre"],
+                "puntos_totales": sum(explicit),
+                "partidos_con_puntos": len(explicit),
+                "origen": "suma_de_partidos_disponibles",
+            })
     leaders.sort(key=lambda item: (-item["puntos_totales"], item["jugador_id"]))
     return {
         "equipos": teams, "numero_equipos": len(teams),
@@ -110,5 +141,6 @@ def competition_analysis(standings: dict, fixtures: dict,
         "anotadores": leaders,
         "plantillas_disponibles": sum(
             1 for team in teams if type(rosters.get(team["id"])) is dict),
+        "jugadores_con_puntos_por_partido": covered,
         "aviso": "Solo estadísticas publicadas por FBM; las ausentes no se estiman.",
     }
