@@ -1,0 +1,127 @@
+"""Offline checks for opt-in HA scheduler, persisted cursors and clean unload."""
+import asyncio
+import importlib.util
+from pathlib import Path
+import sys
+import tempfile
+import types
+import unittest
+from unittest.mock import AsyncMock, patch
+
+ROOT=Path(__file__).resolve().parents[1]/"custom_components"/"fbm"
+PKG="test_competition_auto_package"
+pkg=types.ModuleType(PKG)
+pkg.__path__=[str(ROOT)]
+sys.modules[PKG]=pkg
+
+event_name="homeassistant.helpers.event"
+event_mod=sys.modules.setdefault(event_name,types.ModuleType(event_name))
+listeners=[]
+def track(hass, callback, interval):
+    record={"callback":callback,"interval":interval,"cancelled":False}
+    listeners.append(record)
+    def cancel():
+        record["cancelled"]=True
+    return cancel
+event_mod.async_track_time_interval=track
+
+store_name="homeassistant.helpers.storage"
+store_mod=sys.modules.setdefault(store_name,types.ModuleType(store_name))
+stored={}
+class Store:
+    def __init__(self,hass,version,key,**kwargs):
+        self.key=key
+    async def async_load(self):
+        return stored.get(self.key)
+    async def async_save(self,value):
+        stored[self.key]=dict(value)
+store_mod.Store=Store
+
+def import_part(name):
+    spec=importlib.util.spec_from_file_location(
+        PKG+"."+name,ROOT/(name+".py"))
+    mod=importlib.util.module_from_spec(spec)
+    sys.modules[spec.name]=mod
+    spec.loader.exec_module(mod)
+    return mod
+
+Archive=import_part("competition_archive").CompetitionArchive
+import_part("competition_sync")
+import_part("competition_player_stats")
+mod=import_part("competition_auto_sync")
+IDENT={"season_verified":True,"season_id":"26/27",
+       "phase_id":"phase","group_id":"group"}
+
+class Hass:
+    async def async_add_executor_job(self,fn,*args):
+        return fn(*args)
+    def async_create_task(self,coro):
+        return asyncio.create_task(coro)
+
+class FakeClient:
+    pass
+
+class AutoTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        listeners.clear()
+        stored.clear()
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path=str(Path(self.temp.name)/"comp.sqlite")
+        archive=Archive(self.path)
+        archive.follow(IDENT,"anchor")
+        archive.record(IDENT,"standings",{"clasificacion":[
+            {"id":"a","equipo":"A"},{"id":"b","equipo":"B"}]})
+        self.hass=Hass()
+        self.updater=mod.CompetitionAutoUpdater(
+            self.hass,"test",FakeClient(),self.path,Archive)
+
+    async def test_disabled_does_not_register_timers_or_fetch(self):
+        await self.updater.async_start(False,False)
+        self.assertEqual(listeners,[])
+        await self.updater.async_stop()
+
+    async def test_enabled_registers_two_cancelable_native_timers(self):
+        await self.updater.async_start(True,True)
+        self.assertEqual(len(listeners),2)
+        self.assertEqual(listeners[0]["interval"],mod.GROUP_INTERVAL)
+        self.assertEqual(listeners[1]["interval"],mod.PLAYER_INTERVAL)
+        await self.updater.async_stop()
+        self.assertTrue(all(x["cancelled"] for x in listeners))
+
+    async def test_group_tick_targets_only_followed_group_without_roster(self):
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
+            await self.updater._run_group()
+        sync.assert_awaited_once()
+        self.assertFalse(sync.await_args.kwargs["fetch_rosters"])
+        self.assertEqual(sync.await_args.kwargs["expected_competition"]["season_id"],"26/27")
+        self.assertEqual(stored[self.updater.storage.key]["group_index"],0)
+
+    async def test_stats_cursor_moves_and_survives_new_coordinator(self):
+        with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"ok","next_offset":5}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_args.args[-1],"a")
+            self.assertEqual(sync.await_args.kwargs["offset"],0)
+            self.assertEqual(sync.await_args.kwargs["limit"],5)
+            self.assertEqual(stored[self.updater.storage.key]["players"]["offset"],5)
+            newer=mod.CompetitionAutoUpdater(
+                self.hass,"test",FakeClient(),self.path,Archive)
+            sync.return_value={"status":"ok","next_offset":None}
+            await newer._run_players()
+            self.assertEqual(sync.await_args.kwargs["offset"],5)
+            self.assertEqual(stored[newer.storage.key]["players"]["team_index"],1)
+        await newer.async_stop()
+
+    async def test_unfollow_blocks_group_and_player_requests(self):
+        archive=Archive(self.path)
+        archive.unfollow(IDENT)
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as groups:
+            with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as players:
+                await self.updater._run_group()
+                await self.updater._run_players()
+        groups.assert_not_awaited()
+        players.assert_not_awaited()
+
+if __name__=="__main__":
+    unittest.main()
