@@ -21,6 +21,7 @@ Direct **search by competition name without any team** is reserved for a later s
 
 ### Current DEV commands (Home Assistant WebSocket, administrator only)
 
+- `fbm/competition/verify_season`: `entry_id`, `equipo`. Explicit read-only metadata check: consults two players of distinct official group teams and returns only `season_match_verified` boolean, group status and team count; never player names, IDs or season IDs. Does not follow, persist or download all rosters.
 - `fbm/competition/preview`: `entry_id`, `equipo`, `desde`, `hasta`. Fetches official group membership and fixtures without saving or requesting player rosters, even when season is unverified.
 - `fbm/competition/sync`: `entry_id`, `equipo`, `desde`, `hasta`, `incluir_plantillas` (boolean)
 - `fbm/competition/list`: `entry_id`
@@ -71,6 +72,8 @@ Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home
 **Gestionar → Seleccionar competición → Confirmar dejar de seguir** detiene su seguimiento sin borrar históricos. El almacén compartido evita duplicados mediante temporada/fase/grupo. La búsqueda **directa por nombre de competición**, sin seleccionar equipo, queda pendiente de verificar su consulta real en la API FBM; no se ha inventado un servicio. Textos de la interfaz en español e inglés. Todo sigue en DEV, sin probarse todavía en Home Assistant.
 
 ### Comandos de desarrollo
+
+El comando `fbm/competition/verify_season` permite comprobar sin escrituras si las temporadas oficiales de las fichas verificadas de dos equipos distintos coinciden. Devuelve únicamente una confirmación, el estado y el número de equipos; nunca identificadores de jugadores ni de temporada. Las comprobaciones individuales de estadísticas de Pinto Basket y Parla Basket en la versión estable han devuelto `complete`, pero eso **no confirma por sí mismo** que la temporada de ambos sea idéntica. La nueva comprobación requiere validación real tras instalar DEV.
 
 Los comandos WebSocket `fbm/competition/preview`, `fbm/competition/sync`, `fbm/competition/list`, `fbm/competition/latest` y `fbm/competition/analysis` requieren permisos de administrador. `analysis` compara todos los equipos del grupo usando la clasificación y los partidos finalizados con marcador disponible, y ordena anotadores solo cuando FBM publica sus puntos totales. Trabaja exclusivamente sobre los datos archivados y devuelve fechas de observación. **Todavía no es una herramienta MCP directa.** La vista previa consulta equipos y calendario del grupo sin persistencia ni descargas de plantillas, incluso cuando la temporada no esté verificada. La sincronización usa la identidad invitada ya existente, limita la descarga a 20 equipos y consulta plantillas secuencialmente, sin solicitudes automáticas al iniciar HA.
 
