@@ -130,6 +130,16 @@ def _image_reference_shape(value: object) -> dict:
     result = {"kind": _image_reference_kind(value), "length_band": band}
     if not value or length > 400000:
         return result
+    result["text_form"] = (
+        "json" if value.startswith(("{", "[")) else
+        "xml" if value.startswith(("<svg", "<?xml", "<!DOCTYPE")) else
+        "html" if value.startswith("<") else
+        "absolute_url" if value.lower().startswith(("http://", "https://")) else
+        "relative_url" if value.startswith(("/", "./", "../")) else
+        "hex" if re.fullmatch(r"[0-9a-fA-F]+", value) else
+        "base64" if re.fullmatch(r"[A-Za-z0-9+/_=-]+", value) else
+        "other"
+    )
     candidate = value
     if value.lower().startswith("data:image/") and ";base64," in value[:100]:
         candidate = value.split(";base64,", 1)[1]
@@ -143,6 +153,13 @@ def _image_reference_shape(value: object) -> dict:
                          "gif" if prefix.startswith((b"GIF87a", b"GIF89a")) else
                          "other")
             result["base64_magic"] = signature
+            result["decoded_text_form"] = (
+                "xml" if prefix.startswith((b"<?xml", b"<svg", b"<SVG")) else
+                "json" if prefix.startswith((b"{", b"[")) else
+                "url" if prefix.startswith((b"http://", b"https://")) else
+                "html" if prefix.startswith((b"<!DOCTYPE", b"<html")) else
+                "other"
+            )
         except (ValueError, binascii.Error):
             result["base64_magic"] = "invalid"
     return result
