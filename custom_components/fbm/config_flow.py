@@ -87,7 +87,8 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                     step_id="select",
                     data_schema=probatio.Schema({probatio.Required("equipo"): probatio.In(choices)}),
                     errors={"base": "invalid_selection"})
-            self._candidate = {"team_id": team_id, "name": self._results[team_id]["nombre"]}
+            self._candidate = {"team_id": team_id, "name": self._results[team_id]["nombre"],
+                               "season": self._results[team_id].get("temporada")}
             return await self.async_step_confirm()
         return self.async_show_form(
             step_id="select",
@@ -102,7 +103,8 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
         if user_input is None:
             try:
                 client = self._entry()["cliente_independiente"]
-                candidate["verified"] = await identify_competition(client, candidate["team_id"])
+                candidate["verified"] = await identify_competition(
+                    client, candidate["team_id"], candidate["season"])
             except Exception:
                 return self.async_show_form(
                     step_id="confirm", errors={"base": "cannot_verify"},
