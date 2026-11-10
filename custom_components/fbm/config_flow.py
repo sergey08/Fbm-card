@@ -15,3 +15,146 @@ class FBMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             return self.async_create_entry(title="FBM (modo invitado)", data={})
         return self.async_show_form(step_id="user")
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        """Use Home Assistant's native Configure button."""
+        return FBMCompetitionOptionsFlow()
+
+
+class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
+    """Select and manage whole competition groups, not just favorite teams."""
+
+    def __init__(self):
+        self._results = {}
+        self._candidate = None
+
+    def _entry(self):
+        record = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if type(record) is not dict:
+            raise ValueError("La integración no está disponible")
+        return record
+
+    async def async_step_init(self, user_input=None):
+        return self.async_show_menu(
+            step_id="init", menu_options=["search", "manage"])
+
+    async def async_step_search(self, user_input=None):
+        import probatio
+        errors = {}
+        if user_input is not None:
+            query = user_input["texto"].strip()
+            if not 3 <= len(query) <= 80:
+                errors["base"] = "invalid_search"
+            else:
+                try:
+                    client = self._entry()["cliente_independiente"]
+                    candidates = await client.async_search_teams(query, 0)
+                    self._results = {
+                        result["id"]: result for result in candidates[:40]
+                        if type(result) is dict and
+                        type(result.get("id")) is str and
+                        type(result.get("nombre")) is str and
+                        0 < len(result["id"]) <= 512
+                    }
+                    if self._results:
+                        return await self.async_step_select()
+                    errors["base"] = "no_teams"
+                except Exception:
+                    errors["base"] = "cannot_connect"
+        return self.async_show_form(
+            step_id="search",
+            data_schema=probatio.Schema({probatio.Required("texto"): str}),
+            errors=errors)
+
+    async def async_step_select(self, user_input=None):
+        import probatio
+        if not self._results:
+            return await self.async_step_search()
+        choices = {
+            team_id: " · ".join(filter(None, [
+                item["nombre"], item.get("categoria"), item.get("temporada")]))
+            for team_id, item in self._results.items()
+        }
+        if user_input is not None:
+            team_id = user_input["equipo"]
+            if team_id not in self._results:
+                return self.async_show_form(
+                    step_id="select",
+                    data_schema=probatio.Schema({probatio.Required("equipo"): probatio.In(choices)}),
+                    errors={"base": "invalid_selection"})
+            self._candidate = {"team_id": team_id, "name": self._results[team_id]["nombre"]}
+            return await self.async_step_confirm()
+        return self.async_show_form(
+            step_id="select",
+            data_schema=probatio.Schema({probatio.Required("equipo"): probatio.In(choices)}))
+
+    async def async_step_confirm(self, user_input=None):
+        import probatio
+        from .competition_manager import identify_competition, group_selection
+        candidate = self._candidate
+        if not candidate:
+            return await self.async_step_search()
+        if user_input is None:
+            try:
+                client = self._entry()["cliente_independiente"]
+                candidate["verified"] = await identify_competition(client, candidate["team_id"])
+            except Exception:
+                return self.async_show_form(
+                    step_id="confirm", errors={"base": "cannot_verify"},
+                    description_placeholders={"team": candidate["name"], "group": "No disponible"},
+                    data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}))
+        data = candidate.get("verified", {})
+        if data.get("status") != "verified":
+            return self.async_show_form(
+                step_id="confirm", errors={"base": "season_unverified"},
+                description_placeholders={"team": candidate["name"], "group": "Temporada no verificada"},
+                data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}))
+        if user_input is not None and user_input.get("confirmar") is True:
+            entry = self._entry()
+            archive = await self.hass.async_add_executor_job(
+                entry["competitions_archive_factory"],
+                entry["competitions_sqlite_path"])
+            await self.hass.async_add_executor_job(archive.follow, group_selection(data))
+            # This selects a group. It does not automatically download rosters.
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+        return self.async_show_form(
+            step_id="confirm",
+            data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}),
+            description_placeholders={
+                "team": candidate["name"],
+                "group": f'{data["season_id"]} / {data["phase_id"]} / {data["group_id"]} ({data["team_count"]} equipos)',
+            })
+
+    async def async_step_manage(self, user_input=None):
+        import probatio
+        entry = self._entry()
+        # Do not create a SQLite archive merely to view the manager.
+        from pathlib import Path
+        archive_path = entry["competitions_sqlite_path"]
+        if not await self.hass.async_add_executor_job(Path(archive_path).is_file):
+            return self.async_abort(reason="none_followed")
+        archive = await self.hass.async_add_executor_job(
+            entry["competitions_archive_factory"], archive_path)
+        groups = await self.hass.async_add_executor_job(archive.followed)
+        if not groups:
+            return self.async_abort(reason="none_followed")
+        options = {
+            str(i): " · ".join((group["season_id"], group["phase_id"], group["group_id"]))
+            for i, group in enumerate(groups)
+        }
+        if user_input is not None:
+            selected = user_input["competicion"]
+            if selected not in options:
+                return self.async_show_form(
+                    step_id="manage",
+                    data_schema=probatio.Schema({probatio.Required("competicion"): probatio.In(options)}),
+                    errors={"base": "invalid_selection"})
+            chosen = groups[int(selected)]
+            await self.hass.async_add_executor_job(
+                archive.unfollow, {**chosen, "season_verified": True})
+            # Historic snapshots are preserved.
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+        return self.async_show_form(
+            step_id="manage",
+            data_schema=probatio.Schema({probatio.Required("competicion"): probatio.In(options)}))
