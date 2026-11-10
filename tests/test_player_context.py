@@ -23,6 +23,24 @@ class PlayerContextTests(unittest.TestCase):
         self.assertNotIn("private",repr(result))
         self.assertNotIn("Prueba",repr(result))
 
+    def test_live_pascalcase_player_and_team_context(self):
+        raw=detail()
+        raw["jugador"]={"Id":"p","Nombre":"Prueba"}
+        raw["equipo"]={"Id":"t","Nombre":"Equipo"}
+        self.assertEqual(mod.verified_player_stats_context(raw,"p","t"),{
+            "id_jugador":"p","id_equipo":"t",
+            "id_componente_club":"c","id_temporada":"s"})
+
+    def test_rejects_conflicting_casing_and_wrong_team(self):
+        raw=detail()
+        raw["jugador"]={"Id":"p","id":"p"}
+        with self.assertRaises(mod.PlayerContextUnverified):
+            mod.verified_player_stats_context(raw,"p","t")
+        raw=detail()
+        raw["equipo"]={"Id":"other"}
+        with self.assertRaises(mod.PlayerContextUnverified):
+            mod.verified_player_stats_context(raw,"p","t")
+
     def test_rejects_wrong_team_or_player(self):
         for player, team in (("x","t"),("p","other")):
             with self.subTest(player=player,team=team), self.assertRaises(mod.PlayerContextUnverified):
