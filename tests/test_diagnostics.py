@@ -28,7 +28,20 @@ class SafeDiagnosticsTests(unittest.TestCase):
         result=mod.safe_payload_shape(response,kind="schedule")
         self.assertEqual(result["partidos_count"],1)
         self.assertEqual(result["present"],["error","partidos"])
+        self.assertEqual(result["top_level_keys"],["error","partidos"])
         self.assertNotIn("authorization",str(result))
+
+    def test_safe_top_level_field_names_include_unknown_shape_but_no_values(self):
+        response={"error":"","misDatosJugadores":{"secret":"Do not expose"},"session":"secret"}
+        result=mod.safe_payload_shape(response,kind="roster")
+        self.assertIn("misDatosJugadores",result["top_level_keys"])
+        self.assertNotIn("session",result["top_level_keys"])
+        self.assertNotIn("Do not expose",str(result))
+
+    def test_transport_categories_are_fixed(self):
+        class Transport(RuntimeError):
+            code="http_non_200"
+        self.assertEqual(mod.safe_error_category(Transport("token=sensitive")),"http_non_200")
 
     def test_diagnostic_errors_do_not_expose_exceptions(self):
         result=mod.safe_error_category(RuntimeError("key=secret"))
