@@ -39,6 +39,29 @@ class SafeDiagnosticsTests(unittest.TestCase):
         for private in ("private-match","Private Club","42"):
             self.assertNotIn(private,str(shape))
 
+    def test_photo_diagnostic_reports_format_never_photo_or_url(self):
+        payload={"error":"","misjugadores":[
+            {"Id":"private-id","Nombre":"Private Name",
+             "Foto":"https://appaficionfbm.gesdeportiva.es/imagenes.ashx?key=private"}
+        ]}
+        result=mod.safe_payload_shape(payload,kind="roster")
+        self.assertEqual(result["player_photo_reference"],"https_url")
+        self.assertNotIn("private-id",str(result))
+        self.assertNotIn("private",str(result))
+        self.assertEqual(mod._image_reference_kind("opaque_photo_ref"),"opaque_reference")
+        self.assertEqual(mod._image_reference_kind(""),"empty")
+
+    def test_fixture_crest_diagnostic_reports_keys_only(self):
+        payload={"error":"","partidos":[
+            {"IdEquipoLocal":"private-local","EscudoLocal":"private-crest",
+             "IdEquipoVisitante":"private-away","EscudoVisitante":None}]}
+        result=mod.safe_payload_shape(payload,kind="schedule")
+        self.assertIn("EscudoLocal",result["match_image_fields"])
+        self.assertEqual(result["match_image_types"]["EscudoLocal"],"opaque_reference")
+        self.assertEqual(result["match_image_types"]["EscudoVisitante"],"null")
+        for value in ("private-local","private-away","private-crest"):
+            self.assertNotIn(value,str(result))
+
     def test_stats_shape_never_returns_private_values(self):
         response={"error":"","puntosTotalesJugador":19,"key":"secret",
                   "listaDatosPartido":[{"idPartido":"private-id","puntos":5}]}
