@@ -127,6 +127,20 @@ class CompetitionTests(unittest.TestCase):
         reopened = Archive(self.store.path)
         self.assertEqual(reopened.latest(identity(), "fixtures")["payload"]["partidos"][0]["id"], "m1")
 
+    def test_changed_competition_aborts_before_fixture_and_roster_fetch(self):
+        client = FakeClient()
+        self.store.follow(identity())
+        wanted = {"season_id": "2026-27", "phase_id": "phase1",
+                  "group_id": "group-other"}
+        result = asyncio.run(sync_group(
+            client, self.store, "a", date(2026, 10, 1),
+            date(2026, 11, 1), expected_competition=wanted))
+        self.assertEqual(result["status"], "competition_changed")
+        self.assertFalse(result["saved"])
+        self.assertFalse(any(action in ("schedule", "roster")
+                             for action, _ in client.calls))
+        self.assertIsNone(self.store.latest(identity(), "fixtures"))
+
     def test_unselected_competition_cannot_download_or_save_rosters(self):
         client = FakeClient()
         result = asyncio.run(sync_group(client, self.store, "a",
