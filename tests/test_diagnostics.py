@@ -19,7 +19,21 @@ class SafeDiagnosticsTests(unittest.TestCase):
         self.assertTrue(result["error_type"]=="str")
         self.assertFalse(result["error_empty_string"])
         self.assertIn("nombre",result["first_row_present"])
+        self.assertEqual(result["first_row_types"]["nombre"], "string")
+        self.assertEqual(result["first_row_types"]["puntosTotales"], "number")
         for private in ("secret","token","Private Student","veryprivateid","private-image"):
+            self.assertNotIn(private,str(result))
+
+    def test_lowercase_roster_field_shapes_do_not_expose_values(self):
+        raw={"error":"","misjugadores":[{"idJugador":"private123",
+               "nombreCompleto":"Persona privada", "partidosJugados":10,
+               "ficha":{"secreto":"dato interno"}, "key":"secret"}]}
+        result=mod.safe_payload_shape(raw,kind="roster")
+        self.assertEqual(result["misjugadores_count"],1)
+        self.assertIn("idJugador",result["first_row_keys"])
+        self.assertEqual(result["first_row_types"]["ficha"],"object")
+        self.assertNotIn("key",result["first_row_keys"])
+        for private in ("private123","Persona privada","dato interno","secret"):
             self.assertNotIn(private,str(result))
 
     def test_schedule_shape_only_known_keys(self):
