@@ -1311,7 +1311,9 @@ class FBMCompetitionCard extends HTMLElement {
         this._config.group_index < 0 || this._config.group_index > 49)
       throw new Error("Índice de competición inválido");
     this._groupIndex = this._config.group_index;
-    this._teamId = null; this._roster = null; this._error = "";
+    this._teamId = null; this._roster = null; this._matches = null;
+    this._playerId = null; this._playerStats = null; this._playerError = "";
+    this._error = "";
     this._render();
   }
   set hass(hass) {
@@ -1336,7 +1338,9 @@ class FBMCompetitionCard extends HTMLElement {
   async _openTeam(team) {
     if (!team || typeof team.id !== "string" || !team.id ||
         typeof team.equipo !== "string") return;
-    this._teamId = team.id; this._roster = null; this._error = "";
+    this._teamId = team.id; this._roster = null; this._matches = null;
+    this._playerId = null; this._playerStats = null; this._playerError = "";
+    this._error = "";
     this._render();
     const { group } = this._group();
     if (!group || !this._hass?.callWS) return;
@@ -1353,9 +1357,43 @@ class FBMCompetitionCard extends HTMLElement {
       if (this._teamId !== teamId || this._groupIndex !== groupIndex) return;
       if (!Array.isArray(data?.jugadores)) throw new Error("Plantilla no disponible");
       this._roster = data.jugadores;
+      this._matches = Array.isArray(data.partidos) ? data.partidos : [];
     } catch (_) {
       if (this._teamId === teamId && this._groupIndex === groupIndex)
         this._error = "No se ha podido leer la plantilla archivada; no se hará una descarga adicional.";
+    }
+    this._render();
+  }
+  async _openPlayer(player) {
+    if (!player || typeof player.id !== "string" || !player.id ||
+        !Array.isArray(this._roster) || !this._roster.some(p => p.id === player.id))
+      return;
+    if (this._playerId === player.id) {
+      this._playerId = null; this._playerStats = null; this._playerError = "";
+      this._render(); return;
+    }
+    const {group} = this._group();
+    if (!group || !this._teamId || !this._hass?.callWS) return;
+    const teamId = this._teamId, playerId = player.id;
+    const index = this._groupIndex;
+    this._playerId = playerId; this._playerStats = null; this._playerError = "";
+    this._render();
+    try {
+      const entries = await this._hass.callWS({type:"fbm/client/entries"});
+      if (!Array.isArray(entries?.entries) || entries.entries.length !== 1)
+        throw Error("Missing integration");
+      const data = await this._hass.callWS({
+        type:"fbm/competition/team_player_stats", entry_id:entries.entries[0],
+        season_id:group.season_id, phase_id:group.phase_id,
+        group_id:group.group_id, equipo:teamId, jugador:playerId
+      });
+      if (this._groupIndex !== index || this._teamId !== teamId ||
+          this._playerId !== playerId) return;
+      this._playerStats = data?.estadisticas || {};
+    } catch (_) {
+      if (this._groupIndex === index && this._teamId === teamId &&
+          this._playerId === playerId)
+        this._playerError = "No se pudieron leer las estadísticas archivadas.";
     }
     this._render();
   }
@@ -1378,6 +1416,8 @@ class FBMCompetitionCard extends HTMLElement {
       .back{margin-bottom:12px;padding:5px}
       .players{list-style:none;padding:0;display:grid;gap:6px}
       .players li{border-bottom:1px solid var(--divider-color,#ddd);padding:6px}
+      .player-stats{padding:8px;background:var(--secondary-background-color,#f3f3f3);border-radius:8px}
+      .fixture{padding:8px 0;border-bottom:1px solid var(--divider-color,#ddd)}
       select{width:100%;padding:8px;margin-bottom:12px}
     `;
     const card = this._el("ha-card");
@@ -1412,6 +1452,17 @@ class FBMCompetitionCard extends HTMLElement {
       });
       card.append(back, this._el("h3", team.equipo));
       card.append(this._el("p", "Posición "+team.posicion+" · "+team.puntos+" puntos · "+team.jugados+" partidos", "muted"));
+      card.append(this._el("h3", "Partidos"));
+      if (!this._matches) card.append(this._el("p", "Consultando el calendario archivado…", "muted"));
+      else if (!this._matches.length) card.append(this._el("p", "No hay partidos archivados identificados para este equipo.", "muted"));
+      else for (const match of this._matches) {
+        const date = [match.fecha,match.hora].filter(v=>typeof v==="string" && v).join(" ");
+        const score = match.marcador && Number.isInteger(match.marcador.local) &&
+          Number.isInteger(match.marcador.visitante)
+          ? match.marcador.local+" – "+match.marcador.visitante : "vs";
+        card.append(this._el("div", (date ? date+" · " : "")+
+          (match.local||"Local")+" "+score+" "+(match.visitante||"Visitante"), "fixture"));
+      }
       card.append(this._el("h3", "Jugadores"));
       if (this._error) card.append(this._el("p", this._error, "muted"));
       else if (!this._roster) card.append(this._el("p", "Consultando el archivo local…", "muted"));
@@ -1419,8 +1470,31 @@ class FBMCompetitionCard extends HTMLElement {
       else {
         const ul = this._el("ul", undefined, "players");
         for (const player of this._roster) {
-          if (typeof player?.nombre === "string")
-            ul.append(this._el("li", player.nombre));
+          if (typeof player?.nombre !== "string") continue;
+          const li = this._el("li");
+          if (typeof player.id === "string" && player.id) {
+            const btn = this._el("button", player.nombre);
+            btn.addEventListener("click",()=>{void this._openPlayer(player);});
+            li.append(btn);
+          } else li.append(this._el("span",player.nombre));
+          if (this._playerId === player.id) {
+            if (this._playerError) li.append(this._el("p",this._playerError,"muted"));
+            else if (!this._playerStats) li.append(this._el("p","Consultando estadísticas archivadas…","muted"));
+            else {
+              const globals = this._playerStats.globales || {};
+              const details = [["puntos_totales","Puntos totales"],["media_puntos","Media puntos"],
+                ["asistencias","Asistencias"],["rebotes","Rebotes"],["valoracion","Valoración"]];
+              const stats = this._el("div",undefined,"player-stats");
+              let shown = 0;
+              for (const [key,label] of details)
+                if (typeof globals[key] === "number" && Number.isFinite(globals[key])) {
+                  stats.append(this._el("p",label+": "+globals[key]));shown++;
+                }
+              if (!shown) stats.append(this._el("p","Sin estadísticas archivadas disponibles.","muted"));
+              li.append(stats);
+            }
+          }
+          ul.append(li);
         }
         card.append(ul);
       }
