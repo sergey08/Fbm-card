@@ -6,6 +6,7 @@ Never return profile photos, private response keys or unverified match data.
 from __future__ import annotations
 
 import json
+import math
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -69,35 +70,54 @@ def post_player_statistics_form(fields: dict[str, str]) -> dict:
 
 
 def normalize_player_detail(response: object, requested_player_id: str) -> dict:
-    if not isinstance(response, dict) or response.get("error") != "":
+    """Normalize either verified JSON casing without mixing the two variants."""
+    if type(response) is not dict or response.get("error") != "":
         raise PlayerDetailError("Ficha de jugador no validada")
     raw = response.get("jugador")
-    if not isinstance(raw, dict):
+    if type(raw) is not dict:
         raise PlayerDetailError("Falta el jugador")
-    player_id, name = raw.get("id"), raw.get("nombre")
-    if (type(player_id) is not str or player_id != requested_player_id
-            or type(name) is not str or not name.strip() or len(name) > 256):
-        raise PlayerDetailError("Identidad deportiva del jugador no coincide")
+    variants = (
+        {"id": "id", "nombre": "nombre", "nombreEquipo": "equipo",
+         "temporada": "temporada", "categoria": "categoria",
+         "partidosJugados": "partidos_jugados", "puntosTotales": "puntos_totales",
+         "mediaPuntos": "media_puntos", "puntosPorPartido": "puntos_por_partido",
+         "minutosPorPartido": "minutos_por_partido"},
+        {"Id": "id", "Nombre": "nombre", "NombreEquipo": "equipo",
+         "Temporada": "temporada", "Categoria": "categoria",
+         "PartidosJugados": "partidos_jugados", "PuntosTotales": "puntos_totales",
+         "MediaPuntos": "media_puntos", "PuntosPorPartido": "puntos_por_partido",
+         "MinutosPorPartido": "minutos_por_partido"},
+    )
+    matching = [mapping for mapping in variants
+                if type(raw.get(next(k for k,v in mapping.items() if v == "id"))) is str
+                and type(raw.get(next(k for k,v in mapping.items() if v == "nombre"))) is str]
+    if len(matching) != 1:
+        raise PlayerDetailError("Identidad deportiva no validada")
+    mapping = matching[0]
+    other = variants[1] if mapping is variants[0] else variants[0]
+    if any(field in raw for field in other):
+        raise PlayerDetailError("Formato de ficha mezclado")
+    ident = next(k for k,v in mapping.items() if v == "id")
+    name_key = next(k for k,v in mapping.items() if v == "nombre")
+    player_id, name = raw[ident], raw[name_key]
+    if player_id != requested_player_id or not name.strip() or len(name) > 256:
+        raise PlayerDetailError("Identidad deportiva no coincide")
     result = {"id": player_id, "nombre": name}
-    for source, target in (
-        ("nombreEquipo", "equipo"),
-        ("temporada", "temporada"),
-        ("categoria", "categoria"),
-    ):
+    for source, target in mapping.items():
+        if target in ("id", "nombre"):
+            continue
         value = raw.get(source)
-        if value is not None and (type(value) is not str or len(value) > 256):
-            raise PlayerDetailError("Campo deportivo inválido")
-        result[target] = value
-    for source, target in (
-        ("partidosJugados", "partidos_jugados"),
-        ("puntosTotales", "puntos_totales"),
-        ("mediaPuntos", "media_puntos"),
-        ("puntosPorPartido", "puntos_por_partido"),
-        ("minutosPorPartido", "minutos_por_partido"),
-    ):
-        value = raw.get(source)
-        if value is not None and (type(value) not in (int, float)
-                                  or not 0 <= value < 1000000):
-            raise PlayerDetailError("Estadística deportiva inválida")
+        if target in ("equipo", "temporada", "categoria"):
+            if value is not None and (type(value) is not str or len(value) > 256):
+                raise PlayerDetailError("Campo deportivo inválido")
+        elif value is not None:
+            if type(value) not in (int, float) or not math.isfinite(value):
+                raise PlayerDetailError("Estadística deportiva inválida")
+            if target == "puntos_totales" and type(value) is int and value == -1:
+                value = None
+            elif value < 0 or value >= 1000000:
+                raise PlayerDetailError("Estadística deportiva inválida")
+            elif target == "partidos_jugados" and type(value) is not int:
+                raise PlayerDetailError("Partidos jugados no es entero")
         result[target] = value
     return {"jugador": result, "fuente": "FBM"}
