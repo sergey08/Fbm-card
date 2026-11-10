@@ -7,6 +7,8 @@ Only selected sporting fields are emitted; photos and club metadata stay out.
 """
 from __future__ import annotations
 import math
+from .image_references import image_data_uri
+
 
 
 class PlayerRosterError(ValueError):
@@ -71,6 +73,9 @@ def normalize_team_roster(response: object) -> dict:
                                           or not math.isfinite(value) or value < 0 or value >= 1000000):
                     raise PlayerRosterError("Promedio no válido")
             item[target] = value
+        photo = image_data_uri(raw.get("Foto" if mapping is _VARIANTS[1] else "foto"))
+        if photo:
+            item["foto"] = photo
         players.append(item)
     return {"jugadores": players, "total": len(players)}
 
