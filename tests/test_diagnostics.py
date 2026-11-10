@@ -10,6 +10,16 @@ spec.loader.exec_module(mod)
 
 
 class SafeDiagnosticsTests(unittest.TestCase):
+    def test_player_detail_diagnostic_is_field_names_only(self):
+        response={"error":"","Jugador":{"Id":"sensitive-id","Nombre":"Private Name",
+                     "Foto":"private-image"},"IdTemporadaActual":"secret-season",
+                  "key":"secret"}
+        result=mod.safe_player_detail_shape(response)
+        self.assertIn("Jugador",result["present"])
+        self.assertIn("Id",result["player_fields"])
+        for value in ("sensitive-id","Private Name","private-image","secret-season"):
+            self.assertNotIn(value,str(result))
+
     def test_roster_shape_never_returns_private_values(self):
         raw={"error":"secret session error", "key":"token", "misJugadores":[
             {"id":"veryprivateid","nombre":"Private Student","puntosTotales":18,
