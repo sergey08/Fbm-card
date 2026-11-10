@@ -76,6 +76,16 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
 
+    async def test_platform_initializes_after_automatic_flags(self):
+        # Initial sensor poll must never observe the pre-options defaults.
+        init_source=(ROOT/"__init__.py").read_text(encoding="utf-8")
+        setup=init_source.split("async def async_setup_entry(",1)[1].split(
+            "async def async_unload_entry(",1)[0]
+        options_pos=setup.index('["auto_sync_flags"] = (')
+        platform_pos=setup.index('async_forward_entry_setups(entry, ["sensor"])')
+        self.assertLess(options_pos, platform_pos)
+        self.assertLess(setup.index('await service.async_start('), platform_pos)
+
     async def test_disabled_does_not_register_timers_or_fetch(self):
         await self.updater.async_start(False,False)
         self.assertEqual(listeners,[])
