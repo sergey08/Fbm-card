@@ -49,10 +49,9 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     # The phase response alone cannot attest to the season. Two distinct
     # officially listed teams must return matching official player-detail
     # idTemporadaActual, with player/team identity verified inside the adapter.
-    if identity.get("season_verified") is True:
-        verified = identity
-    else:
-        verified = await client.async_verify_group_season(team_ids)
+    # Never trust an uncorroborated group-level "season_verified" flag.
+    # Two different official team/player bindings must agree on season.
+    verified = await client.async_verify_group_season(team_ids)
     if verified.get("season_verified") is not True:
         return {
             "status": "season_unverified", "group_verified": True,
