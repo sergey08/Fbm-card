@@ -1,0 +1,26 @@
+name: FBM real Home Assistant API smoke
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'custom_components/fbm/**'
+      - 'tests/ha_real_api_smoke.py'
+      - '.github/workflows/ha-real-api-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  options-flow-real-ha:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+          cache-dependency-path: '.github/workflows/ha-real-api-smoke.yml'
+      - name: Install stable Home Assistant core
+        run: python -m pip install --disable-pip-version-check 'homeassistant==2026.11.0'
+      - name: Test actual Home Assistant 2026.11 options API without a server
+        run: python tests/ha_real_api_smoke.py
