@@ -27,6 +27,7 @@ from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
 from .schedule_probe import summarize_schedule_shape
+from .diagnostics import safe_error_category, safe_payload_shape
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -177,6 +178,53 @@ class AficionFBMAdapter:
             post_team_form, players_fields(device_id, key, team_id)
         )
         return normalize_team_roster(response)
+
+    async def team_roster_diagnostic(self, team_id: str) -> dict:
+        """Observe only official response shape or a safe failure stage."""
+        try:
+            device_id, key = self._team_key()
+        except Exception as exc:
+            return {"ok": False, "stage": "session", "category": safe_error_category(exc)}
+        try:
+            fields = players_fields(device_id, key, team_id)
+            response = await asyncio.to_thread(post_team_form, fields)
+        except Exception as exc:
+            return {"ok": False, "stage": "request", "category": safe_error_category(exc)}
+        shape = safe_payload_shape(response, kind="roster")
+        try:
+            result = normalize_team_roster(response)
+        except Exception as exc:
+            return {"ok": False, "stage": "normalize", "category": safe_error_category(exc), "shape": shape}
+        return {"ok": True, "stage": "complete", "shape": shape, "count": result["total"]}
+
+    async def team_schedule_diagnostic(self, team_id: str, start: date, end: date) -> dict:
+        """Identify failed phase, selection, fetch or parser without raw data."""
+        try:
+            device_id, key = self._team_key()
+        except Exception as exc:
+            return {"ok": False, "stage": "session", "category": safe_error_category(exc)}
+        try:
+            phase_response = await asyncio.to_thread(post_team_form, phases_fields(device_id, key, team_id))
+        except Exception as exc:
+            return {"ok": False, "stage": "phases_request", "category": safe_error_category(exc)}
+        try:
+            fields = schedule_fields(device_id, key, team_id, phase_response, start, end)
+        except Exception as exc:
+            return {
+                "ok": False, "stage": "schedule_selection",
+                "category": safe_error_category(exc),
+                "phases_shape": safe_payload_shape(phase_response, kind="schedule"),
+            }
+        try:
+            response = await asyncio.to_thread(post_team_form, fields)
+        except Exception as exc:
+            return {"ok": False, "stage": "schedule_request", "category": safe_error_category(exc)}
+        shape = safe_payload_shape(response, kind="schedule")
+        try:
+            result = normalize_team_schedule(response)
+        except Exception as exc:
+            return {"ok": False, "stage": "normalize", "category": safe_error_category(exc), "shape": shape}
+        return {"ok": True, "stage": "complete", "shape": shape, "count": len(result["partidos"])}
 
     async def player_detail(self, player_id: str) -> dict:
         """APK LH5/j;->e on-demand player detail using existing guest access."""
