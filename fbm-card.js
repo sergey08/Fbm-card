@@ -122,7 +122,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", playerDetail: null, playerDetailTeamId: "", playerDetailPlayerId: "", playerStats: null, playerStatsTeamId: "", playerStatsPlayerId: "", playerStatsEntryId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", playerDetail: null, playerDetailTeamId: "", playerDetailPlayerId: "", playerStats: null, playerStatsTeamId: "", playerStatsPlayerId: "", playerStatsEntryId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", scheduleTeamId: "", scheduleEntryId: "", matchRound: "all", matchStart: "", matchEnd: "", lastScheduleUpdate: 0, lastStandingsUpdate: 0, lastPlayersUpdate: 0, message: "", busy: false };
   }
 
   _experimentalPreferenceKey(entryId) {
@@ -298,6 +298,22 @@ class FBMCard extends HTMLElement {
     this._render();
   }
 
+  _fixedScheduleDates(state) {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - 45);
+    const end = new Date(today);
+    end.setDate(end.getDate() + 75);
+    const iso = date => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")].join("-");
+    return { desde: state.matchStart || iso(start), hasta: state.matchEnd || iso(end) };
+  }
+
+  _fixedMatchesAvailable(state, teamId) {
+    return state.scheduleEntryId === state.entry && state.scheduleTeamId === teamId &&
+      Array.isArray(state.schedule?.partidos);
+  }
+
   async _experimentalPlayerDetail(playerId) {
     const state = this._experimentalState();
     if (state.busy || !state.entry || !state.selected || !this._hass?.callWS ||
@@ -428,6 +444,26 @@ class FBMCard extends HTMLElement {
           if (state.rounds.length) request.ronda = state.round;
           remoteAttempted = true;
           state.schedule = await this._hass.callWS(request);
+        } else if (action === "fixed_schedule") {
+          if (this._config?.tipo_tarjeta !== "equipo" || !state.selected ||
+              state.status?.sesion_vigente !== true) throw new Error("Equipo o sesión no disponible.");
+          const range = this._fixedScheduleDates(state);
+          const first = new Date(range.desde + "T12:00:00");
+          const last = new Date(range.hasta + "T12:00:00");
+          if (!Number.isFinite(first.getTime()) || !Number.isFinite(last.getTime()) ||
+              first > last || (last.getTime() - first.getTime()) > 125 * 86400000)
+            throw new Error("Selecciona un periodo válido de hasta 125 días.");
+          const teamId = state.selected, entryId = state.entry;
+          remoteAttempted = true;
+          const data = await this._hass.callWS({
+            type: "fbm/team/schedule", ...common, equipo: teamId,
+            desde: range.desde, hasta: range.hasta
+          });
+          if (state.selected !== teamId || state.entry !== entryId) return;
+          if (!data || !Array.isArray(data.partidos)) throw new Error("Calendario FBM no válido.");
+          state.schedule = data; state.scheduleTeamId = teamId;
+          state.scheduleEntryId = entryId; state.matchRound = "all";
+          state.lastScheduleUpdate = Date.now();
         } else if (action === "players") {
           if (!state.selected) throw new Error("Elige un equipo.");
           state.players = null; state.playersTeamId = ""; state.playersEntryId = "";
@@ -451,7 +487,7 @@ class FBMCard extends HTMLElement {
         }
       }
     } catch (_) {
-      if (remoteAttempted && ["register", "recover_registration", "connect", "search", "phases", "schedule", "standings", "players"].includes(action) && state.entry) {
+      if (remoteAttempted && ["register", "recover_registration", "connect", "search", "phases", "schedule", "fixed_schedule", "standings", "players"].includes(action) && state.entry) {
         try { state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry }); }
         catch (_) {
           state.status = { ...state.status, sesion_vigente: false };
@@ -532,7 +568,7 @@ class FBMCard extends HTMLElement {
           const tab = this._element("button", title);
           tab.type = "button"; tab.className = "fbm-tab";
           tab.setAttribute("aria-pressed", String((state.tab || "clasificacion") === name));
-          tab.addEventListener("click", () => { state.tab = name; this._render(); });
+          tab.addEventListener("click", () => { state.tab = name; this._render(); if (name === "partidos" && connected && !this._fixedMatchesAvailable(state, pinned.id)) this._experimentalAction("fixed_schedule"); });
           tabs.append(tab);
         }
         card.append(tabs);
@@ -543,19 +579,87 @@ class FBMCard extends HTMLElement {
             const sub = this._element("button", title);
             sub.type = "button"; sub.className = "fbm-tab";
             sub.setAttribute("aria-pressed", String((state.partidosTab || "fases") === name));
-            sub.addEventListener("click", () => { state.partidosTab = name; this._render(); });
+            sub.addEventListener("click", () => {
+              state.partidosTab = name; this._render();
+              if (connected && !this._fixedMatchesAvailable(state, pinned.id))
+                this._experimentalAction("fixed_schedule");
+            });
             subtabs.append(sub);
           }
           card.append(subtabs);
-          if (state.partidosTab !== "jornadas") {
-            button("Consultar fases oficiales", "phases", connected);
-            if (state.phaseName) card.append(this._element("p", "Fase actual: " + state.phaseName, "muted"));
-            if (Array.isArray(state.rounds)) {
-              if (!state.rounds.length) card.append(this._element("p", "No hay rondas enumeradas por FBM para la fase actual.", "muted"));
-              for (const round of state.rounds) card.append(this._element("p", round.nombre, "muted"));
-            }
+          const controls = this._element("div", "", "fbm-match-controls");
+          const range = this._fixedScheduleDates(state);
+          for (const [label, key, value] of [["Desde", "matchStart", range.desde], ["Hasta", "matchEnd", range.hasta]]) {
+            const field = this._element("label", label);
+            const picker = document.createElement("input"); picker.type = "date"; picker.value = value;
+            picker.disabled = state.busy;
+            picker.addEventListener("change", event => { state[key] = event.target.value; });
+            field.append(picker); controls.append(field);
+          }
+          const load = this._element("button", "Actualizar partidos", "fbm-action fbm-action-primary");
+          load.type = "button"; load.disabled = state.busy || !connected;
+          load.addEventListener("click", () => this._experimentalAction("fixed_schedule"));
+          controls.append(load); card.append(controls);
+          const hasSchedule = this._fixedMatchesAvailable(state, pinned.id);
+          if (!hasSchedule) {
+            card.append(this._element("p", state.busy ? "Consultando los partidos oficiales..." :
+              "Pulsa Actualizar partidos para consultar el calendario del grupo.", "fbm-player-caption"));
           } else {
-            card.append(this._element("p", "Calendario completo del grupo pendiente: la consulta oficial de jornadas aún no está validada. No se muestran enfrentamientos inventados.", "muted"));
+            const all = state.schedule.partidos;
+            const rounds = [...new Set(all.map(match => match.jornada)
+              .filter(value => Number.isInteger(value)))].sort((a, b) => a - b);
+            if (state.partidosTab === "fases") {
+              const heading = this._element("h4", state.phaseName || "Fase y grupo actual", "fbm-subheading");
+              card.append(heading);
+              const phase = this._element("p", "Jornadas con partidos: " + rounds.length +
+                " · Enfrentamientos oficiales: " + all.length, "fbm-player-caption");
+              card.append(phase);
+              if (Number.isInteger(state.schedule.jornada_actual))
+                card.append(this._element("p", "Jornada actual: " + state.schedule.jornada_actual, "fbm-player-caption"));
+              const jump = this._element("button", "Ver enfrentamientos por jornada", "fbm-action");
+              jump.type = "button"; jump.addEventListener("click", () => {
+                state.partidosTab = "jornadas"; this._render();
+              }); card.append(jump);
+            } else {
+              const roundSelector = this._element("label", "Seleccionar jornada");
+              const selector = document.createElement("select");
+              const optAll = this._element("option", "Todas las jornadas"); optAll.value = "all";
+              selector.append(optAll);
+              for (const number of rounds) {
+                const option = this._element("option", "Jornada " + number);
+                option.value = String(number); selector.append(option);
+              }
+              selector.value = rounds.some(n => String(n) === state.matchRound) ? state.matchRound : "all";
+              selector.addEventListener("change", event => {
+                state.matchRound = event.target.value; this._render();
+              });
+              roundSelector.append(selector); card.append(roundSelector);
+              const filtered = state.matchRound === "all" ? all :
+                all.filter(game => String(game.jornada) === state.matchRound);
+              card.append(this._element("p", filtered.length + " enfrentamientos del grupo", "fbm-section-subtitle"));
+              if (!filtered.length) card.append(this._element("p", "FBM no devuelve partidos en esta jornada.", "fbm-player-caption"));
+              const games = this._element("div", "", "fbm-fixture-list");
+              const sorted = [...filtered].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
+                String(a.fecha || "").localeCompare(String(b.fecha || "")));
+              for (const match of sorted) {
+                const box = this._element("article", "", "fbm-fixture");
+                const top = this._element("div", "", "fbm-match-header");
+                top.append(this._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
+                top.append(this._element("span", [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente", "fbm-player-caption"));
+                box.append(top);
+                const teams = this._element("div", "", "fbm-fixture-teams");
+                teams.append(this._element("span", match.local || "Local sin indicar"));
+                const score = match.marcador &&
+                  Number.isInteger(match.marcador.local) && Number.isInteger(match.marcador.visitante)
+                  ? match.marcador.local + " – " + match.marcador.visitante : "vs";
+                teams.append(this._element("strong", score, "fbm-fixture-score"));
+                teams.append(this._element("span", match.visitante || "Visitante sin indicar"));
+                box.append(teams);
+                if (match.campo) box.append(this._element("p", match.campo, "fbm-player-caption"));
+                games.append(box);
+              }
+              card.append(games);
+            }
           }
         }
         if (state.tab === "jugadores") {
@@ -862,6 +966,16 @@ class FBMCard extends HTMLElement {
       .fbm-table-scroll .standings td:first-child{font-weight:700;color:var(--primary-color,#1976d2)}
       .fbm-standing-name{font-weight:600;line-height:1.35;min-width:145px;overflow-wrap:anywhere}
       .fbm-table-scroll .fbm-current-team{background:color-mix(in srgb,var(--primary-color,#1976d2) 11%,var(--card-background-color,#fff));box-shadow:inset 3px 0 var(--primary-color,#1976d2)}
+      .fbm-match-controls{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin:10px 0}
+      .fbm-match-controls label{display:flex;flex:1 1 125px;flex-direction:column;gap:4px;font-size:.75rem;color:var(--secondary-text-color,#666)}
+      .fbm-match-controls input{width:100%;box-sizing:border-box;min-height:36px;border:1px solid var(--divider-color,#ddd);border-radius:8px;padding:5px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222)}
+      .fbm-match-controls button{align-self:end}
+      .fbm-fixture-list{display:grid;gap:9px;margin-top:10px}
+      .fbm-fixture{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:11px;background:var(--card-background-color,#fff)}
+      .fbm-fixture-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:9px}
+      .fbm-fixture-teams span{min-width:0;overflow-wrap:anywhere;font-weight:600;font-size:.83rem}
+      .fbm-fixture-teams span:last-child{text-align:right}
+      .fbm-fixture-score{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--primary-color,#1976d2);font-size:1rem}
       .fbm-roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px;margin:12px 0}
       .fbm-player{min-width:0;border:1px solid var(--divider-color,#ddd);border-radius:14px;padding:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.04)}
       .fbm-player-open{grid-column:1/-1;border-color:var(--primary-color,#1976d2)}
