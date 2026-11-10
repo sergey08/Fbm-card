@@ -39,6 +39,20 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             raise ValueError("La integración no está disponible")
         return record
 
+    @staticmethod
+    def _display_group(group, index=0):
+        """Never render FBM's opaque phase/group IDs in options menus."""
+        fields = [group.get("team_name"), group.get("season_id"),
+                  group.get("phase_name"), group.get("group_name")]
+        readable = [v for v in fields if type(v) is str and v.strip()]
+        if len(readable) == 1:
+            return f"Competición {index + 1} · {readable[0]}"
+        if not group.get("phase_name") and not group.get("group_name"):
+            return " · ".join(filter(None, [group.get("team_name"),
+                                             group.get("season_id"),
+                                             f"Competición {index + 1}"]))
+        return " · ".join(readable)
+
     async def async_step_init(self, user_input=None):
         return self.async_show_menu(
             step_id="init", menu_options=["search", "manage", "refresh"])
@@ -122,7 +136,10 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                 entry["competitions_archive_factory"],
                 entry["competitions_sqlite_path"])
             await self.hass.async_add_executor_job(
-                archive.follow, group_selection(data), candidate["team_id"])
+                archive.follow, group_selection(data), candidate["team_id"],
+                {"team_name": candidate["name"],
+                 "phase_name": data.get("phase_name", ""),
+                 "group_name": data.get("group_name", "")})
             # This selects a group. It does not automatically download rosters.
             return self.async_create_entry(title="", data=dict(self.config_entry.options))
         return self.async_show_form(
@@ -148,11 +165,11 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="none_followed")
         archive = await self.hass.async_add_executor_job(
             entry["competitions_archive_factory"], archive_path)
-        groups = await self.hass.async_add_executor_job(archive.followed)
+        groups = await self.hass.async_add_executor_job(archive.followed_with_anchor)
         if not groups:
             return self.async_abort(reason="none_followed")
         options = {
-            str(i): " · ".join((group["season_id"], group["phase_id"], group["group_id"]))
+            str(i): self._display_group(group, i)
             for i, group in enumerate(groups)
         }
         if user_input is not None:
@@ -183,7 +200,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
         # Old DEV archives may lack an anchor: require re-selection, do not
         # guess the team from a display label or arbitrary competition member.
         choices = {
-            str(i): " · ".join((g["season_id"], g["phase_id"], g["group_id"]))
+            str(i): self._display_group(g, i)
             for i, g in enumerate(groups) if g.get("anchor_team_id")
         }
         if not choices:
@@ -248,8 +265,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                 probatio.Required("incluir_plantillas", default=False): bool,
             }),
             description_placeholders={
-                "group": " / ".join(
-                    selected[k] for k in ("season_id", "phase_id", "group_id"))
+                "group": self._display_group(selected)
             },
             errors=errors)
 
@@ -273,5 +289,4 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             data_schema=probatio.Schema({
                 probatio.Required("confirmar", default=False): bool}),
             description_placeholders={
-                "group": " / ".join((chosen["season_id"], chosen["phase_id"],
-                                     chosen["group_id"]))})
+                "group": self._display_group(chosen)})
