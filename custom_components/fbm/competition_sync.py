@@ -46,25 +46,15 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         team_ids.append(tid)
     if team_id not in team_ids:
         raise ValueError("El equipo no figura en la clasificación del grupo")
-    # The phase response alone cannot attest to the season. Two distinct
-    # officially listed teams must return matching official player-detail
-    # idTemporadaActual, with player/team identity verified inside the adapter.
-    # Never trust an uncorroborated group-level "season_verified" flag.
-    # Two different official team/player bindings must agree on season.
-    verified = await client.async_verify_group_season(team_ids)
-    if verified.get("season_verified") is not True:
-        return {
-            "status": "season_unverified", "group_verified": True,
-            "season_evidence_status": verified.get("season_evidence_status", "none"),
-            "saved": False,
-        }
-    season_id = verified.get("season_id")
-    if type(season_id) is not str or not season_id.strip():
-        raise ValueError("La temporada no está verificada")
-    group = {
-        "season_id": season_id, "phase_id": identity["phase_id"],
-        "group_id": identity["group_id"], "season_verified": True,
-    }
+    # The official search season label is stored when the user follows a
+    # competition. Refreshes reuse that consented identity; FBM's group
+    # endpoint does not provide another season ID. Never infer an ID from
+    # player details and never auto-follow an unselected competition.
+    group = await asyncio.to_thread(
+        archive.selected_for_team, team_id,
+        identity["phase_id"], identity["group_id"])
+    if group is None:
+        return {"status": "not_followed", "saved": False}
     # Detect phase/season/group transitions before ANY fixture or roster
     # download, not after archiving under a possibly different identity.
     if expected_competition is not None:
