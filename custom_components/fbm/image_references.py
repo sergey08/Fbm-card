@@ -72,8 +72,17 @@ def official_player_image_url(value: object) -> str | None:
     composable. Do not decode it as pixels, use player IDs, accept external
     hosts or emit private values into logs.
     """
-    if type(value) is not str or not (16 <= len(value) <= 4096):
+    if type(value) is not str or not (64 <= len(value) <= 4096):
         return None
-    if len(value) % 2 or re.fullmatch(r"[0-9a-fA-F]+", value) is None:
+    if len(value) % 4 or re.fullmatch(r"[0-9a-fA-F]+", value) is None:
+        return None
+    try:
+        # The actual FBM field is hex(UTF-16LE(opaque reference)).
+        # Confirm that exact structural shape; do not decode or reinterpret it
+        # as an image or a request token.
+        reference = bytes.fromhex(value).decode("utf-16le", errors="strict")
+    except (ValueError, UnicodeError):
+        return None
+    if len(reference) < 24 or re.fullmatch(r"[A-Za-z0-9+/=_-]+", reference) is None:
         return None
     return _OFFICIAL_PLAYER_IMAGE_BASE + value
