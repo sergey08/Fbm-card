@@ -19,6 +19,10 @@ The integration's **Configure** button opens a native Home Assistant options flo
 
 Direct **search by competition name without any team** is reserved for a later step because its official discovery endpoint has not yet been established; no fake competition lookup was added. UI labels are translated in English and Spanish. This is code-only DEV and has not been verified in Home Assistant.
 
+### Explicit opt-in enforcement (DEV)
+
+A group may be synchronized **only after it has been explicitly followed in the native competition manager**. A manual WebSocket `fbm/competition/sync` request for a verified but unselected group returns `status=not_followed` without calling the schedule or downloading players. The sync operation never calls `follow` itself. The follow step does not request rosters, and unfollow preserves already archived snapshots. The full search → select → verify → follow → manage → confirm unfollow flow is covered by offline integration-style tests using a temporary SQLite database and simulated Home Assistant flow APIs. **These tests do not yet constitute a visual test in a real HA deployment.**
+
 ### Current DEV commands (Home Assistant WebSocket, administrator only)
 
 - `fbm/competition/verify_season`: `entry_id`, `equipo`. Explicit read-only metadata check: consults two players of distinct official group teams and returns only `season_match_verified` boolean, group status and team count; never player names, IDs or season IDs. Does not follow, persist or download all rosters.
@@ -70,6 +74,10 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home Assistant. La primera vía implementada es **Buscar equipo → Seleccionar equipo → Verificar competición completa → Confirmar seguimiento**. Usa la búsqueda ya validada de equipos; antes de seguir comprueba fase/grupo oficial, pertenencia a la clasificación y temporada concordante en dos fichas oficiales de jugadores de equipos distintos. Si falla la verificación no guarda datos ni activa seguimiento. Seleccionar una competición no descarga automáticamente las plantillas.
 
 **Gestionar → Seleccionar competición → Confirmar dejar de seguir** detiene su seguimiento sin borrar históricos. El almacén compartido evita duplicados mediante temporada/fase/grupo. La búsqueda **directa por nombre de competición**, sin seleccionar equipo, queda pendiente de verificar su consulta real en la API FBM; no se ha inventado un servicio. Textos de la interfaz en español e inglés. Todo sigue en DEV, sin probarse todavía en Home Assistant.
+
+### Seguimiento exclusivamente voluntario (DEV)
+
+Una competición **solo puede sincronizarse después de haber sido seleccionada expresamente en el gestor de competiciones**. Una petición manual `fbm/competition/sync` dirigida a un grupo verificado pero no seleccionado devuelve `status=not_followed` sin descargar partidos ni plantillas. La sincronización nunca añade automáticamente competiciones al seguimiento. Seleccionar un grupo no descarga plantillas y dejar de seguirlo conserva los históricos. El flujo completo buscar → seleccionar → verificar → seguir → gestionar → confirmar baja se prueba sin red con un archivo SQLite temporal y simulaciones de Home Assistant. **Estas pruebas todavía no equivalen a una validación visual sobre HA real.**
 
 ### Comandos de desarrollo
 
