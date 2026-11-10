@@ -217,7 +217,11 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                 result = await sync_group(
                     entry["cliente_independiente"], archive,
                     selected["anchor_team_id"], begin, end,
-                    fetch_rosters=user_input.get("incluir_plantillas") is True)
+                    fetch_rosters=user_input.get("incluir_plantillas") is True,
+                    expected_competition={
+                        key: selected[key] for key in
+                        ("season_id", "phase_id", "group_id")
+                    })
                 if result.get("status") not in ("ok", "partial") or not result.get("saved"):
                     errors["base"] = result.get("status", "cannot_refresh")
                 elif result.get("competition") != {
