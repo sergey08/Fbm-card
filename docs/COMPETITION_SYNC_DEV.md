@@ -13,6 +13,10 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 - Image URLs, image payloads and raw FBM DTO responses are not persisted.
 - Snapshot timestamps use timezone-aware UTC; stale results cannot overwrite the most recent good observation.
 
+### Real Home Assistant 2026.11 API compatibility test
+
+The separate CI workflow `.github/workflows/ha-real-api-smoke.yml` installs the **real Home Assistant Core 2026.11.0** package in a fresh Python 3.14 environment and runs `tests/ha_real_api_smoke.py`. It confirms that the FBM OptionsFlow factory, native menu, and invalid-search form work with actual Home Assistant and Probatio classes, **without importing or starting the production server**. It is an API compatibility smoke test, not a frontend/browser validation, live season check or end-to-end integration deployment. The normal offline unit/JS tests remain separate.
+
 ### Native competition manager (DEV)
 
 The integration's **Configure** button opens a native Home Assistant options flow. The selection now retains the **verified source-team identifier** in the competition row (`anchor_team_id`) to support future explicit refreshes of the group, without exposing it in the summary sensor. Existing DEV SQLite files are migrated in place, with historical snapshots preserved. No background jobs are started. The first implemented selection path is **Find team → Select team → Verify entire current competition → Confirm follow**. Searching uses the existing authenticated `async_search_teams` endpoint; the confirmation checks official phase/group, group standings membership and the same verified season across player details from two separate teams. If verification fails, nothing is followed or stored. The flow does not automatically download any rosters. **Manage → Select competition → Confirm unfollow** turns off following but preserves historical snapshots. It reuses the same SQLite archive as the WebSocket endpoints and summary sensor; duplicates are prevented by the season/phase/group composite key.
@@ -78,6 +82,10 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 - `snapshots`: clasificación, calendario y plantilla normalizada de cada rival, con fecha de observación
 - No se guardan fotografías, URLs de fotos ni respuestas FBM originales.
 - Se conservan las instantáneas válidas anteriores cuando una petición falla.
+
+### Prueba de compatibilidad con Home Assistant 2026.11 real
+
+El flujo CI independiente `.github/workflows/ha-real-api-smoke.yml` instala **Home Assistant Core 2026.11.0 real** en Python 3.14 y ejecuta `tests/ha_real_api_smoke.py`. Comprueba el registro de OptionsFlow, su menú y el formulario de búsqueda inválida usando clases reales de Home Assistant y Probatio, **sin arrancar el servidor de producción**. Es una prueba de compatibilidad de API, no una prueba visual del frontend ni una sincronización real de temporada. Se mantienen aparte las pruebas aisladas habituales.
 
 ### Gestor de competiciones nativo (DEV)
 
