@@ -250,6 +250,21 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.path.exists())
         self.assertNotIn("roster", self.client.calls)
 
+    async def test_auto_refresh_is_opt_in_and_rejects_player_only(self):
+        self.assertEqual(
+            (await self.flow.async_step_init())["menu_options"],
+            ["search", "manage", "refresh", "automatic"])
+        view = await self.flow.async_step_automatic()
+        self.assertEqual(view["step_id"], "automatic")
+        blocked = await self.flow.async_step_automatic(
+            {"auto_groups": False, "auto_players": True})
+        self.assertEqual(blocked["errors"]["base"], "auto_requires_groups")
+        saved = await self.flow.async_step_automatic(
+            {"auto_groups": True, "auto_players": True})
+        self.assertEqual(saved["type"], "create_entry")
+        self.assertTrue(saved["data"]["auto_groups"])
+        self.assertTrue(saved["data"]["auto_players"])
+
     async def test_invalid_selection_and_empty_manage_are_safe(self):
         await self.flow.async_step_search({"texto": "pinto"})
         result = await self.flow.async_step_select({"equipo": "untrusted-team"})
