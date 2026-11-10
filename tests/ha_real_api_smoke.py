@@ -87,7 +87,7 @@ async def run():
 
         async def async_verify_group_season(self, team_ids):
             self.calls.append("verify")
-            return {"season_verified": True, "season_id": "official-season"}
+            return {"season_verified": True, "season_id": "26/27"}
 
         async def async_team_schedule(self, team_id, start, end):
             self.calls.append("schedule")
@@ -143,7 +143,7 @@ async def run():
         assert refreshed["type"] == "create_entry", refreshed
         assert "schedule" in client.calls
         assert "roster" not in client.calls
-        identity = {"season_verified": True, "season_id": "official-season",
+        identity = {"season_verified": True, "season_id": "26/27",
                     "phase_id": "phase", "group_id": "group"}
         assert Archive(str(db)).latest(identity, "fixtures") is not None
 
