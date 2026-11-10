@@ -38,7 +38,7 @@ class RosterTests(unittest.TestCase):
 
     def test_verified_inline_photo_only(self):
         import base64
-        png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\n" + b"photo-fixture").decode()
+        png = base64.b64encode(bytes([137,80,78,71,13,10,26,10]) + b"photo-fixture").decode()
         result = mod.normalize_team_roster({"error":"", "misjugadores":[
             {"Id":"p1","Nombre":"Jugador","Foto":png}
         ]})
