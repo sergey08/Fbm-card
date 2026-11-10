@@ -25,7 +25,7 @@ from .player_detail import post_player_detail_form, post_player_statistics_form,
 from .player_statistics_bridge import PlayerStatisticsFetcher
 from .player_context import verified_player_stats_context
 from .player_protocol import player_stats_fields
-from .player_statistics import normalize_global_player_stats, normalize_player_match_list
+from .player_statistics import normalize_global_player_stats, normalize_player_match_list, diagnose_match_rows
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
@@ -310,7 +310,8 @@ class AficionFBMAdapter:
                 normalizer(response)
             except Exception as exc:
                 return {"ok": False, "stage": kind + "_normalize",
-                        "category": safe_error_category(exc), "shape": shape}
+                        "category": safe_error_category(exc), "shape": shape,
+                        **({"match_diagnostics": diagnose_match_rows(response)} if kind == "matches" else {})}
         return {"ok": True, "stage": "complete"}
 
     async def team_standings(self, team_id: str) -> dict:
