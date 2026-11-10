@@ -31,6 +31,35 @@ class FBMCard extends HTMLElement {
     if (this._config?.modo_experimental === true && hadHass && !userChanged) return;
     this._render();
   }
+  connectedCallback() {
+    if (this._fbmRefreshTimer || typeof setInterval !== "function") return;
+    this._fbmRefreshTimer = setInterval(() => { void this._autoRefresh(); }, 60000);
+  }
+  disconnectedCallback() {
+    if (this._fbmRefreshTimer) clearInterval(this._fbmRefreshTimer);
+    this._fbmRefreshTimer = null;
+  }
+  async _autoRefresh() {
+    if (this._config?.modo_experimental !== true || this._config?.tipo_tarjeta !== "equipo" ||
+        !this._hass?.callWS || (typeof document !== "undefined" && document.visibilityState === "hidden"))
+      return;
+    const state = this._experimentalState();
+    if (state.busy || !state.entry || !state.selected || state.status?.sesion_vigente !== true) return;
+    const selected = this._restoreExperimentalTeam(state.entry);
+    if (!selected || selected.id !== state.selected) return;
+    const stale = timestamp => timestamp > 0 && Date.now() - timestamp >= 15 * 60 * 1000;
+    if (state.tab === "partidos" && this._fixedMatchesAvailable(state, selected.id) &&
+        stale(state.lastScheduleUpdate)) {
+      await this._experimentalAction("refresh_schedule");
+    } else if (state.tab === "jugadores" && Array.isArray(state.players) &&
+               state.playersTeamId === selected.id && state.playersEntryId === state.entry &&
+               stale(state.lastPlayersUpdate)) {
+      await this._experimentalAction("refresh_players");
+    } else if ((state.tab === "clasificacion" || !state.tab) &&
+               Array.isArray(state.standings) && stale(state.lastStandingsUpdate)) {
+      await this._experimentalAction("standings");
+    }
+  }
   getCardSize() { return 5; }
   static getStubConfig() { return { title: "FBM Card", equipos: [] }; }
 
@@ -242,7 +271,7 @@ class FBMCard extends HTMLElement {
         state.teams = [saved]; state.selected = saved.id;
         if (state.status.sesion_vigente) {
           const data = await this._hass.callWS({ type: "fbm/team/standings", entry_id: state.entry, equipo: saved.id });
-          if (Array.isArray(data.clasificacion)) state.standings = data.clasificacion;
+          if (Array.isArray(data.clasificacion)) { state.standings = data.clasificacion; state.lastStandingsUpdate = Date.now(); }
         }
       }
     } catch (_) {
@@ -444,7 +473,7 @@ class FBMCard extends HTMLElement {
           if (state.rounds.length) request.ronda = state.round;
           remoteAttempted = true;
           state.schedule = await this._hass.callWS(request);
-        } else if (action === "fixed_schedule") {
+        } else if (action === "fixed_schedule" || action === "refresh_schedule") {
           if (this._config?.tipo_tarjeta !== "equipo" || !state.selected ||
               state.status?.sesion_vigente !== true) throw new Error("Equipo o sesión no disponible.");
           const range = this._fixedScheduleDates(state);
@@ -462,11 +491,12 @@ class FBMCard extends HTMLElement {
           if (state.selected !== teamId || state.entry !== entryId) return;
           if (!data || !Array.isArray(data.partidos)) throw new Error("Calendario FBM no válido.");
           state.schedule = data; state.scheduleTeamId = teamId;
-          state.scheduleEntryId = entryId; state.matchRound = "all";
+          state.scheduleEntryId = entryId;
+          if (action !== "refresh_schedule") state.matchRound = "all";
           state.lastScheduleUpdate = Date.now();
-        } else if (action === "players") {
+        } else if (action === "players" || action === "refresh_players") {
           if (!state.selected) throw new Error("Elige un equipo.");
-          state.players = null; state.playersTeamId = ""; state.playersEntryId = "";
+          if (action !== "refresh_players") { state.players = null; state.playersTeamId = ""; state.playersEntryId = ""; }
           remoteAttempted = true;
           const selectedTeam = state.selected, selectedEntry = state.entry;
           const data = await this._hass.callWS({ type: "fbm/team/players", ...common, equipo: selectedTeam });
@@ -474,10 +504,13 @@ class FBMCard extends HTMLElement {
           if (state.selected !== selectedTeam || state.entry !== selectedEntry) return;
           if (!data || !Array.isArray(data.jugadores)) throw new Error("Plantilla FBM no válida.");
           state.players = data.jugadores; state.playersTeamId = selectedTeam;
-          state.playersEntryId = selectedEntry;
-          state.playerDetail = null; state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
-          state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
-          state.message = data.jugadores.length ? "Plantilla consultada desde FBM." : "FBM devolvió una plantilla vacía para este equipo.";
+          state.playersEntryId = selectedEntry; state.lastPlayersUpdate = Date.now();
+          if (action !== "refresh_players" || !data.jugadores.some(player => player.id === state.playerDetailPlayerId)) {
+            state.playerDetail = null; state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
+            state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+          }
+          if (action !== "refresh_players")
+            state.message = data.jugadores.length ? "Plantilla consultada desde FBM." : "FBM devolvió una plantilla vacía para este equipo.";
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
           remoteAttempted = true;
@@ -487,7 +520,7 @@ class FBMCard extends HTMLElement {
         }
       }
     } catch (_) {
-      if (remoteAttempted && ["register", "recover_registration", "connect", "search", "phases", "schedule", "fixed_schedule", "standings", "players"].includes(action) && state.entry) {
+      if (remoteAttempted && ["register", "recover_registration", "connect", "search", "phases", "schedule", "fixed_schedule", "refresh_schedule", "standings", "players", "refresh_players"].includes(action) && state.entry) {
         try { state.status = await this._hass.callWS({ type: "fbm/client/status", entry_id: state.entry }); }
         catch (_) {
           state.status = { ...state.status, sesion_vigente: false };
