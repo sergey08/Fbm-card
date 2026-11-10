@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import quote
+import json
+import sqlite3
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import HomeAssistant
@@ -24,30 +27,41 @@ async def async_setup_entry(
     async_add_entities([FBMCompetitionsSensor(hass, entry)], True)
 
 
-def _read_competition_summary(path: str, archive_type) -> dict:
-    """Executor-only, read-only summary (no images or player details)."""
+def _read_competition_summary(path: str) -> dict:
+    """Read existing SQLite in mode=ro; no migrations or file writes."""
     if not Path(path).is_file():
         return {"count": 0, "groups": []}
-    archive = archive_type(path)
-    groups = archive.followed()
-    if len(groups) > 50:
-        raise ValueError("Demasiadas competiciones seguidas")
-    result = []
-    for group in groups:
-        ident = {**group, "season_verified": True}
-        standing = archive.latest(ident, "standings")
-        fixtures = archive.latest(ident, "fixtures")
-        result.append({
-            "season_id": group["season_id"],
-            "phase_id": group["phase_id"],
-            "group_id": group["group_id"],
-            "teams": (len(standing["payload"]["clasificacion"])
-                      if standing is not None else None),
-            "matches": (len(fixtures["payload"]["partidos"])
-                        if fixtures is not None else None),
-            "standings_at": standing["observed_at"] if standing else None,
-            "fixtures_at": fixtures["observed_at"] if fixtures else None,
-        })
+    uri = "file:" + quote(str(Path(path).resolve()), safe="/") + "?mode=ro"
+    with sqlite3.connect(uri, uri=True) as db:
+        groups = db.execute(
+            """SELECT season, phase, group_id FROM competitions
+               WHERE followed=1 ORDER BY season, phase, group_id LIMIT 51"""
+        ).fetchall()
+        if len(groups) > 50:
+            raise ValueError("Demasiadas competiciones seguidas")
+        result = []
+        for season, phase, group_id in groups:
+            snapshots = []
+            for source in ("standings", "fixtures"):
+                record = db.execute(
+                    """SELECT observed_at, payload FROM snapshots WHERE
+                       season=? AND phase=? AND group_id=?
+                       AND source=? AND subject=''
+                       ORDER BY observed_at DESC LIMIT 1""",
+                    (season, phase, group_id, source),
+                ).fetchone()
+                snapshots.append(record)
+            standings, fixtures = snapshots
+            count_teams = (len(json.loads(standings[1])["clasificacion"])
+                           if standings else None)
+            count_matches = (len(json.loads(fixtures[1])["partidos"])
+                             if fixtures else None)
+            result.append({
+                "season_id": season, "phase_id": phase, "group_id": group_id,
+                "teams": count_teams, "matches": count_matches,
+                "standings_at": standings[0] if standings else None,
+                "fixtures_at": fixtures[0] if fixtures else None,
+            })
     return {"count": len(groups), "groups": result}
 
 
@@ -74,9 +88,8 @@ class FBMCompetitionsSensor(SensorEntity):
             summary = await self.hass.async_add_executor_job(
                 _read_competition_summary,
                 entry["competitions_sqlite_path"],
-                entry["competitions_archive_factory"],
             )
-        except (OSError, ValueError):
+        except (OSError, ValueError, KeyError, sqlite3.Error):
             self._attr_available = False
             return
         self._attr_available = True
