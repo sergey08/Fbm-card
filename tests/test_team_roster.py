@@ -79,7 +79,7 @@ class RosterTests(unittest.TestCase):
         self.assertNotIn("foto", invalid["jugadores"][0])
 
     def test_apk_verified_official_photo_reference(self):
-        photo_ref = "00410042" * 48
+        photo_ref = ("AbCd1234+/_=" * 16).encode("utf-16le").hex()
         result = mod.normalize_team_roster({"error": "", "misjugadores": [
             {"Id": "p1", "Nombre": "Jugador", "Foto": photo_ref}
         ]})
