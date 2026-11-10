@@ -13,6 +13,10 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 - Image URLs, image payloads and raw FBM DTO responses are not persisted.
 - Snapshot timestamps use timezone-aware UTC; stale results cannot overwrite the most recent good observation.
 
+### Mandatory cross-team season evidence
+
+Both the native follow action and every manual sync now **always** call `async_verify_group_season` with the official participant IDs. A season flag from the group identity response **cannot bypass** independent player/team detail corroboration. If two separate teams do not yield the same official `idTemporadaActual`, follow/sync is blocked before downloading fixtures or rosters. Offline regression tests cover a falsely verified group metadata response. The real Pinto Basket equality check still needs DEV installation or a safe authenticated development environment.
+
 ### Real Home Assistant 2026.11 API compatibility test
 
 The separate CI workflow `.github/workflows/ha-real-api-smoke.yml` installs the **real Home Assistant Core 2026.11.0** package in a fresh Python 3.14 environment and runs `tests/ha_real_api_smoke.py`. It confirms that the FBM OptionsFlow factory, native menu, invalid-search form and complete search → verify → follow → refresh fixtures → unfollow with retained SQLite history operate with actual Home Assistant and Probatio classes, **without importing or starting the production server**. It is an integration-flow API compatibility check using fake FBM responses and temporary SQLite, not a frontend/browser validation, live season check or end-to-end HA server deployment. The normal offline unit/JS tests remain separate.
@@ -82,6 +86,10 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 - `snapshots`: clasificación, calendario y plantilla normalizada de cada rival, con fecha de observación
 - No se guardan fotografías, URLs de fotos ni respuestas FBM originales.
 - Se conservan las instantáneas válidas anteriores cuando una petición falla.
+
+### Corroboración obligatoria de la temporada entre equipos
+
+Tanto la selección de una competición como **cada sincronización** ejecutan obligatoriamente `async_verify_group_season` con los equipos oficiales del grupo. Un indicador de temporada verificada en la cabecera del grupo **nunca sustituye** la comprobación independiente de dos fichas jugador-equipo. Sin coincidencia del identificador oficial `idTemporadaActual` de dos equipos distintos, se bloquea el seguimiento o la sincronización antes de descargar calendarios o plantillas. Nuevas pruebas de regresión evitan saltarse esta regla. La comparación real de Pinto Basket aún requiere instalar DEV en entorno aislado o disponer de acceso de desarrollo autenticado seguro.
 
 ### Prueba de compatibilidad con Home Assistant 2026.11 real
 
