@@ -13,9 +13,11 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 - Image URLs, image payloads and raw FBM DTO responses are not persisted.
 - Snapshot timestamps use timezone-aware UTC; stale results cannot overwrite the most recent good observation.
 
-### Mandatory cross-team season evidence
+### Official season label from FBM search (simplified)
 
-Both the native follow action and every manual sync now **always** call `async_verify_group_season` with the official participant IDs. A season flag from the group identity response **cannot bypass** independent player/team detail corroboration. If two separate teams do not yield the same official `idTemporadaActual`, follow/sync is blocked before downloading fixtures or rosters. Offline regression tests cover a falsely verified group metadata response. The real Pinto Basket equality check still needs DEV installation or a safe authenticated development environment.
+FBM's team search supplies the visible official season label (for example `26/27`), while the separate phase/group endpoint supplies the official phase and group identifiers without a distinct season ID. Following now uses the validated **official search label + official phase ID + official group ID**, after confirming the chosen team belongs to the group's standings. The label must have a consecutive `YY/YY` season format. It is stored as a **label**, not misrepresented as an undocumented numeric API season ID.
+
+On refresh, the archive resolves the explicit prior selection using its official anchor team and phase/group IDs; it keeps the originally selected season label, rather than re-deriving it or fetching player records. Changed phase/group causes a safe stop. The two-player season-ID check remains an **optional administrator diagnostic** (`fbm/competition/verify_season`) for discrepancies and is never required for ordinary following or syncing. No player records are queried during selection or fixture-only refresh.
 
 ### Real Home Assistant 2026.11 API compatibility test
 
@@ -23,7 +25,7 @@ The separate CI workflow `.github/workflows/ha-real-api-smoke.yml` installs the 
 
 ### Native competition manager (DEV)
 
-The integration's **Configure** button opens a native Home Assistant options flow. The selection now retains the **verified source-team identifier** in the competition row (`anchor_team_id`) to support future explicit refreshes of the group, without exposing it in the summary sensor. Existing DEV SQLite files are migrated in place, with historical snapshots preserved. No background jobs are started. The first implemented selection path is **Find team → Select team → Verify entire current competition → Confirm follow**. Searching uses the existing authenticated `async_search_teams` endpoint; the confirmation checks official phase/group, group standings membership and the same verified season across player details from two separate teams. If verification fails, nothing is followed or stored. The flow does not automatically download any rosters. **Manage → Select competition → Confirm unfollow** turns off following but preserves historical snapshots. It reuses the same SQLite archive as the WebSocket endpoints and summary sensor; duplicates are prevented by the season/phase/group composite key.
+The integration's **Configure** button opens a native Home Assistant options flow. The selection now retains the **verified source-team identifier** in the competition row (`anchor_team_id`) to support future explicit refreshes of the group, without exposing it in the summary sensor. Existing DEV SQLite files are migrated in place, with historical snapshots preserved. No background jobs are started. The first implemented selection path is **Find team → Select team → Verify entire current competition → Confirm follow**. Searching uses the existing authenticated `async_search_teams` endpoint; the confirmation validates the official search season label, phase/group IDs and team membership in standings, without downloading any player details. If verification fails, nothing is followed or stored. The flow does not automatically download any rosters. **Manage → Select competition → Confirm unfollow** turns off following but preserves historical snapshots. It reuses the same SQLite archive as the WebSocket endpoints and summary sensor; duplicates are prevented by the season/phase/group composite key.
 
 Direct **search by competition name without any team** is reserved for a later step because its official discovery endpoint has not yet been established; no fake competition lookup was added. UI labels are translated in English and Spanish. This is code-only DEV and has not been verified in Home Assistant.
 
@@ -60,7 +62,7 @@ The archive now uses strict field allowlists for every source, excluding player 
 
 ### Important blocker
 
-The phase/group lookup alone continues to return `season_verified=False`. The new two-team official detail verification may unblock storage; it still requires a real HA DEV validation. Never infer seasons from labels such as 26/27.
+The phase/group lookup does not return a separate season ID. The official season display label comes from FBM team search; persistent group selection uses that validated label plus phase and group IDs. Do not claim that it is a separate internal season ID.
 
 ### Native Home Assistant MCP-facing summary entity (DEV)
 
@@ -68,7 +70,7 @@ The sensor platform registers one entity per FBM config entry, named `FBM Compet
 
 ### Next steps
 
-1. Verify an official season identifier and exact group membership in an authenticated FBM response, without collecting private player photos.
+1. Validate the official FBM season search label and exact group membership in an authenticated DEV session, without collecting player photos.
 2. Validate that the selected team standings include every competitor and that team schedule covers the group.
 3. Test an explicit full-group synchronization in an isolated HA DEV environment.
 4. Add a small HA summary entity per followed competition and authenticated MCP-facing query actions. WebSocket access alone is not a finished MCP connector.
@@ -87,9 +89,11 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 - No se guardan fotografías, URLs de fotos ni respuestas FBM originales.
 - Se conservan las instantáneas válidas anteriores cuando una petición falla.
 
-### Corroboración obligatoria de la temporada entre equipos
+### Temporada oficial visible de FBM (criterio simplificado)
 
-Tanto la selección de una competición como **cada sincronización** ejecutan obligatoriamente `async_verify_group_season` con los equipos oficiales del grupo. Un indicador de temporada verificada en la cabecera del grupo **nunca sustituye** la comprobación independiente de dos fichas jugador-equipo. Sin coincidencia del identificador oficial `idTemporadaActual` de dos equipos distintos, se bloquea el seguimiento o la sincronización antes de descargar calendarios o plantillas. Nuevas pruebas de regresión evitan saltarse esta regla. La comparación real de Pinto Basket aún requiere instalar DEV en entorno aislado o disponer de acceso de desarrollo autenticado seguro.
+La búsqueda de equipos de FBM proporciona la temporada oficial visible (por ejemplo, `26/27`) y la consulta del grupo proporciona los identificadores oficiales de fase y grupo, pero no otro identificador de temporada independiente. Para seguir una competición se emplea **etiqueta oficial de temporada + ID de fase + ID de grupo**, después de verificar que el equipo seleccionado figura en la clasificación. La etiqueta tiene que seguir el formato consecutivo `AA/AA`. No se presenta como un identificador numérico de API inexistente.
+
+Al actualizar se reutiliza la selección voluntaria archivada, vinculada al equipo oficial de referencia y a la fase/grupo; no se buscan fichas de jugadores. Si cambian fase o grupo, se detiene con aviso. La comprobación cruzada de IDs de temporada de dos jugadores queda como **diagnóstico opcional para administradores** (`fbm/competition/verify_season`), no como requisito de cada actualización. El seguimiento inicial y la actualización sin plantillas no consultan datos de jugadores.
 
 ### Prueba de compatibilidad con Home Assistant 2026.11 real
 
@@ -97,7 +101,7 @@ El flujo CI independiente `.github/workflows/ha-real-api-smoke.yml` instala **Ho
 
 ### Gestor de competiciones nativo (DEV)
 
-Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home Assistant. Al seguir un grupo se conserva también el **identificador del equipo oficial usado como referencia** (`anchor_team_id`) para futuras actualizaciones controladas, sin exponerlo en el sensor resumen. Las bases SQLite DEV anteriores se migran sin eliminar históricos. Por ahora no hay tareas automáticas. La primera vía implementada es **Buscar equipo → Seleccionar equipo → Verificar competición completa → Confirmar seguimiento**. Usa la búsqueda ya validada de equipos; antes de seguir comprueba fase/grupo oficial, pertenencia a la clasificación y temporada concordante en dos fichas oficiales de jugadores de equipos distintos. Si falla la verificación no guarda datos ni activa seguimiento. Seleccionar una competición no descarga automáticamente las plantillas.
+Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home Assistant. Al seguir un grupo se conserva también el **identificador del equipo oficial usado como referencia** (`anchor_team_id`) para futuras actualizaciones controladas, sin exponerlo en el sensor resumen. Las bases SQLite DEV anteriores se migran sin eliminar históricos. Por ahora no hay tareas automáticas. La primera vía implementada es **Buscar equipo → Seleccionar equipo → Verificar competición completa → Confirmar seguimiento**. Usa la búsqueda ya validada de equipos; antes de seguir comprueba la etiqueta de temporada oficial obtenida de la búsqueda, la fase y el grupo y la pertenencia a la clasificación, sin descargar fichas de jugadores. Si falla la verificación no guarda datos ni activa seguimiento. Seleccionar una competición no descarga automáticamente las plantillas.
 
 **Gestionar → Seleccionar competición → Confirmar dejar de seguir** detiene su seguimiento sin borrar históricos. El almacén compartido evita duplicados mediante temporada/fase/grupo. La búsqueda **directa por nombre de competición**, sin seleccionar equipo, queda pendiente de verificar su consulta real en la API FBM; no se ha inventado un servicio. Textos de la interfaz en español e inglés. Todo sigue en DEV, sin probarse todavía en Home Assistant.
 
