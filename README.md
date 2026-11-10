@@ -1,6 +1,6 @@
 # FBM Card — Madrid Basketball Federation
 
-Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current stable version: 0.2.0.** It is not an official FBM product.
+Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current stable version: 0.2.1.** It is not an official FBM product.
 
 ## Features
 - Search FBM teams and save multiple favorites.
@@ -39,6 +39,10 @@ equipo_fijo:
 ```
 Replace the sample fields using the configuration copied by the search card. Teams saved only in browser storage may not sync between devices.
 
+## Version 0.2.1 — stable Marketplace update fix
+- Stable maintenance release with no runtime or card behavior changes from the validated 0.2.0 build.
+- Uses a version number above the entire 0.2.0 beta series so Marketplace can identify the newest stable release.
+
 ## Version 0.2.0 — first stable release
 - Includes team search, favorites, independent fixed-team cards, group standings, match schedules, rosters, statistics and team crests.
 - Player photographs use the official image endpoint verified against Afición FBM 5.0.42 APK bytecode. **Real photographs were visually verified in Home Assistant on 0.2.0b15 across multiple teams.**
@@ -53,7 +57,7 @@ Photos and account/device secrets must not be posted in issues or diagnostics. T
 
 # FBM Card — Federación de Baloncesto de Madrid
 
-Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión estable actual: 0.2.0.** No es un producto oficial de la Federación.
+Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión estable actual: 0.2.1.** No es un producto oficial de la Federación.
 
 ## Funciones
 - Búsqueda de equipos FBM y varios favoritos.
@@ -91,6 +95,10 @@ equipo_fijo:
   temporada: "26/27"
 ```
 Sustituye los valores del ejemplo con la configuración copiada desde el buscador. Las selecciones guardadas solo en el navegador pueden no sincronizarse entre dispositivos.
+
+## Versión 0.2.1 — mantenimiento de actualizaciones Marketplace
+- Versión estable de mantenimiento, sin cambios de funcionamiento respecto a 0.2.0.
+- La numeración supera toda la serie beta 0.2.0 y permite identificar la versión estable más reciente.
 
 ## Version 0.2.0 — primera versión estable
 - Incluye la búsqueda, favoritos, equipos fijos independientes, clasificación, calendario de partidos, plantillas, estadísticas y escudos.
