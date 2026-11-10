@@ -123,68 +123,77 @@ class CompetitionAutoUpdater:
                     fetch_rosters=False,
                     expected_competition={k: group[k] for k in
                                           ("season_id", "phase_id", "group_id")})
-                self._mark("groups", "ok" if response.get("status") == "ok" else "failed")
-            except (OSError, ValueError, RuntimeError):
-                # Keep last-good archived snapshot. No auto-enrollment.
+                status = response.get("status") if isinstance(response, dict) else None
+                self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
+            except Exception:
+                # Never leak service errors, IDs or player details into HA state.
+                # The archive retains the last successful snapshot.
                 self._mark("groups", "failed")
                 return
 
     async def _run_players(self):
         async with self._player_lock:
-            if self._stopped:
-                return
-            archive, groups = await self._archive_and_groups()
-            if not groups:
-                self._mark("players", "no_followed_groups")
-                return
-            state = await self._read_state()
-            cursor = state.get("players", {})
-            if type(cursor) is not dict:
-                cursor = {}
-            last = cursor.get("cycle_finished_at")
-            if type(last) is str:
-                try:
-                    completed = datetime.fromisoformat(last)
-                    if completed.tzinfo and datetime.now(timezone.utc) - completed < PLAYER_CYCLE_DELAY:
-                        return
-                except ValueError:
-                    pass
-            group_index = int(cursor.get("group_index", 0)) % len(groups)
-            selected = groups[group_index]
-            identity = {**{k: selected[k] for k in
-                          ("season_id", "phase_id", "group_id")},
-                        "season_verified": True}
-            # Only already archived rosters; no automatic mass enrollment.
-            standing = await self.hass.async_add_executor_job(
-                archive.latest, identity, "standings")
-            rows = (standing or {}).get("payload", {}).get("clasificacion", [])
-            team_ids = [row.get("id") for row in rows if type(row) is dict
-                        and type(row.get("id")) is str][:20]
-            if not team_ids:
-                self._mark("players", "no_standings")
-                return
-            team_index = int(cursor.get("team_index", 0)) % len(team_ids)
-            offset = max(0, int(cursor.get("offset", 0)))
-            if self._stopped:
-                return
-            response = await sync_player_stats_batch(
-                self.client, archive, identity, team_ids[team_index],
-                offset=offset, limit=5)
-            if response.get("status") not in ("ok", "partial", "no_roster"):
-                self._mark("players", "failed")
-                return
-            if response.get("next_offset") is not None:
-                cursor = {"group_index": group_index,
-                          "team_index": team_index,
-                          "offset": response["next_offset"]}
-            elif team_index + 1 < len(team_ids):
-                cursor = {"group_index": group_index,
-                          "team_index": team_index + 1, "offset": 0}
-            elif group_index + 1 < len(groups):
-                cursor = {"group_index": group_index + 1,
-                          "team_index": 0, "offset": 0}
-            else:
-                cursor = {"group_index": 0, "team_index": 0, "offset": 0,
-                          "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
-            await self._save_state({"players": cursor})
-            self._mark("players", response["status"])
+        if self._stopped:
+            return
+        try:
+            await self._run_players_impl()
+        except Exception:
+            # FBM failures are contained and never disclose player data.
+            self._mark("players", "failed")
+
+    async def _run_players_impl(self):
+        archive, groups = await self._archive_and_groups()
+        if not groups:
+            self._mark("players", "no_followed_groups")
+            return
+        state = await self._read_state()
+        cursor = state.get("players", {})
+        if type(cursor) is not dict:
+            cursor = {}
+        last = cursor.get("cycle_finished_at")
+        if type(last) is str:
+            try:
+                completed = datetime.fromisoformat(last)
+                if completed.tzinfo and datetime.now(timezone.utc) - completed < PLAYER_CYCLE_DELAY:
+                    return
+            except ValueError:
+                pass
+        group_index = int(cursor.get("group_index", 0)) % len(groups)
+        selected = groups[group_index]
+        identity = {**{k: selected[k] for k in
+                      ("season_id", "phase_id", "group_id")},
+                    "season_verified": True}
+        # Only already archived rosters; no automatic mass enrollment.
+        standing = await self.hass.async_add_executor_job(
+            archive.latest, identity, "standings")
+        rows = (standing or {}).get("payload", {}).get("clasificacion", [])
+        team_ids = [row.get("id") for row in rows if type(row) is dict
+                    and type(row.get("id")) is str][:20]
+        if not team_ids:
+            self._mark("players", "no_standings")
+            return
+        team_index = int(cursor.get("team_index", 0)) % len(team_ids)
+        offset = max(0, int(cursor.get("offset", 0)))
+        if self._stopped:
+            return
+        response = await sync_player_stats_batch(
+            self.client, archive, identity, team_ids[team_index],
+            offset=offset, limit=5)
+        if response.get("status") not in ("ok", "partial", "no_roster"):
+            self._mark("players", "failed")
+            return
+        if response.get("next_offset") is not None:
+            cursor = {"group_index": group_index,
+                      "team_index": team_index,
+                      "offset": response["next_offset"]}
+        elif team_index + 1 < len(team_ids):
+            cursor = {"group_index": group_index,
+                      "team_index": team_index + 1, "offset": 0}
+        elif group_index + 1 < len(groups):
+            cursor = {"group_index": group_index + 1,
+                      "team_index": 0, "offset": 0}
+        else:
+            cursor = {"group_index": 0, "team_index": 0, "offset": 0,
+                      "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
+        await self._save_state({"players": cursor})
+        self._mark("players", response["status"])
