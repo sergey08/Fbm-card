@@ -110,6 +110,22 @@ def normalize_player_match_list(response: object) -> dict:
     return {"partidos": matches, "total": len(matches)}
 
 
+def _text_stat_category(value: str) -> str:
+    """Return only a fixed category label, never server-supplied text."""
+    stripped = value.strip()
+    if not stripped:
+        return "whitespace"
+    if stripped in ("-", "--", "—", "–"):
+        return "dash_placeholder"
+    if stripped.upper() in ("N/A", "N.D.", "ND", "S/D", "N/D"):
+        return "unavailable_label"
+    if stripped.replace(",", "", 1).replace(".", "", 1).lstrip("-").isdigit():
+        return "decimal_separator"
+    if any(ch.isalpha() for ch in stripped):
+        return "alphabetic_text"
+    return "other_symbols"
+
+
 def diagnose_match_rows(response: object) -> dict:
     """Count official field types and validation failures without exposing values."""
     if type(response) is not dict or response.get("error") != "":
@@ -147,6 +163,10 @@ def diagnose_match_rows(response: object) -> dict:
                         "other_text" if type(value) is str else "other")
                 counts = types.setdefault(field, {})
                 counts[kind] = counts.get(kind, 0) + 1
+                if kind == "other_text":
+                    label = _text_stat_category(value)
+                    patterns = counts.setdefault("text_patterns", {})
+                    patterns[label] = patterns.get(label, 0) + 1
                 if type(value) in (int, float) and value < 0 or (
                     type(value) is str and value == "-1"):
                     counts["negative_count"] = counts.get("negative_count", 0) + 1
