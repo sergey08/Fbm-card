@@ -78,6 +78,21 @@ class RosterTests(unittest.TestCase):
         ]})
         self.assertNotIn("foto", invalid["jugadores"][0])
 
+    def test_apk_verified_official_photo_reference(self):
+        photo_ref = "00410042" * 48
+        result = mod.normalize_team_roster({"error": "", "misjugadores": [
+            {"Id": "p1", "Nombre": "Jugador", "Foto": photo_ref}
+        ]})
+        self.assertEqual(
+            result["jugadores"][0]["foto"],
+            "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=jugador&id=" + photo_ref
+        )
+        for invalid in ("https://evil.example/image", "ff&key=secret", "xyz", "ab" * 5000, "abc"):
+            result = mod.normalize_team_roster({"error": "", "misjugadores": [
+                {"Id": "p2", "Nombre": "Jugador", "Foto": invalid}
+            ]})
+            self.assertNotIn("foto", result["jugadores"][0])
+
     def test_live_lowercase_roster_spelling(self):
         result = mod.normalize_team_roster({"error": "", "misjugadores": [
             {"id": "p1", "nombre": "Ejemplo"}
