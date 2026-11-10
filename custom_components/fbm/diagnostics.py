@@ -158,6 +158,34 @@ def _image_reference_shape(value: object) -> dict:
             )
         except ValueError:
             result["hex_decoded_kind"] = "invalid"
+    # Additional bounded, metadata-only classification for hexadecimal UTF-16LE
+    # references. Never return decoded text, URLs, IDs, fragments or hashes.
+    if result.get("text_form") == "hex" and result.get("hex_decoded_kind") in (
+            "utf16le_text", "utf16le_url", "utf16le_json"):
+        try:
+            preview = bytes.fromhex(value[:min(len(value) - len(value) % 4, 4096)])
+            decoded_text = preview.decode("utf-16le", errors="strict").strip("\\ufeff\\x00 \\r\\n\\t")
+            lowered = decoded_text.lower()
+            if lowered.startswith(("https://", "http://")):
+                subtype = "absolute_url"
+            elif "https://" in lowered or "http://" in lowered:
+                subtype = "embedded_url"
+            elif lowered.startswith(("data:image/",)):
+                subtype = "inline_image"
+            elif lowered.startswith(("{", "[")):
+                subtype = "json_like"
+            elif lowered.startswith(("/", "./", "../")):
+                subtype = "relative_path"
+            elif re.fullmatch(r"[A-Za-z0-9+/=_-]{24,}", decoded_text):
+                subtype = "base64_or_identifier"
+            else:
+                subtype = "opaque_text"
+            result["utf16le_reference_form"] = subtype
+            # Report presence of the official host only as a boolean.
+            result["official_fbm_host_present"] = (
+                "appaficionfbm.gesdeportiva.es" in lowered)
+        except (ValueError, UnicodeError):
+            result["utf16le_reference_form"] = "invalid"
     candidate = value
     if value.lower().startswith("data:image/") and ";base64," in value[:100]:
         candidate = value.split(";base64,", 1)[1]
