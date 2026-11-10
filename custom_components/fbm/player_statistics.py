@@ -105,7 +105,13 @@ def normalize_player_match_list(response: object) -> dict:
             raise PlayerStatisticsError("Localía inválida")
         record["local"] = local
         for source, output in numbers.items():
-            record[output] = _number(row.get(source), signed=output == "valoracion")
+            value = row.get(source)
+            # Official Afición FBM per-match DTO uses a dash where this
+            # particular statistic is unavailable; never convert it to 0.
+            if type(value) is str and value.strip() in ("-", "--", "—", "–"):
+                record[output] = None
+            else:
+                record[output] = _number(value, signed=output == "valoracion")
         matches.append(record)
     return {"partidos": matches, "total": len(matches)}
 
