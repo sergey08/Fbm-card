@@ -1,70 +1,72 @@
-"""Normalize team roster using APK 5.0.42 JugadoresEquipoResponseDto.
+"""Normalize official FBM team rosters without inferring missing statistics.
 
-The APK uses "misJugadores" and JugadorEquipoDto uses lower camelCase.
-No network calls or inferred statistics. Only explicitly present public
-basketball fields are passed through. Deployment remains disabled until
-the official response and permitted fields are verified in live testing.
+Live Afición FBM 5.0.42 returns 'misjugadores' with PascalCase rows.
+Older experimentally observed DTOs used camelCase. Accept either complete
+variant, never combine different spellings within a single player.
+Only selected sporting fields are emitted; photos and club metadata stay out.
 """
 from __future__ import annotations
+import math
 
 
 class PlayerRosterError(ValueError):
     """Roster payload is not a recognized official structure."""
 
 
-def normalize_team_roster(response: object) -> dict:
-    if not isinstance(response, dict) or response.get("error") != "":
-        raise PlayerRosterError("Respuesta de plantilla no validada")
-    # Live official response also uses the lower-case wire spelling.
-    # Do not combine arrays or silently accept two conflicting variants.
-    keys = [key for key in ("misJugadores", "misjugadores") if key in response]
-    if len(keys) != 1:
-        raise PlayerRosterError("Lista de jugadores ausente o ambigua")
-    roster = response[keys[0]]
-    if not isinstance(roster, list):
-        raise PlayerRosterError("La lista de jugadores no es una lista")
+_VARIANTS = (
+    {"id": "id", "nombre": "nombre", "nombreEquipo": "equipo",
+     "temporada": "temporada", "partidosJugados": "partidos_jugados",
+     "puntosTotales": "puntos_totales", "mediaPuntos": "media_puntos",
+     "puntosPorPartido": "puntos_por_partido", "minutosPorPartido": "minutos_por_partido"},
+    {"Id": "id", "Nombre": "nombre", "NombreEquipo": "equipo",
+     "Temporada": "temporada", "PartidosJugados": "partidos_jugados",
+     "PuntosTotales": "puntos_totales", "MediaPuntos": "media_puntos",
+     "PuntosPorPartido": "puntos_por_partido", "MinutosPorPartido": "minutos_por_partido"},
+)
 
-    players = []
-    seen = set()
-    text_fields = {
-        "nombreEquipo": "equipo",
-        "temporada": "temporada",
-    }
-    int_fields = {
-        "partidosJugados": "partidos_jugados",
-        "puntosTotales": "puntos_totales",
-        "mediaPuntos": "media_puntos",
-    }
-    float_fields = {
-        "puntosPorPartido": "puntos_por_partido",
-        "minutosPorPartido": "minutos_por_partido",
-    }
-    for raw in roster:
-        if not isinstance(raw, dict):
+
+def normalize_team_roster(response: object) -> dict:
+    if type(response) is not dict or response.get("error") != "":
+        raise PlayerRosterError("Respuesta de plantilla no validada")
+    keys = [key for key in ("misJugadores", "misjugadores") if key in response]
+    if len(keys) != 1 or type(response[keys[0]]) is not list:
+        raise PlayerRosterError("Lista de jugadores ausente, ambigua o no válida")
+
+    players, seen = [], set()
+    for raw in response[keys[0]]:
+        if type(raw) is not dict:
             raise PlayerRosterError("Jugador inválido")
-        ident, name = raw.get("id"), raw.get("nombre")
-        if (type(ident) is not str or not ident.strip() or len(ident) > 512
-                or type(name) is not str or not name.strip() or len(name) > 256):
-            raise PlayerRosterError("Jugador sin identificador y nombre oficiales")
-        if ident in seen:
-            raise PlayerRosterError("Identificador de jugador duplicado")
+        variants = [mapping for mapping in _VARIANTS
+                    if type(raw.get(next(k for k,v in mapping.items() if v == "id"))) is str
+                    and type(raw.get(next(k for k,v in mapping.items() if v == "nombre"))) is str]
+        if len(variants) != 1:
+            raise PlayerRosterError("Jugador sin identificador y nombre de un formato conocido")
+        mapping = variants[0]
+        ident_key = next(k for k,v in mapping.items() if v == "id")
+        name_key = next(k for k,v in mapping.items() if v == "nombre")
+        ident, name = raw[ident_key], raw[name_key]
+        if not ident.strip() or len(ident) > 512 or not name.strip() or len(name) > 256 or ident in seen:
+            raise PlayerRosterError("Jugador incompleto o repetido")
+        # Reject mixed naming of recognized sports fields, not unknown DTO extras.
+        other = _VARIANTS[1] if mapping is _VARIANTS[0] else _VARIANTS[0]
+        if any(k in raw for k in other):
+            raise PlayerRosterError("Campos de dos variantes mezclados")
         seen.add(ident)
-        player = {"id": ident, "nombre": name}
-        for source, target in text_fields.items():
+        item = {"id": ident, "nombre": name}
+        for source, target in mapping.items():
+            if target in ("id", "nombre"):
+                continue
             value = raw.get(source)
-            if value is not None and (type(value) is not str or len(value) > 256):
-                raise PlayerRosterError("Campo de jugador inválido")
-            player[target] = value
-        for source, target in int_fields.items():
-            value = raw.get(source)
-            if value is not None and (type(value) is not int or value < 0):
-                raise PlayerRosterError("Estadística de jugador inválida")
-            player[target] = value
-        for source, target in float_fields.items():
-            value = raw.get(source)
-            if value is not None and (type(value) not in (float, int)
-                                      or not 0 <= value < 1000000):
-                raise PlayerRosterError("Promedio de jugador inválido")
-            player[target] = value
-        players.append(player)
+            if target in ("equipo", "temporada"):
+                if value is not None and (type(value) is not str or len(value) > 256):
+                    raise PlayerRosterError("Campo de texto no válido")
+            elif target in ("partidos_jugados", "puntos_totales"):
+                if value is not None and (type(value) is not int or value < 0):
+                    raise PlayerRosterError("Estadística entera no válida")
+            else:
+                if value is not None and (type(value) not in (int, float)
+                                          or not math.isfinite(value) or value < 0 or value >= 1000000):
+                    raise PlayerRosterError("Promedio no válido")
+            item[target] = value
+        players.append(item)
     return {"jugadores": players, "total": len(players)}
