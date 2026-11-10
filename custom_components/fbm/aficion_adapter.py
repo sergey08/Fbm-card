@@ -23,11 +23,14 @@ from .team_roster import normalize_team_roster, diagnose_roster_rows
 from .player_protocol import players_fields, player_detail_fields
 from .player_detail import post_player_detail_form, post_player_statistics_form, normalize_player_detail
 from .player_statistics_bridge import PlayerStatisticsFetcher
+from .player_context import verified_player_stats_context
+from .player_protocol import player_stats_fields
+from .player_statistics import normalize_global_player_stats, normalize_player_match_list
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
 from .schedule_probe import summarize_schedule_shape
-from .diagnostics import safe_error_category, safe_payload_shape, safe_player_detail_shape
+from .diagnostics import safe_error_category, safe_payload_shape, safe_player_detail_shape, safe_statistics_shape
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -273,6 +276,42 @@ class AficionFBMAdapter:
         return await PlayerStatisticsFetcher(raw_detail, post_stats).fetch(
             player_id, team_id, device_id, key
         )
+
+    async def player_statistics_diagnostic(self, player_id: str, team_id: str) -> dict:
+        """Stage-specific read-only stats diagnostic, no raw player data."""
+        try:
+            device_id, key = self._team_key()
+        except Exception as exc:
+            return {"ok": False, "stage": "session", "category": safe_error_category(exc)}
+        try:
+            raw = await asyncio.to_thread(
+                post_player_detail_form, player_detail_fields(device_id, key, player_id))
+        except Exception as exc:
+            return {"ok": False, "stage": "detail_request", "category": safe_error_category(exc)}
+        try:
+            binding = verified_player_stats_context(raw, player_id, team_id)
+        except Exception as exc:
+            return {"ok": False, "stage": "context", "category": safe_error_category(exc),
+                    "detail_shape": safe_player_detail_shape(raw)}
+        for kind, action, normalizer in (
+            ("global", "datosGlobalesJugadorEquipo", normalize_global_player_stats),
+            ("matches", "datosMediasJugadorPartidos", normalize_player_match_list)
+        ):
+            try:
+                fields = player_stats_fields(
+                    device_id, key, binding["id_jugador"], binding["id_equipo"],
+                    binding["id_componente_club"], binding["id_temporada"], action=action)
+                response = await asyncio.to_thread(post_player_statistics_form, fields)
+            except Exception as exc:
+                return {"ok": False, "stage": kind + "_request",
+                        "category": safe_error_category(exc)}
+            shape = safe_statistics_shape(response, kind)
+            try:
+                normalizer(response)
+            except Exception as exc:
+                return {"ok": False, "stage": kind + "_normalize",
+                        "category": safe_error_category(exc), "shape": shape}
+        return {"ok": True, "stage": "complete"}
 
     async def team_standings(self, team_id: str) -> dict:
         """Consulta la clasificacion del grupo actual del equipo elegido."""
