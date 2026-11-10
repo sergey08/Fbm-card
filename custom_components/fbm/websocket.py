@@ -263,7 +263,7 @@ async def ws_player_stats(hass, connection, msg):
     await _dispatch(hass, connection, msg, _player_statistics)
 
 
-@websocket_api.websocket_command({"type": "fbm/team/diagnostic", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("kind"): str, probatio.Optional("desde"): str, probatio.Optional("hasta"): str})
+@websocket_api.websocket_command({"type": "fbm/team/diagnostic", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("kind"): str, probatio.Required("desde"): str, probatio.Required("hasta"): str})
 @websocket_api.require_admin
 @websocket_api.async_response
 async def ws_diagnostic(hass, connection, msg):
