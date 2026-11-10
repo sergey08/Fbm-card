@@ -57,3 +57,32 @@ def image_data_uri(value: object, *, max_bytes: int = 131072) -> str | None:
     if not mime:
         return None
     return "data:" + mime + ";base64," + base64.b64encode(raw).decode("ascii")
+
+
+# APK Afición FBM 5.0.42: static base URL in
+# Lcom/google/android/gms/internal/play_billing/r0;.a, and image
+# composable LR4/o;.t assembles ?tipo=jugador&id=<Foto>.
+_OFFICIAL_PLAYER_IMAGE_BASE = "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=jugador&id="
+
+
+def official_player_image_url(value: object) -> str | None:
+    """Resolve only a bounded opaque *official* FBM photo reference.
+
+    The APK passes JugadorEquipoDto.Foto unchanged to the official image
+    composable. Do not decode it as pixels, use player IDs, accept external
+    hosts or emit private values into logs.
+    """
+    if type(value) is not str or not (64 <= len(value) <= 4096):
+        return None
+    if len(value) % 4 or re.fullmatch(r"[0-9a-fA-F]+", value) is None:
+        return None
+    try:
+        # The actual FBM field is hex(UTF-16LE(opaque reference)).
+        # Confirm that exact structural shape; do not decode or reinterpret it
+        # as an image or a request token.
+        reference = bytes.fromhex(value).decode("utf-16le", errors="strict")
+    except (ValueError, UnicodeError):
+        return None
+    if len(reference) < 24 or re.fullmatch(r"[A-Za-z0-9+/=_-]+", reference) is None:
+        return None
+    return _OFFICIAL_PLAYER_IMAGE_BASE + value

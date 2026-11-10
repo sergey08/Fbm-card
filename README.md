@@ -1,6 +1,6 @@
 # FBM Card — Madrid Basketball Federation
 
-Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current candidate: 0.2.0b14 (beta).** It is not an official FBM product.
+Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current candidate: 0.2.0b15 (beta).** It is not an official FBM product.
 
 ## Features
 - Search FBM teams and save multiple favorites.
@@ -39,7 +39,11 @@ equipo_fijo:
 ```
 Replace the sample fields using the configuration copied by the search card. Teams saved only in browser storage may not sync between devices.
 
-## 0.2.0b14 changes
+## 0.2.0b15 changes
+- APK 5.0.42 bytecode analysis confirms the official image base at `imagenes.ashx`, the image-rendering path `?tipo=jugador&id=`, and the `JugadorEquipoDto.Foto` field flowing into that renderer.
+- For the observed hex-encoded UTF-16LE opaque `Foto` reference, the backend now builds a fixed-host official player-image URL; it never invents an image payload or uses player name/ID as substitute.
+- Only strictly bounded, format-validated references from FBM are accepted; the card allows only that exact official image endpoint or validated inline images, with error fallback.
+- **The URL construction is supported by APK code; successful live image retrieval still needs visual confirmation in Home Assistant.**
 - Supports `hex(UTF-16LE(Base64(image)))` **only when the decoded bytes have a verified PNG/JPEG/WebP signature and respect the size limit**; opaque IDs remain hidden.
 - The player-photo diagnostic adds `utf16le_inner_magic` with a fixed category (png/jpeg/webp/other/invalid_base64), without exposing player images or identifiers.
 - Real FBM player photos have **not yet been visually verified**; this is a controlled compatibility candidate.
@@ -57,7 +61,7 @@ Photos and account/device secrets must not be posted in issues or diagnostics. T
 
 # FBM Card — Federación de Baloncesto de Madrid
 
-Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión candidata actual: 0.2.0b14 (beta).** No es un producto oficial de la Federación.
+Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión candidata actual: 0.2.0b15 (beta).** No es un producto oficial de la Federación.
 
 ## Funciones
 - Búsqueda de equipos FBM y varios favoritos.
@@ -96,7 +100,11 @@ equipo_fijo:
 ```
 Sustituye los valores del ejemplo con la configuración copiada desde el buscador. Las selecciones guardadas solo en el navegador pueden no sincronizarse entre dispositivos.
 
-## Cambios 0.2.0b14
+## Cambios 0.2.0b15
+- El análisis del código DEX de la APK 5.0.42 confirma el servicio oficial `imagenes.ashx`, la construcción `?tipo=jugador&id=` y el paso del campo `JugadorEquipoDto.Foto` al componente de imágenes.
+- Para la referencia opaca `Foto` con formato hexadecimal UTF-16LE observado, el backend construye una URL del servidor oficial con dominio fijo; nunca inventa contenido de imagen ni sustituye la referencia por el nombre o ID del jugador.
+- Solo acepta referencias estrictamente limitadas y verificadas estructuralmente; la tarjeta admite únicamente este endpoint oficial o imágenes inline validadas y oculta miniaturas fallidas.
+- **La construcción está respaldada por el código de la APK, pero la visualización real en Home Assistant todavía requiere confirmación.**
 - Admite `hex(UTF-16LE(Base64(imagen)))` **solo cuando los bytes decodificados tienen cabecera PNG/JPEG/WebP verificada y cumplen el límite de tamaño**; los identificadores opacos no se muestran.
 - El diagnóstico de fotos incorpora `utf16le_inner_magic` con una categoría fija (png/jpeg/webp/other/invalid_base64), sin revelar imágenes ni identificadores.
 - Las fotografías reales de FBM **aún no se han validado visualmente**; se trata de una candidata de compatibilidad controlada.

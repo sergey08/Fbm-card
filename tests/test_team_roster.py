@@ -63,7 +63,7 @@ class RosterTests(unittest.TestCase):
             ]})["jugadores"][0]
             self.assertNotIn("foto", player)
 
-    def test_nested_utf16le_hex_base64_photo_only_if_verified(self):
+    def test_nested_utf16le_hex_base64_inline_or_official_opaque_reference(self):
         import base64
         png = bytes([137,80,78,71,13,10,26,10]) + b"synthetic-png"
         nested = base64.b64encode(png).decode().encode("utf-16le").hex()
@@ -76,7 +76,22 @@ class RosterTests(unittest.TestCase):
         invalid = mod.normalize_team_roster({"error":"", "misjugadores":[
             {"Id":"p2", "Nombre":"Jugador", "Foto":fake}
         ]})
-        self.assertNotIn("foto", invalid["jugadores"][0])
+        self.assertEqual(invalid["jugadores"][0]["foto"], "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=jugador&id=" + fake)
+
+    def test_apk_verified_official_photo_reference(self):
+        photo_ref = ("AbCd1234+/_=" * 16).encode("utf-16le").hex()
+        result = mod.normalize_team_roster({"error": "", "misjugadores": [
+            {"Id": "p1", "Nombre": "Jugador", "Foto": photo_ref}
+        ]})
+        self.assertEqual(
+            result["jugadores"][0]["foto"],
+            "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=jugador&id=" + photo_ref
+        )
+        for invalid in ("https://evil.example/image", "ff&key=secret", "xyz", "ab" * 5000, "abc"):
+            result = mod.normalize_team_roster({"error": "", "misjugadores": [
+                {"Id": "p2", "Nombre": "Jugador", "Foto": invalid}
+            ]})
+            self.assertNotIn("foto", result["jugadores"][0])
 
     def test_live_lowercase_roster_spelling(self):
         result = mod.normalize_team_roster({"error": "", "misjugadores": [
