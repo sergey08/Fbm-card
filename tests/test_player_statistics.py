@@ -50,6 +50,29 @@ class PlayerStatsTests(unittest.TestCase):
         self.assertEqual(row["valoracion"], -2)
         self.assertNotIn("not-exported", str(result))
 
+    def test_live_pascalcase_match_stats(self):
+        result=stats.normalize_player_match_list({"error":"","listaDatosPartido":[
+            {"IdPartido":"m1","FechaPartido":"2026-11-05",
+             "NombreEquipoRival":"Rival de ejemplo","Local":False,
+             "Puntos":11,"Asistencia":"2","FaltaCometida":3,
+             "FaltaRecibida":"","RebotesTotal":"7",
+             "RebotesDefensivos":"4","RebotesOfensivos":"3",
+             "Recuperaciones":"","Perdidas":"1","Valoracion":-2}
+        ]})
+        record=result["partidos"][0]
+        self.assertEqual(result["total"],1)
+        self.assertEqual(record["puntos"],11)
+        self.assertEqual(record["asistencias"],2)
+        self.assertEqual(record["faltas_cometidas"],3)
+        self.assertIsNone(record["faltas_recibidas"])
+        self.assertEqual(record["rebotes"],7)
+        self.assertEqual(record["valoracion"],-2)
+
+    def test_reject_mixed_match_casing(self):
+        with self.assertRaises(stats.PlayerStatisticsError):
+            stats.normalize_player_match_list({"error":"","listaDatosPartido":[
+                {"IdPartido":"m1","Puntos":4,"puntos":99}]})
+
     def test_fail_closed_for_missing_error_duplicates_and_non_numeric(self):
         invalid = [
             {"error": "private", "listaDatosPartido": []},
