@@ -102,4 +102,6 @@ def safe_player_detail_shape(payload: object) -> dict:
     for key in ("equipo", "Equipo"):
         if key in payload:
             result["team_type"] = "object" if type(payload[key]) is dict else "other"
+            if type(payload[key]) is dict:
+                result["team_fields"] = [k for k in ("id", "Id", "nombre", "Nombre") if k in payload[key]]
     return result
