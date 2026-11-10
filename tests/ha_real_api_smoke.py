@@ -91,7 +91,11 @@ async def run():
 
         async def async_team_schedule(self, team_id, start, end):
             self.calls.append("schedule")
-            return {"partidos": [{"id": "m1", "local": "A", "visitante": "B"}]}
+            return {"partidos": [{
+                "id": "m1", "local": "A", "visitante": "B",
+                "fecha": "2026-11-01", "estado": "finished",
+                "marcador": {"local": 35, "visitante": 31},
+            }]}
 
         async def async_team_roster(self, team_id):
             self.calls.append("roster")
