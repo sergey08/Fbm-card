@@ -19,7 +19,7 @@ from .team_search import normalize_team_results
 from .team_protocol import phases_fields, schedule_fields, standings_fields, post_team_form
 from .team_schedule import normalize_team_schedule
 from .team_standings import normalize_standings
-from .team_roster import normalize_team_roster
+from .team_roster import normalize_team_roster, diagnose_roster_rows
 from .player_protocol import players_fields, player_detail_fields
 from .player_detail import post_player_detail_form, post_player_statistics_form, normalize_player_detail
 from .player_statistics_bridge import PlayerStatisticsFetcher
@@ -194,7 +194,8 @@ class AficionFBMAdapter:
         try:
             result = normalize_team_roster(response)
         except Exception as exc:
-            return {"ok": False, "stage": "normalize", "category": safe_error_category(exc), "shape": shape}
+            return {"ok": False, "stage": "normalize", "category": safe_error_category(exc),
+                    "shape": shape, "row_diagnostics": diagnose_roster_rows(response)}
         return {"ok": True, "stage": "complete", "shape": shape, "count": result["total"]}
 
     async def team_schedule_diagnostic(self, team_id: str, start: date, end: date) -> dict:
