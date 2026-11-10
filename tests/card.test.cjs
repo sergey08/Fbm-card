@@ -1057,3 +1057,11 @@ test("diagnóstico de foto solo muestra categorías permitidas sin datos privado
   assert.ok(!state.photoDiagnostic.includes("PRIVATE"));
   assert.ok(!state.photoDiagnostic.includes("<private"));
 });
+
+test("la tarjeta permite foto solo desde endpoint oficial de jugador", () => {
+  assert.ok(source.includes("appaficionfbm"));
+  assert.ok(source.includes("imagenes"));
+  assert.ok(source.includes("tipo=jugador&id="));
+  assert.ok(source.includes("data:image"));
+  assert.ok(!source.includes("tipo=foto&id="));
+});
