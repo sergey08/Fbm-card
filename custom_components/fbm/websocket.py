@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+from .competition_sync import sync_group
 import probatio
 from homeassistant.components import websocket_api
 
@@ -306,8 +307,86 @@ async def ws_standings(hass, connection, msg):
     await _dispatch(hass, connection, msg, _standings)
 
 
+
+async def _sync_competition(hass, msg):
+    entry_id = msg["entry_id"]
+    client = _client(hass, entry_id)
+    entry = hass.data[DOMAIN][entry_id]
+    archive = await hass.async_add_executor_job(
+        entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+    return await sync_group(
+        client, archive, msg["equipo"],
+        date.fromisoformat(msg["desde"]), date.fromisoformat(msg["hasta"]),
+        fetch_rosters=msg["incluir_plantillas"])
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/sync",
+    probatio.Required("entry_id"): str,
+    probatio.Required("equipo"): str,
+    probatio.Required("desde"): str,
+    probatio.Required("hasta"): str,
+    probatio.Required("incluir_plantillas"): bool,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_sync(hass, connection, msg):
+    try:
+        result = await _sync_competition(hass, msg)
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudo sincronizar la competición.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/list",
+    probatio.Required("entry_id"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_list(hass, connection, msg):
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        groups = await hass.async_add_executor_job(archive.followed)
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudieron leer las competiciones.")
+        return
+    connection.send_result(msg["id"], {"competitions": groups})
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/latest",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+    probatio.Required("source"): str,
+    probatio.Required("subject"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_latest(hass, connection, msg):
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        identity = {"season_verified": True, "season_id": msg["season_id"],
+                    "phase_id": msg["phase_id"], "group_id": msg["group_id"]}
+        item = await hass.async_add_executor_job(
+            archive.latest, identity, msg["source"], msg["subject"])
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudieron leer los datos archivados.")
+        return
+    connection.send_result(msg["id"], {"snapshot": item})
+
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_latest):
         websocket_api.async_register_command(hass, command)
 
 
