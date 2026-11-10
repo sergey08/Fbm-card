@@ -26,8 +26,16 @@ def verified_player_stats_context(response: object, player_id: str, team_id: str
     player, team = response.get("jugador"), response.get("equipo")
     if not isinstance(player, dict) or not isinstance(team, dict):
         raise PlayerContextUnverified("Falta asociación explícita jugador-equipo")
-    checked(player.get("id"), player_id)
-    checked(team.get("id"), team_id)
+    # APK 5.0.42 live detail uses PascalCase in the nested DTOs;
+    # require an unambiguous variant, never infer association by name.
+    def exact_id(row):
+        names = [k for k in ("id", "Id") if k in row]
+        if len(names) != 1:
+            raise PlayerContextUnverified("Identificador de DTO ambiguo")
+        return row[names[0]]
+
+    checked(exact_id(player), player_id)
+    checked(exact_id(team), team_id)
     component = checked(response.get("idComponenteClub"))
     season = checked(response.get("idTemporadaActual"))
     # Do not output any raw response, session metadata or display attributes.
