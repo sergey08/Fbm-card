@@ -164,7 +164,7 @@ def _image_reference_shape(value: object) -> dict:
             "utf16le_text", "utf16le_url", "utf16le_json"):
         try:
             preview = bytes.fromhex(value[:min(len(value) - len(value) % 4, 4096)])
-            decoded_text = preview.decode("utf-16le", errors="strict").strip("\\ufeff\\x00 \\r\\n\\t")
+            decoded_text = preview.decode("utf-16le", errors="strict").strip("\ufeff\x00 \r\n\t")
             lowered = decoded_text.lower()
             if lowered.startswith(("https://", "http://")):
                 subtype = "absolute_url"
