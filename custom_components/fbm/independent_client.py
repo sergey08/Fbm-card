@@ -172,6 +172,22 @@ class IndependentClient:
                 raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
             return await self._adapter.team_schedule_probe(team_id, start, end, round_id)
 
+    async def async_team_diagnostic(self, team_id: str, kind: str,
+                                    start: date | None = None, end: date | None = None) -> dict:
+        """Administrator-triggered, read-only; no caching of raw responses."""
+        self._validate_team_id(team_id)
+        if kind not in ("roster", "schedule"):
+            raise ValueError("Diagnóstico no permitido")
+        if kind == "schedule" and (type(start) is not date or type(end) is not date
+                                   or start > end or (end - start).days > 366):
+            raise ValueError("Fechas inválidas")
+        async with self._lock:
+            if self._adapter is None or not self._adapter.session_is_usable():
+                return {"ok": False, "stage": "session", "category": "not_connected"}
+            if kind == "roster":
+                return await self._adapter.team_roster_diagnostic(team_id)
+            return await self._adapter.team_schedule_diagnostic(team_id, start, end)
+
     async def async_team_group_identity(self, team_id: str) -> dict:
         """Read official current group; do not enable follow or infer season."""
         self._validate_team_id(team_id)
