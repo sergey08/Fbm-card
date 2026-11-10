@@ -19,6 +19,10 @@ The integration's **Configure** button opens a native Home Assistant options flo
 
 Direct **search by competition name without any team** is reserved for a later step because its official discovery endpoint has not yet been established; no fake competition lookup was added. UI labels are translated in English and Spanish. This is code-only DEV and has not been verified in Home Assistant.
 
+### Concurrent stop-following and idempotent refresh (DEV)
+
+A manual synchronization checks that the group is still followed before each roster request and again before writing snapshots. If a user stops following during a long request, it returns `not_followed`, does not request any additional player roster and does not persist the in-flight batch. Retrying an unchanged competition remains a successful operation with `records_written=0`; unchanged snapshots are deduplicated. This behavior is covered by synthetic offline tests, not live FBM deployment.
+
 ### Manual refresh of a followed competition (DEV)
 
 The **Configure → Refresh competition** options-flow path lists only explicitly followed groups with a retained verified `anchor_team_id`. It requires selecting the competition and **a separate confirmation** before making any FBM calls. The requested date window is bounded to 45 days in the past and 60 days in the future (105 days total). It refreshes official standings and group fixtures; **player-roster downloads are off by default** and require an explicit additional checkbox. `sync_group` enforces an `expected_competition` binding and aborts with `competition_changed` before fetching fixtures or rosters if the official season, phase or group has changed. An unfollowed group cannot be downloaded. There is no scheduler or automatic polling.
@@ -80,6 +84,10 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home Assistant. Al seguir un grupo se conserva también el **identificador del equipo oficial usado como referencia** (`anchor_team_id`) para futuras actualizaciones controladas, sin exponerlo en el sensor resumen. Las bases SQLite DEV anteriores se migran sin eliminar históricos. Por ahora no hay tareas automáticas. La primera vía implementada es **Buscar equipo → Seleccionar equipo → Verificar competición completa → Confirmar seguimiento**. Usa la búsqueda ya validada de equipos; antes de seguir comprueba fase/grupo oficial, pertenencia a la clasificación y temporada concordante en dos fichas oficiales de jugadores de equipos distintos. Si falla la verificación no guarda datos ni activa seguimiento. Seleccionar una competición no descarga automáticamente las plantillas.
 
 **Gestionar → Seleccionar competición → Confirmar dejar de seguir** detiene su seguimiento sin borrar históricos. El almacén compartido evita duplicados mediante temporada/fase/grupo. La búsqueda **directa por nombre de competición**, sin seleccionar equipo, queda pendiente de verificar su consulta real en la API FBM; no se ha inventado un servicio. Textos de la interfaz en español e inglés. Todo sigue en DEV, sin probarse todavía en Home Assistant.
+
+### Cancelación durante la descarga y actualización sin cambios (DEV)
+
+La sincronización manual comprueba que el grupo sigue seleccionado antes de consultar la plantilla de cada equipo y de nuevo antes de guardar instantáneas. Si se deja de seguir durante una descarga, devuelve `not_followed`, no consulta más plantillas ni guarda ese lote. Una actualización sin cambios se considera correcta, con `records_written=0`, y no crea duplicados. Comprobado con pruebas offline; falta validación funcional en HA.
 
 ### Actualización manual de una competición seguida (DEV)
 
