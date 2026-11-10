@@ -27,7 +27,7 @@ from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
 from .schedule_probe import summarize_schedule_shape
-from .diagnostics import safe_error_category, safe_payload_shape
+from .diagnostics import safe_error_category, safe_payload_shape, safe_player_detail_shape
 
 SEARCH_URL = "https://appaficionfbm.gesdeportiva.es/v2/busqueda.ashx"
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -234,6 +234,24 @@ class AficionFBMAdapter:
             post_player_detail_form, player_detail_fields(device_id, key, player_id)
         )
         return normalize_player_detail(response, player_id)
+
+    async def player_detail_diagnostic(self, player_id: str) -> dict:
+        """Read-only: show response schema and failure stage, never personal values."""
+        try:
+            device_id, key = self._team_key()
+        except Exception as exc:
+            return {"ok": False, "stage": "session", "category": safe_error_category(exc)}
+        try:
+            payload = await asyncio.to_thread(
+                post_player_detail_form, player_detail_fields(device_id, key, player_id))
+        except Exception as exc:
+            return {"ok": False, "stage": "request", "category": safe_error_category(exc)}
+        shape = safe_player_detail_shape(payload)
+        try:
+            normalize_player_detail(payload, player_id)
+        except Exception as exc:
+            return {"ok": False, "stage": "normalize", "category": safe_error_category(exc), "shape": shape}
+        return {"ok": True, "stage": "complete", "shape": shape}
 
     async def player_statistics(self, player_id: str, team_id: str) -> dict:
         """Use the same APK-verified session, context and stats transport.
