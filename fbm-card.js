@@ -708,12 +708,23 @@ class FBMCard extends HTMLElement {
                 top.append(this._element("span", [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente", "fbm-player-caption"));
                 box.append(top);
                 const teams = this._element("div", "", "fbm-fixture-teams");
-                teams.append(this._element("span", match.local || "Local sin indicar"));
+                const teamLabel = (name, image, side) => {
+                  const box = this._element("div", "", "fbm-fixture-side fbm-fixture-" + side);
+                  if (typeof image === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(image)) {
+                    const img = document.createElement("img"); img.src = image;
+                    img.className = "fbm-fixture-logo"; img.alt = "Escudo de " + name;
+                    img.loading = "lazy"; img.addEventListener("error", () => img.remove(), { once: true });
+                    box.append(img);
+                  }
+                  box.append(this._element("span", name));
+                  return box;
+                };
+                teams.append(teamLabel(match.local || "Local sin indicar", match.img_local, "local"));
                 const score = match.marcador &&
                   Number.isInteger(match.marcador.local) && Number.isInteger(match.marcador.visitante)
                   ? match.marcador.local + " – " + match.marcador.visitante : "vs";
                 teams.append(this._element("strong", score, "fbm-fixture-score"));
-                teams.append(this._element("span", match.visitante || "Visitante sin indicar"));
+                teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante, "away"));
                 box.append(teams);
                 if (match.campo) box.append(this._element("p", match.campo, "fbm-player-caption"));
                 games.append(box);
@@ -755,7 +766,17 @@ class FBMCard extends HTMLElement {
               const item = this._element("section", "", opened ? "fbm-player fbm-player-open" : "fbm-player");
               const header = this._element("div", "", "fbm-player-header");
               const person = this._element("div", "", "fbm-player-identity");
-              person.append(this._element("strong", player.nombre, "fbm-player-name"));
+              const personRow = this._element("div", "", "fbm-player-person");
+              const photo = player.foto || (opened && opened.foto) || "";
+              if (typeof photo === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(photo)) {
+                const img = document.createElement("img");
+                img.className = "fbm-player-photo"; img.src = photo;
+                img.alt = "Fotografía de " + player.nombre; img.loading = "lazy";
+                img.addEventListener("error", () => img.remove(), { once: true });
+                personRow.append(img);
+              }
+              personRow.append(this._element("strong", player.nombre, "fbm-player-name"));
+              person.append(personRow);
               person.append(this._element("span", "Temporada " + (player.temporada || pinned.temporada || "FBM"), "fbm-player-caption"));
               const detailButton = this._element("button", opened ? "Cerrar ficha" : "Ver ficha", "fbm-action");
               detailButton.type = "button";
@@ -1026,6 +1047,14 @@ class FBMCard extends HTMLElement {
       .fbm-table-scroll .standings td:first-child{font-weight:700;color:var(--primary-color,#1976d2)}
       .fbm-standing-name{font-weight:600;line-height:1.35;min-width:145px;overflow-wrap:anywhere}
       .fbm-table-scroll .fbm-current-team{background:color-mix(in srgb,var(--primary-color,#1976d2) 11%,var(--card-background-color,#fff));box-shadow:inset 3px 0 var(--primary-color,#1976d2)}
+      .fbm-player-person{display:flex;align-items:center;gap:8px;min-width:0}
+      .fbm-player-photo{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover;background:var(--secondary-background-color,#eee)}
+      .fbm-fixture-side{display:flex;align-items:center;gap:7px;min-width:0}
+      .fbm-fixture-side.fbm-fixture-away{justify-content:flex-end}
+      .fbm-fixture-side.fbm-fixture-away img{order:2}
+      .fbm-fixture-logo{width:25px;height:25px;flex:0 0 25px;object-fit:contain}
+      .fbm-fixture-side span{font-size:.82rem;font-weight:600;overflow-wrap:anywhere}
+      .fbm-fixture-side.fbm-fixture-away span{text-align:right}
       .fbm-match-controls{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin:10px 0}
       .fbm-match-controls label{display:flex;flex:1 1 125px;flex-direction:column;gap:4px;font-size:.75rem;color:var(--secondary-text-color,#666)}
       .fbm-match-controls input{width:100%;box-sizing:border-box;min-height:36px;border:1px solid var(--divider-color,#ddd);border-radius:8px;padding:5px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222)}
