@@ -66,6 +66,18 @@ class SafeDiagnosticsTests(unittest.TestCase):
         for value in ("private-local","private-away","private-crest"):
             self.assertNotIn(value,str(result))
 
+    def test_photo_format_probe_reports_structure_not_photo_contents(self):
+        import base64
+        opaque = base64.b64encode(b"<svg xmlns='http://www.w3.org/2000/svg'></svg>").decode()
+        info = mod._image_reference_shape(opaque)
+        self.assertEqual(info["text_form"], "base64")
+        self.assertEqual(info["decoded_text_form"], "xml")
+        self.assertNotIn(opaque, str(info))
+        self.assertNotIn("http://www.w3.org", str(info))
+        jsoninfo = mod._image_reference_shape('{"photo":"private"}')
+        self.assertEqual(jsoninfo["text_form"],"json")
+        self.assertNotIn("private",str(jsoninfo))
+
     def test_stats_shape_never_returns_private_values(self):
         response={"error":"","puntosTotalesJugador":19,"key":"secret",
                   "listaDatosPartido":[{"idPartido":"private-id","puntos":5}]}
