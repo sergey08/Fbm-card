@@ -66,6 +66,12 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         "season_id": season_id, "phase_id": identity["phase_id"],
         "group_id": identity["group_id"], "season_verified": True,
     }
+    # Only the native competition manager may grant opt-in. A direct
+    # WebSocket sync call cannot silently enroll a new group or download
+    # player rosters from a competition the user has not selected.
+    if not await asyncio.to_thread(archive.is_followed, group):
+        return {"status": "not_followed", "saved": False}
+
     fixtures = await client.async_team_schedule(team_id, start, end)
     if type(fixtures) is not dict or type(fixtures.get("partidos")) is not list:
         raise ValueError("Calendario oficial no válido")
@@ -87,7 +93,6 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
 
     # Atomicity per snapshot: no partial invalid DTO is written. Last-good
     # snapshots remain available when an individual roster request fails.
-    await asyncio.to_thread(archive.follow, group)
     results = {}
     for source, subject, data in (
             ("standings", "", standings), ("fixtures", "", fixtures),
