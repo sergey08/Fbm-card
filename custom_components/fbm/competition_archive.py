@@ -25,6 +25,7 @@ class CompetitionArchive:
                     phase TEXT NOT NULL,
                     group_id TEXT NOT NULL,
                     followed INTEGER NOT NULL DEFAULT 1,
+                    anchor_team_id TEXT NOT NULL DEFAULT '',
                     PRIMARY KEY (season, phase, group_id)
                 );
                 CREATE TABLE IF NOT EXISTS snapshots (
@@ -42,6 +43,14 @@ class CompetitionArchive:
                 CREATE INDEX IF NOT EXISTS idx_fbm_recent
                   ON snapshots (season, phase, group_id, source, subject, observed_at DESC);
             """)
+            # Migrate development databases created before anchor support.
+            columns = {
+                row[1] for row in db.execute("PRAGMA table_info(competitions)")
+            }
+            if "anchor_team_id" not in columns:
+                db.execute(
+                    "ALTER TABLE competitions ADD COLUMN anchor_team_id TEXT NOT NULL DEFAULT ''"
+                )
 
     def _db(self):
         db = sqlite3.connect(self.path)
@@ -57,12 +66,40 @@ class CompetitionArchive:
             raise ValueError("Identidad oficial incompleta")
         return tuple(v.strip() for v in fields)
 
-    def follow(self, identity: dict):
+    def follow(self, identity: dict, anchor_team_id: str = ""):
+        """Opt in to verified competition, retaining a verified source team."""
         key = self._identity(identity)
+        if (type(anchor_team_id) is not str or len(anchor_team_id) > 512
+                or (anchor_team_id and not anchor_team_id.strip())):
+            raise ValueError("Equipo de referencia inválido")
         with self._db() as db:
-            db.execute("""INSERT INTO competitions VALUES (?, ?, ?, 1)
-                ON CONFLICT(season,phase,group_id) DO UPDATE SET followed=1""", key)
+            db.execute(
+                """INSERT INTO competitions
+                   (season, phase, group_id, followed, anchor_team_id)
+                   VALUES (?, ?, ?, 1, ?)
+                   ON CONFLICT(season,phase,group_id) DO UPDATE SET
+                      followed=1,
+                      anchor_team_id=CASE
+                        WHEN excluded.anchor_team_id <> '' THEN excluded.anchor_team_id
+                        ELSE competitions.anchor_team_id
+                      END""",
+                (*key, anchor_team_id),
+            )
         return key
+
+    def followed_with_anchor(self):
+        """Only for admin management; do not put source IDs into sensor attrs."""
+        with self._db() as db:
+            rows = db.execute(
+                """SELECT season,phase,group_id,anchor_team_id
+                   FROM competitions WHERE followed=1
+                   ORDER BY season,phase,group_id"""
+            ).fetchall()
+        return [
+            {"season_id": season, "phase_id": phase, "group_id": group,
+             "anchor_team_id": anchor}
+            for season,phase,group,anchor in rows
+        ]
 
     def is_followed(self, identity: dict) -> bool:
         """Check explicit opt-in without changing the archive."""
