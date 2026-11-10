@@ -84,6 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Existing-device access only; no registration or identity replacement.
     restored = await client.async_restore()
     _LOGGER.info("FBM saved guest session restored: %s", restored)
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     return True
 
 
@@ -93,4 +94,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if state is not None:
         await state["cliente_independiente"].async_disconnect()
         state["cache_consultas"].clear()
-    return True
+    return await hass.config_entries.async_unload_platforms(entry, ["sensor"])
