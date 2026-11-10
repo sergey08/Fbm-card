@@ -113,6 +113,15 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
             *((("roster", tid, response) for tid, response in rosters.items()))):
         results[source + (":" + subject if subject else "")] = await asyncio.to_thread(
             archive.record, group, source, data, subject=subject)
+    # Backfill readable names for pre-existing beta archives after successful
+    # sync; never re-follow a group that an admin has deactivated.
+    source_team = next(
+        (row.get("equipo") for row in rows if row.get("id") == team_id), "")
+    await asyncio.to_thread(archive.update_display, group, {
+        "team_name": source_team if type(source_team) is str else "",
+        "phase_name": identity.get("phase_name") or "",
+        "group_name": identity.get("group_name") or "",
+    })
     return {
         "status": "partial" if errors else "ok",
         "saved": True, "team_count": len(team_ids),
