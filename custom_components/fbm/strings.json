@@ -16,7 +16,8 @@
         "title": "FBM competition manager",
         "menu_options": {
           "search": "Find team to follow competition",
-          "manage": "Unfollow competition"
+          "manage": "Unfollow competition",
+          "refresh": "Refresh a followed competition"
         }
       },
       "search": {
@@ -51,6 +52,21 @@
         "data": {
           "confirmar": "Confirm"
         }
+      },
+      "refresh": {
+        "title": "Choose competition to refresh",
+        "description": "Only previously followed groups with a verified source team are shown.",
+        "data": {
+          "competicion": "Competition"
+        }
+      },
+      "refresh_confirm": {
+        "title": "Confirm competition refresh",
+        "description": "Group: {group}. Manually refresh standings and fixtures. Roster downloads are optional and off by default.",
+        "data": {
+          "confirmar": "Confirm refresh",
+          "incluir_plantillas": "Also download available rosters and statistics"
+        }
       }
     },
     "error": {
@@ -59,10 +75,14 @@
       "cannot_connect": "Could not query FBM",
       "invalid_selection": "Invalid selection",
       "cannot_verify": "Could not verify competition",
-      "season_unverified": "Season not yet verified; no data saved"
+      "season_unverified": "Season not yet verified; no data saved",
+      "not_followed": "Competition is no longer followed",
+      "competition_changed": "Season, phase or group changed. Select the new competition in search.",
+      "cannot_refresh": "Could not refresh competition"
     },
     "abort": {
-      "none_followed": "No followed competitions"
+      "none_followed": "No followed competitions",
+      "no_refreshable_groups": "No followed competitions have a verified reference team; select them again"
     }
   }
 }
