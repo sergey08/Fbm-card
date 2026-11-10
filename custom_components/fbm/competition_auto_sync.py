@@ -133,13 +133,13 @@ class CompetitionAutoUpdater:
 
     async def _run_players(self):
         async with self._player_lock:
-        if self._stopped:
-            return
-        try:
-            await self._run_players_impl()
-        except Exception:
-            # FBM failures are contained and never disclose player data.
-            self._mark("players", "failed")
+            if self._stopped:
+                return
+            try:
+                await self._run_players_impl()
+            except Exception:
+                # FBM failures are contained and never disclose player data.
+                self._mark("players", "failed")
 
     async def _run_players_impl(self):
         archive, groups = await self._archive_and_groups()
