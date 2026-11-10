@@ -122,7 +122,7 @@ class FBMCard extends HTMLElement {
 
   _experimentalState() {
     return this._experimental ||= { entry: null, status: null, release: "16", query: "", teams: [],
-      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", playerDetail: null, playerDetailTeamId: "", playerDetailPlayerId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
+      selected: "", rounds: null, round: "", phaseName: "", start: "", end: "", schedule: null, standings: null, players: null, playersTeamId: "", playersEntryId: "", playerDetail: null, playerDetailTeamId: "", playerDetailPlayerId: "", playerStats: null, playerStatsTeamId: "", playerStatsPlayerId: "", playerStatsEntryId: "", showGroup: false, tab: "clasificacion", partidosTab: "fases", message: "", busy: false };
   }
 
   _experimentalPreferenceKey(entryId) {
@@ -308,6 +308,7 @@ class FBMCard extends HTMLElement {
     if (!Array.isArray(roster) || !roster.some(player => player.id === playerId)) return;
     state.busy = true; state.message = ""; state.playerDetail = null;
     state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
+    state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
     this._render();
     try {
       const data = await this._hass.callWS({
@@ -321,6 +322,37 @@ class FBMCard extends HTMLElement {
     } catch (_) {
       if (state.entry === entryId && state.selected === teamId)
         state.message = "No se pudo obtener la ficha de este jugador desde FBM.";
+    } finally { state.busy = false; this._render(); }
+  }
+
+  async _experimentalPlayerStats(playerId) {
+    const state = this._experimentalState();
+    if (state.busy || !state.entry || !state.selected || !this._hass?.callWS ||
+        typeof playerId !== "string" || !playerId.trim()) return;
+    const entryId = state.entry, teamId = state.selected;
+    const roster = state.playersTeamId === teamId && state.playersEntryId === entryId
+      ? state.players : null;
+    if (!Array.isArray(roster) || !roster.some(player => player.id === playerId)) return;
+    state.busy = true; state.message = "";
+    state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+    this._render();
+    try {
+      const data = await this._hass.callWS({
+        type: "fbm/player/stats", entry_id: entryId, equipo: teamId, jugador: playerId
+      });
+      if (!data || data.jugador !== playerId || data.equipo !== teamId ||
+          !Array.isArray(data.partidos?.partidos) || !data.globales?.estadisticas) {
+        throw new Error("Estadísticas FBM no válidas");
+      }
+      if (state.entry !== entryId || state.selected !== teamId ||
+          state.playersTeamId !== teamId || state.playersEntryId !== entryId) return;
+      state.playerStats = data;
+      state.playerStatsTeamId = teamId;
+      state.playerStatsPlayerId = playerId;
+      state.playerStatsEntryId = entryId;
+    } catch (_) {
+      if (state.entry === entryId && state.selected === teamId)
+        state.message = "FBM no ha facilitado estadísticas avanzadas válidas para este jugador.";
     } finally { state.busy = false; this._render(); }
   }
 
@@ -402,6 +434,7 @@ class FBMCard extends HTMLElement {
           state.players = data.jugadores; state.playersTeamId = selectedTeam;
           state.playersEntryId = selectedEntry;
           state.playerDetail = null; state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
+          state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
           state.message = data.jugadores.length ? "Plantilla consultada desde FBM." : "FBM devolvió una plantilla vacía para este equipo.";
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
@@ -552,6 +585,54 @@ class FBMCard extends HTMLElement {
                 if (typeof opened.minutos_por_partido === "number" && Number.isFinite(opened.minutos_por_partido))
                   label.push("Min/partido " + opened.minutos_por_partido);
                 if (label.length) item.append(this._element("p", label.join(" · "), "muted"));
+              }
+              if (opened) {
+                const statsButton = this._element("button", "Consultar estadísticas por partido");
+                statsButton.type = "button"; statsButton.disabled = state.busy;
+                statsButton.addEventListener("click", () => this._experimentalPlayerStats(player.id));
+                item.append(statsButton);
+                const stats = state.playerStatsTeamId === pinned?.id &&
+                  state.playerStatsEntryId === state.entry &&
+                  state.playerStatsPlayerId === player.id ? state.playerStats : null;
+                if (stats) {
+                  const formatStat = value => typeof value === "number" && Number.isFinite(value)
+                    ? String(value) : "—";
+                  const labels = [
+                    ["puntos_totales", "Puntos totales"], ["media_puntos", "Media puntos"],
+                    ["asistencias", "Asistencias"], ["faltas_cometidas", "Faltas cometidas"],
+                    ["faltas_recibidas", "Faltas recibidas"], ["rebotes", "Rebotes"],
+                    ["rebotes_defensivos", "Rebotes defensivos"], ["rebotes_ofensivos", "Rebotes ofensivos"],
+                    ["recuperaciones", "Recuperaciones"], ["perdidas", "Pérdidas"],
+                    ["valoracion", "Valoración"]
+                  ];
+                  const globals = stats.globales.estadisticas;
+                  const availableGlobals = labels.filter(([key]) => typeof globals[key] === "number" && Number.isFinite(globals[key]));
+                  if (availableGlobals.length) {
+                    item.append(this._element("p", "Estadísticas globales FBM", "muted"));
+                    for (const [key, title] of availableGlobals)
+                      item.append(this._element("p", title + ": " + formatStat(globals[key]), "muted"));
+                  } else {
+                    item.append(this._element("p", "Estadísticas globales no disponibles.", "muted"));
+                  }
+                  const games = stats.partidos.partidos;
+                  item.append(this._element("p", "Partidos con estadísticas: " + games.length, "muted"));
+                  for (const game of games) {
+                    const title = [game.fecha || "Fecha sin indicar", game.rival || "Rival sin indicar"].join(" · ");
+                    const match = this._element("div", "", "fbm-player");
+                    match.append(this._element("strong", title));
+                    match.append(this._element("p", [
+                      "Puntos " + formatStat(game.puntos),
+                      "Asist. " + formatStat(game.asistencias),
+                      "Faltas cometidas " + formatStat(game.faltas_cometidas),
+                      "Faltas recibidas " + formatStat(game.faltas_recibidas),
+                      "Rebotes " + formatStat(game.rebotes),
+                      "Recup. " + formatStat(game.recuperaciones),
+                      "Pérdidas " + formatStat(game.perdidas),
+                      "Valoración " + formatStat(game.valoracion)
+                    ].join(" · "), "muted"));
+                    item.append(match);
+                  }
+                }
               }
               const detail = [];
               if (Number.isInteger(player.partidos_jugados)) detail.push("PJ " + player.partidos_jugados);
