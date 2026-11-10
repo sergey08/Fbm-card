@@ -36,7 +36,7 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
     async def test_does_not_create_database_or_contact_fbm(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "absent.db")
-            self.assertEqual(Sensor._read_competition_summary(path, Archive),
+            self.assertEqual(Sensor._read_competition_summary(path),
                              {"count": 0, "groups": []})
             self.assertFalse(Path(path).exists())
 
