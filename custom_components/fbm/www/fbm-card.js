@@ -327,6 +327,12 @@ class FBMCard extends HTMLElement {
     this._render();
   }
 
+  _fixtureDateKey(value) {
+    if (typeof value !== "string") return "";
+    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+    return match ? match[3] + "-" + match[2] + "-" + match[1] : value;
+  }
+
   _fixedScheduleDates(state) {
     const today = new Date();
     const start = new Date(today);
@@ -492,7 +498,7 @@ class FBMCard extends HTMLElement {
           if (!data || !Array.isArray(data.partidos)) throw new Error("Calendario FBM no válido.");
           state.schedule = data; state.scheduleTeamId = teamId;
           state.scheduleEntryId = entryId;
-          if (action !== "refresh_schedule") state.matchRound = "all";
+          if (action !== "refresh_schedule") { state.matchRound = "all"; state.showGroup = true; }
           state.lastScheduleUpdate = Date.now();
         } else if (action === "players" || action === "refresh_players") {
           if (!state.selected) throw new Error("Elige un equipo.");
@@ -667,13 +673,24 @@ class FBMCard extends HTMLElement {
                 state.matchRound = event.target.value; this._render();
               });
               roundSelector.append(selector); card.append(roundSelector);
-              const filtered = state.matchRound === "all" ? all :
+              const roundMatches = state.matchRound === "all" ? all :
                 all.filter(game => String(game.jornada) === state.matchRound);
-              card.append(this._element("p", filtered.length + " enfrentamientos del grupo", "fbm-section-subtitle"));
+              const toggle = this._element("button", state.showGroup ? "Ver solo mi equipo" : "Ver todo el grupo", "fbm-action");
+              toggle.type = "button";
+              toggle.setAttribute("aria-pressed", String(!state.showGroup));
+              toggle.addEventListener("click", () => { state.showGroup = !state.showGroup; this._render(); });
+              card.append(toggle);
+              const teamName = pinned.nombre.trim().toLowerCase();
+              const filtered = state.showGroup ? roundMatches : roundMatches.filter(game =>
+                [game.local, game.visitante].some(value => typeof value === "string" &&
+                  value.trim().toLowerCase() === teamName));
+              card.append(this._element("p", filtered.length + (state.showGroup ?
+                " enfrentamientos del grupo" : " partidos de tu equipo"), "fbm-section-subtitle"));
               if (!filtered.length) card.append(this._element("p", "FBM no devuelve partidos en esta jornada.", "fbm-player-caption"));
               const games = this._element("div", "", "fbm-fixture-list");
               const sorted = [...filtered].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
-                String(a.fecha || "").localeCompare(String(b.fecha || "")));
+                this._fixtureDateKey(a.fecha).localeCompare(this._fixtureDateKey(b.fecha)) ||
+                String(a.hora || "").localeCompare(String(b.hora || "")));
               for (const match of sorted) {
                 const box = this._element("article", "", "fbm-fixture");
                 const top = this._element("div", "", "fbm-match-header");
