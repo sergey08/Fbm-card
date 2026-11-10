@@ -19,6 +19,12 @@ The integration's **Configure** button opens a native Home Assistant options flo
 
 Direct **search by competition name without any team** is reserved for a later step because its official discovery endpoint has not yet been established; no fake competition lookup was added. UI labels are translated in English and Spanish. This is code-only DEV and has not been verified in Home Assistant.
 
+### Manual refresh of a followed competition (DEV)
+
+The **Configure → Refresh competition** options-flow path lists only explicitly followed groups with a retained verified `anchor_team_id`. It requires selecting the competition and **a separate confirmation** before making any FBM calls. The requested date window is bounded to 45 days in the past and 60 days in the future (105 days total). It refreshes official standings and group fixtures; **player-roster downloads are off by default** and require an explicit additional checkbox. `sync_group` enforces an `expected_competition` binding and aborts with `competition_changed` before fetching fixtures or rosters if the official season, phase or group has changed. An unfollowed group cannot be downloaded. There is no scheduler or automatic polling.
+
+The isolated options-flow suite now exercises manual refresh, explicit roster consent, safe handling of missing anchors, and persistence of fixtures. These are simulations, not an in-production HA frontend validation.
+
 ### Explicit opt-in enforcement (DEV)
 
 A group may be synchronized **only after it has been explicitly followed in the native competition manager**. A manual WebSocket `fbm/competition/sync` request for a verified but unselected group returns `status=not_followed` without calling the schedule or downloading players. The sync operation never calls `follow` itself. The follow step does not request rosters, and unfollow preserves already archived snapshots. The full search → select → verify → follow → manage → confirm unfollow flow is covered by offline integration-style tests using a temporary SQLite database and simulated Home Assistant flow APIs. **These tests do not yet constitute a visual test in a real HA deployment.**
@@ -74,6 +80,12 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home Assistant. Al seguir un grupo se conserva también el **identificador del equipo oficial usado como referencia** (`anchor_team_id`) para futuras actualizaciones controladas, sin exponerlo en el sensor resumen. Las bases SQLite DEV anteriores se migran sin eliminar históricos. Por ahora no hay tareas automáticas. La primera vía implementada es **Buscar equipo → Seleccionar equipo → Verificar competición completa → Confirmar seguimiento**. Usa la búsqueda ya validada de equipos; antes de seguir comprueba fase/grupo oficial, pertenencia a la clasificación y temporada concordante en dos fichas oficiales de jugadores de equipos distintos. Si falla la verificación no guarda datos ni activa seguimiento. Seleccionar una competición no descarga automáticamente las plantillas.
 
 **Gestionar → Seleccionar competición → Confirmar dejar de seguir** detiene su seguimiento sin borrar históricos. El almacén compartido evita duplicados mediante temporada/fase/grupo. La búsqueda **directa por nombre de competición**, sin seleccionar equipo, queda pendiente de verificar su consulta real en la API FBM; no se ha inventado un servicio. Textos de la interfaz en español e inglés. Todo sigue en DEV, sin probarse todavía en Home Assistant.
+
+### Actualización manual de una competición seguida (DEV)
+
+En **Configurar → Actualizar competición** solo aparecen los grupos seguidos expresamente que conservan un `anchor_team_id` oficial. Tras seleccionar el grupo hace falta una **segunda confirmación** antes de consultar FBM. El período solicitado abarca 45 días anteriores y 60 posteriores (105 días). Actualiza clasificación y calendario de todo el grupo; la **descarga de plantillas está desactivada inicialmente** y requiere marcar una casilla adicional. `sync_group` exige que la identidad oficial coincida exactamente con la competición elegida: si cambia la temporada, fase o grupo, devuelve `competition_changed` antes de descargar partidos o jugadores. Un grupo no seguido no puede sincronizarse. Todavía no hay actualización automática.
+
+Las pruebas aisladas cubren la actualización, el consentimiento específico para descargar plantillas, la ausencia segura de equipos de referencia y la persistencia de los partidos. No equivalen a una prueba visual en Home Assistant real.
 
 ### Seguimiento exclusivamente voluntario (DEV)
 
