@@ -1,5 +1,6 @@
 """Configuración local de FBM, sin cuentas ni credenciales externas."""
 from homeassistant import config_entries
+from homeassistant.core import callback
 from .const import DOMAIN
 
 
@@ -17,6 +18,7 @@ class FBMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="user")
 
     @staticmethod
+    @callback
     def async_get_options_flow(config_entry):
         """Use Home Assistant's native Configure button."""
         return FBMCompetitionOptionsFlow()
@@ -116,7 +118,8 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             archive = await self.hass.async_add_executor_job(
                 entry["competitions_archive_factory"],
                 entry["competitions_sqlite_path"])
-            await self.hass.async_add_executor_job(archive.follow, group_selection(data))
+            await self.hass.async_add_executor_job(
+                archive.follow, group_selection(data), candidate["team_id"])
             # This selects a group. It does not automatically download rosters.
             return self.async_create_entry(title="", data=dict(self.config_entry.options))
         return self.async_show_form(
