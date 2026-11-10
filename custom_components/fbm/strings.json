@@ -17,7 +17,8 @@
         "menu_options": {
           "search": "Find team to follow competition",
           "manage": "Unfollow competition",
-          "refresh": "Refresh a followed competition"
+          "refresh": "Refresh a followed competition",
+          "automatic": "Automatic refresh"
         }
       },
       "search": {
@@ -67,6 +68,14 @@
           "confirmar": "Confirm refresh",
           "incluir_plantillas": "Also download available rosters and statistics"
         }
+      },
+      "automatic": {
+        "title": "Automatically refresh competitions",
+        "description": "Only explicitly followed competitions. Standings and fixtures every 4 hours (one group per tick); individual statistics in batches of five every 2 hours, with a 24-hour pause after a complete cycle. No new roster downloads. Both choices are off by default.",
+        "data": {
+          "auto_groups": "Auto-refresh results and standings",
+          "auto_players": "Also refresh already archived players' statistics"
+        }
       }
     },
     "error": {
@@ -78,7 +87,8 @@
       "season_unverified": "Season not yet verified; no data saved",
       "not_followed": "Competition is no longer followed",
       "competition_changed": "Season, phase or group changed. Select the new competition in search.",
-      "cannot_refresh": "Could not refresh competition"
+      "cannot_refresh": "Could not refresh competition",
+      "auto_requires_groups": "Enable group updates before enabling player statistics."
     },
     "abort": {
       "none_followed": "No followed competitions",
