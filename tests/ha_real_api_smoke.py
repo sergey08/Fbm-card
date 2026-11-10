@@ -97,8 +97,18 @@ async def run():
             self.calls.append("roster")
             return {"jugadores": [{"id": "player", "nombre": "No real"}]}
 
+    class FakeConfigEntries:
+        def __init__(self, entry):
+            self.entry = entry
+
+        def async_get_known_entry(self, entry_id):
+            assert entry_id == self.entry.entry_id
+            return self.entry
+
     class FakeHass:
         def __init__(self, db_path, client):
+            self.config_entries = FakeConfigEntries(
+                types.SimpleNamespace(entry_id="test-entry", options={}))
             self.data = {"fbm": {"test-entry": {
                 "cliente_independiente": client,
                 "competitions_sqlite_path": str(db_path),
@@ -112,8 +122,9 @@ async def run():
         db = Path(folder) / "competition.sqlite"
         client = FakeClient()
         flow.hass = FakeHass(db, client)
-        flow.config_entry = types.SimpleNamespace(
-            entry_id="test-entry", options={})
+        # HA 2026.11 exposes config_entry as a read-only property resolved
+        # through hass.config_entries and the flow's handler entry ID.
+        flow.handler = "test-entry"
         search = await flow.async_step_search({"texto": "pinto"})
         assert search["step_id"] == "select", search
         select = await flow.async_step_select({"equipo": "pinto"})
