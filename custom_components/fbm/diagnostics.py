@@ -9,7 +9,7 @@ SCHEDULE_KEYS = frozenset({
     "error", "partidos", "jornadas", "jornadaActual", "resultado", "listaJornadas",
 })
 ROSTER_KEYS = frozenset({
-    "error", "misJugadores", "jugadores", "total", "equipo",
+    "error", "misJugadores", "misjugadores", "jugadores", "total", "equipo",
 })
 ROSTER_ROW_KEYS = frozenset({
     "id", "nombre", "nombreEquipo", "temporada", "partidosJugados",
@@ -49,7 +49,7 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
         "error_type": type(payload["error"]).__name__ if "error" in payload else "missing",
         "error_empty_string": payload.get("error") == "",
     }
-    for name in ("partidos", "jornadas", "listaJornadas", "misJugadores", "jugadores"):
+    for name in ("partidos", "jornadas", "listaJornadas", "misJugadores", "misjugadores", "jugadores"):
         if name not in keys:
             continue
         v = payload.get(name)
