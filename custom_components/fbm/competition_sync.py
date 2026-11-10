@@ -107,6 +107,9 @@ async def preview_group(client, team_id: str, start: date, end: date) -> dict:
     if (type(rows) is not list or len(rows) > MAX_TEAMS
             or type(matches) is not list or len(matches) > 500):
         raise ValueError("Respuesta oficial demasiado grande")
+    if any(type(row) is not dict or type(row.get("id")) is not str
+           or type(row.get("equipo")) is not str for row in rows):
+        raise ValueError("Participantes de grupo no válidos")
     return {
         "status": "preview",
         "persisted": False,
