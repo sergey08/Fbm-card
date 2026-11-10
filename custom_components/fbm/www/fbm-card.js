@@ -546,11 +546,14 @@ class FBMCard extends HTMLElement {
             text_form: ["json","xml","html","absolute_url","relative_url","hex","base64","other"],
             hex_decoded_kind: ["png","jpeg","webp","utf8_url","utf16le_url","json","utf16le_json","utf8_text","utf16le_text","binary_or_encoded","invalid"],
             base64_magic: ["png","jpeg","webp","gif","other","invalid"],
-            decoded_text_form: ["xml","json","url","html","other"]
+            decoded_text_form: ["xml","json","url","html","other"],
+            utf16le_reference_form: ["absolute_url","embedded_url","inline_image","json_like","relative_path","base64_or_identifier","opaque_text","invalid"]
           };
           const parts = Object.entries(allowed)
             .filter(([key, values]) => typeof info[key] === "string" && values.includes(info[key]))
             .map(([key]) => key + "=" + info[key]);
+          if (info.official_fbm_host_present === true) parts.push("official_fbm_host_present=true");
+          else if (info.official_fbm_host_present === false) parts.push("official_fbm_host_present=false");
           state.photoDiagnostic = data?.ok === true
             ? (parts.length ? parts.join(" · ") : "FBM no ha devuelto un formato de fotografía reconocible.")
             : "Diagnóstico no disponible: revisa la sesión y vuelve a consultar.";
