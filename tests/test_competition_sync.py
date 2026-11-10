@@ -86,6 +86,8 @@ class CompetitionTests(unittest.TestCase):
                                           observed_at="2026-11-10T12:00:00Z"))
         self.assertFalse(self.store.record(identity(), "standings", {"clasificacion": []},
                                            observed_at="2026-11-09T12:00:00Z"))
+        self.assertFalse(self.store.record(identity(), "standings", {"clasificacion": []},
+                                           observed_at="2026-11-11T12:00:00Z"))  # sin cambios
         other = {**identity(), "group_id": "group2"}
         self.assertIsNone(self.store.latest(other, "standings"))
         with self.assertRaises(ValueError):
