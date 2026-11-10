@@ -61,7 +61,17 @@ jobs:
             # Mantener el sufijo bN en el tag, pero hacer visible esta release al canal normal.
             gh release edit "$TAG" --prerelease=false --latest
             echo "Release existente $TAG marcada como disponible para HACS."
-            exit 0
+          else
+            gh release create "$TAG" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --generate-notes --latest
+            echo "Publicada release $TAG en $VALIDATED_SHA"
           fi
-          gh release create "$TAG" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --generate-notes --latest
-          echo "Publicada release $TAG en $VALIDATED_SHA"
+          # The old b9 release previously appeared ahead of newer releases in
+          # the API list. Check BOTH the /latest pointer and the first listed
+          # public release, since HACS uses the first non-prerelease in that list.
+          latest="$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)"
+          first="$(gh api "repos/$GH_REPO/releases?per_page=30" --jq '[.[] | select(.draft == false and .prerelease == false)][0].tag_name')"
+          echo "GitHub latest=$latest; HACS first public=$first; expected=$TAG"
+          if [[ "$latest" != "$TAG" || "$first" != "$TAG" ]]; then
+            echo "GitHub release ordering still differs from expected HACS update." >&2
+            exit 1
+          fi
