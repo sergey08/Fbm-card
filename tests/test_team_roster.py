@@ -51,6 +51,18 @@ class RosterTests(unittest.TestCase):
         for private in ("private", "Private Name", "private2"):
             self.assertNotIn(private,str(result))
 
+    def test_minus_one_is_missing_not_negative_statistic(self):
+        result = mod.normalize_team_roster({"error": "", "misjugadores": [
+            {"Id": "id-1", "Nombre": "Prueba", "PartidosJugados": -1,
+             "PuntosTotales": -1, "MediaPuntos": 0}
+        ]})
+        self.assertIsNone(result["jugadores"][0]["partidos_jugados"])
+        self.assertIsNone(result["jugadores"][0]["puntos_totales"])
+        with self.assertRaises(mod.PlayerRosterError):
+            mod.normalize_team_roster({"error": "", "misjugadores": [
+                {"Id": "id-2", "Nombre": "Prueba", "PartidosJugados": -2}
+            ]})
+
     def test_live_pascalcase_roster_fields(self):
         response = {"error": "", "misjugadores": [
             {"Id": "official-id", "Nombre": "Jugador de prueba",
