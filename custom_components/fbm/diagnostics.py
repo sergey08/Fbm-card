@@ -3,6 +3,7 @@
 Never surface raw responses, auth fields, request bodies, IDs or exception strings.
 """
 from __future__ import annotations
+import re
 
 SCHEDULE_KEYS = frozenset({
     "error", "partidos", "jornadas", "jornadaActual", "resultado", "listaJornadas",
@@ -18,6 +19,9 @@ ROSTER_ROW_KEYS = frozenset({
 
 def safe_error_category(exc: Exception) -> str:
     """Type-only diagnosis: never serialize exception messages or URLs."""
+    code = getattr(exc, "code", None)
+    if code in {"http_non_200", "network", "response_too_large", "invalid_json", "non_object_json"}:
+        return code
     if isinstance(exc, TimeoutError):
         return "timeout"
     if isinstance(exc, (ConnectionError, OSError)):
@@ -34,7 +38,11 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
     keys = SCHEDULE_KEYS if kind == "schedule" else ROSTER_KEYS
     if type(payload) is not dict:
         return {"type": type(payload).__name__ if type(payload) in (list, str, int, bool, type(None)) else "other"}
+    # Field names only; accept identifier-like ASCII keys, never arbitrary values.
+    safe_keys = sorted(k for k in payload if isinstance(k, str)
+                       and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,39}", k))[:40]
     result = {
+        "top_level_keys": safe_keys,
         "type": "object",
         "present": sorted(k for k in keys if k in payload),
         "error_type": type(payload["error"]).__name__ if "error" in payload else "missing",
