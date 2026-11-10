@@ -14,7 +14,7 @@ MAX_RANGE_DAYS = 125
 
 
 async def sync_group(client, archive, team_id: str, start: date, end: date,
-                     *, fetch_rosters: bool = True) -> dict:
+                     *, fetch_rosters: bool = True, expected_competition: dict | None = None) -> dict:
     """Fetch all opponents of the selected team's *official current group*.
 
     Called only on explicit administrator request. If season identity has
@@ -66,6 +66,16 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         "season_id": season_id, "phase_id": identity["phase_id"],
         "group_id": identity["group_id"], "season_verified": True,
     }
+    # Detect phase/season/group transitions before ANY fixture or roster
+    # download, not after archiving under a possibly different identity.
+    if expected_competition is not None:
+        required = ("season_id", "phase_id", "group_id")
+        if (type(expected_competition) is not dict
+                or any(type(expected_competition.get(k)) is not str
+                       for k in required)
+                or any(group[k] != expected_competition[k] for k in required)):
+            return {"status": "competition_changed", "saved": False}
+
     # Only the native competition manager may grant opt-in. A direct
     # WebSocket sync call cannot silently enroll a new group or download
     # player rosters from a competition the user has not selected.
