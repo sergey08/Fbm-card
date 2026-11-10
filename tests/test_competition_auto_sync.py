@@ -3,6 +3,7 @@ import asyncio
 import importlib.util
 from pathlib import Path
 import sys
+import sqlite3
 import tempfile
 import types
 import unittest
@@ -75,6 +76,50 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.hass=Hass()
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
+
+    async def test_repeated_identical_standings_do_not_duplicate_snapshots(self):
+        archive=Archive(self.path)
+        ranking={"clasificacion":[{"id":"a","equipo":"A"},{"id":"b","equipo":"B"}]}
+        with sqlite3.connect(self.path) as db:
+            before=db.execute(
+                "SELECT COUNT(*) FROM snapshots WHERE source='standings'").fetchone()[0]
+        # A later refresh with identical content must not create a new snapshot.
+        written=archive.record(
+            IDENT,"standings",ranking,
+            observed_at="2099-01-01T00:00:00+00:00")
+        with sqlite3.connect(self.path) as db:
+            after=db.execute(
+                "SELECT COUNT(*) FROM snapshots WHERE source='standings'").fetchone()[0]
+        self.assertFalse(written)
+        self.assertEqual(before,after)
+
+    async def test_changed_standings_save_once_and_preserve_previous(self):
+        archive=Archive(self.path)
+        changed={"clasificacion":[
+            {"id":"a","equipo":"A","puntos":8},
+            {"id":"b","equipo":"B","puntos":6}]}
+        first=archive.record(
+            IDENT,"standings",changed,
+            observed_at="2099-01-01T00:00:00+00:00")
+        duplicate=archive.record(
+            IDENT,"standings",changed,
+            observed_at="2099-01-02T00:00:00+00:00")
+        with sqlite3.connect(self.path) as db:
+            snapshots=db.execute(
+                "SELECT COUNT(*) FROM snapshots WHERE source='standings'").fetchone()[0]
+        self.assertTrue(first)
+        self.assertFalse(duplicate)
+        self.assertEqual(snapshots,2)
+        self.assertEqual(archive.latest(IDENT,"standings")["payload"],changed)
+
+    async def test_bad_refresh_does_not_replace_last_good_snapshot(self):
+        archive=Archive(self.path)
+        good=archive.latest(IDENT,"standings")
+        with self.assertRaises(ValueError):
+            archive.record(
+                IDENT,"standings",{"clasificacion":"invalid"},
+                observed_at="2099-01-01T00:00:00+00:00")
+        self.assertEqual(archive.latest(IDENT,"standings"),good)
 
     async def test_platform_initializes_after_automatic_flags(self):
         # Initial sensor poll must never observe the pre-options defaults.
