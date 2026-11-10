@@ -867,3 +867,52 @@ test("al refrescar la plantilla se descarta la ficha individual anterior", async
   assert.equal(state.playerDetailTeamId, "");
   assert.equal(state.playersTeamId, "team");
 });
+
+
+test("oculta estadísticas no disponibles pero muestra ceros y valoraciones negativas", () => {
+  const { elements, sandbox } = loadCard();
+  class Elem {
+    constructor(tag) { this.tag=tag; this.children=[]; this.listeners={}; this.textContent=""; }
+    append(...items) { this.children.push(...items); }
+    addEventListener(name,fn) { this.listeners[name]=fn; }
+    setAttribute() {}
+  }
+  sandbox.document={createElement:tag=>new Elem(tag)};
+  const card=new (elements.get("fbm-card"))();
+  const team={id:"equipo",nombre:"Equipo Prueba",club:"Club",categoria:"Alevín",temporada:"26/27"};
+  card._config={modo_experimental:true,tipo_tarjeta:"equipo",id_tarjeta:"jugadores",equipo_fijo:team};
+  card._hass={user:{id:"u"},callWS:async()=>({})};
+  card._restoreExperimentalTeam=()=>team;
+  const state=card._experimentalState();
+  state.entry="entry";state.status={sesion_vigente:true};
+  state.selected=team.id;state.tab="jugadores";
+  state.playersTeamId=team.id;state.playersEntryId="entry";
+  state.players=[{id:"j1",nombre:"Jugador Ejemplo",temporada:"26/27",
+    partidos_jugados:4,puntos_por_partido:0,minutos_por_partido:null,puntos_totales:null}];
+  state.playerDetailTeamId=team.id;state.playerDetailPlayerId="j1";
+  state.playerDetail={id:"j1",nombre:"Jugador Ejemplo",equipo:"Equipo Prueba"};
+  state.playerStatsTeamId=team.id;state.playerStatsPlayerId="j1";state.playerStatsEntryId="entry";
+  state.playerStats={
+    jugador:"j1",equipo:team.id,
+    globales:{estadisticas:{puntos_totales:null,asistencias:null,valoracion:-3}},
+    partidos:{partidos:[{id_partido:"p1",rival:"Equipo Rival",fecha:"2026-11-08",
+      puntos:0,asistencias:null,faltas_cometidas:2,faltas_recibidas:null,
+      rebotes:null,rebotes_defensivos:null,rebotes_ofensivos:null,
+      recuperaciones:null,perdidas:null,valoracion:-3}]}
+  };
+  const output=new Elem("card");
+  card._renderExperimental(output);
+  const flatten=node=>[node,...(node.children||[]).flatMap(flatten)];
+  const nodes=flatten(output);
+  const statLabels=nodes.filter(n=>n.className==="fbm-stat-label").map(n=>n.textContent);
+  const statValues=nodes.filter(n=>n.className==="fbm-stat-value").map(n=>n.textContent);
+  assert.ok(statLabels.includes("Puntos"));
+  assert.ok(statLabels.includes("Faltas"));
+  assert.ok(statLabels.includes("Valoración"));
+  assert.ok(statValues.includes("0"),"el cero real debe mostrarse");
+  assert.ok(statValues.includes("-3"),"la valoración negativa debe mostrarse");
+  for(const absent of ["Asist.","F. recib.","Rebotes","Reb. def.","Reb. of.","Recup.","Pérdidas","Min/partido"]) {
+    assert.ok(!statLabels.includes(absent),absent+" no debe aparecer si carece de dato");
+  }
+  assert.ok(!statValues.includes("—"),"ninguna casilla debe mostrar guiones");
+});
