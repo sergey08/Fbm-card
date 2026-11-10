@@ -77,6 +77,29 @@ class GroupTests(unittest.TestCase):
         self.assertIsNotNone(self.archive.latest(identity(),"fixtures"))
         self.assertEqual(self.archive.followed_with_anchor()[0]["season_id"],"26/27")
 
+    def test_existing_follow_backfills_names_and_keeps_ids_internal(self):
+        self.select()
+        original = self.archive.followed_with_anchor()[0]
+        self.assertEqual(original["team_name"], "")
+        self.assertEqual(original["group_name"], "")
+        self.client.async_team_group_identity = self._named_group_identity
+        result = self.run_sync(fetch_rosters=False)
+        self.assertEqual(result["status"], "ok")
+        chosen = self.archive.followed_with_anchor()[0]
+        self.assertEqual(chosen["team_name"], "A")
+        self.assertEqual(chosen["phase_name"], "Primera fase")
+        self.assertEqual(chosen["group_name"], "Grupo 16")
+        self.assertEqual(chosen["phase_id"], "phase1")
+        self.assertEqual(chosen["group_id"], "group1")
+        self.archive.unfollow(identity())
+        self.archive.update_display(identity(), {"team_name": "No recuperar"})
+        self.assertFalse(self.archive.is_followed(identity()))
+
+    async def _named_group_identity(self, team):
+        self.client.calls.append("identity")
+        return {"phase_id": "phase1", "group_id": "group1",
+                "phase_name": "Primera fase", "group_name": "Grupo 16"}
+
     def test_refresh_only_fixtures_without_rosters(self):
         self.select()
         result=self.run_sync(fetch_rosters=False)
