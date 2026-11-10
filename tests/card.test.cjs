@@ -945,6 +945,8 @@ test("jornadas oficiales muestran enfrentamientos y permiten filtrar solo mi equ
   const root=new Elem("card");card._renderExperimental(root);
   const nodes=flatten(root);
   assert.ok(nodes.some(n=>n.textContent==="3 enfrentamientos del grupo"));
+  assert.ok(nodes.some(n=>n.textContent==="Jornada 1 · 10/10/2026 – 18/10/2026"));
+  assert.ok(nodes.some(n=>n.textContent==="Jornada 2 · 25/10/2026"));
   assert.ok(nodes.some(n=>n.textContent==="23 – 18"));
   const fixtures=nodes.filter(n=>n.className==="fbm-fixture");
   assert.equal(fixtures.length,3);
@@ -1014,4 +1016,14 @@ test("refresco periódico de 15 minutos solo para datos visibles ya consultados"
   sandbox.document={visibilityState:"hidden"};
   await card._autoRefresh();
   assert.equal(calls.length,0);
+});
+
+test("el selector omite la fecha cuando no consta oficialmente", () => {
+  const {elements}=loadCard();
+  const card=new (elements.get("fbm-card"))();
+  assert.equal(card._roundDateLabel([{fecha:null},{fecha:""}]),"");
+  assert.equal(card._roundDateLabel([{fecha:"08/11/2026"},{fecha:"08/11/2026"}]),"08/11/2026");
+  assert.equal(card._roundDateLabel([
+    {fecha:"09/11/2026"}, {fecha:"07/11/2026"}, {fecha:"08/11/2026"}
+  ]),"07/11/2026 – 09/11/2026");
 });
