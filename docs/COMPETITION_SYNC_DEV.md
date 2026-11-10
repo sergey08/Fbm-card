@@ -15,6 +15,7 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 
 ### Current DEV commands (Home Assistant WebSocket, administrator only)
 
+- `fbm/competition/preview`: `entry_id`, `equipo`, `desde`, `hasta`. Fetches official group membership and fixtures without saving or requesting player rosters, even when season is unverified.
 - `fbm/competition/sync`: `entry_id`, `equipo`, `desde`, `hasta`, `incluir_plantillas` (boolean)
 - `fbm/competition/list`: `entry_id`
 - `fbm/competition/latest`: `entry_id`, `season_id`, `phase_id`, `group_id`, `source` (`standings`, `fixtures`, `roster`), `subject` (team ID for roster, empty string otherwise)
@@ -48,7 +49,7 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 
 ### Comandos de desarrollo
 
-Los comandos WebSocket `fbm/competition/sync`, `fbm/competition/list` y `fbm/competition/latest` requieren permisos de administrador. La sincronización usa la identidad invitada ya existente, limita la descarga a 20 equipos y consulta plantillas secuencialmente, sin solicitudes automáticas al iniciar HA.
+Los comandos WebSocket `fbm/competition/preview`, `fbm/competition/sync`, `fbm/competition/list` y `fbm/competition/latest` requieren permisos de administrador. La vista previa consulta equipos y calendario del grupo sin persistencia ni descargas de plantillas, incluso cuando la temporada no esté verificada. La sincronización usa la identidad invitada ya existente, limita la descarga a 20 equipos y consulta plantillas secuencialmente, sin solicitudes automáticas al iniciar HA.
 
 ### Bloqueo conocido
 
