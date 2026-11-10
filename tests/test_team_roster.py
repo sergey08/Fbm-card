@@ -46,7 +46,7 @@ class RosterTests(unittest.TestCase):
         invalid = mod.normalize_team_roster({"error":"", "misjugadores":[
             {"Id":"p2","Nombre":"Jugador","Foto":"not-a-verified-image"}
         ]})
-        self.assertEqual(invalid["jugadores"][0]["foto"], "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=jugador&id=" + fake)
+        self.assertNotIn("foto", invalid["jugadores"][0])
 
     def test_hex_encoded_image_is_accepted_only_with_real_image_signature(self):
         import base64
@@ -76,7 +76,7 @@ class RosterTests(unittest.TestCase):
         invalid = mod.normalize_team_roster({"error":"", "misjugadores":[
             {"Id":"p2", "Nombre":"Jugador", "Foto":fake}
         ]})
-        self.assertNotIn("foto", invalid["jugadores"][0])
+        self.assertEqual(invalid["jugadores"][0]["foto"], "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=jugador&id=" + fake)
 
     def test_apk_verified_official_photo_reference(self):
         photo_ref = ("AbCd1234+/_=" * 16).encode("utf-16le").hex()
