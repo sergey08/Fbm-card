@@ -64,6 +64,16 @@ class CompetitionArchive:
                 ON CONFLICT(season,phase,group_id) DO UPDATE SET followed=1""", key)
         return key
 
+    def is_followed(self, identity: dict) -> bool:
+        """Check explicit opt-in without changing the archive."""
+        key = self._identity(identity)
+        with self._db() as db:
+            row = db.execute(
+                """SELECT followed FROM competitions
+                   WHERE season=? AND phase=? AND group_id=?""", key
+            ).fetchone()
+        return bool(row is not None and row[0] == 1)
+
     def unfollow(self, identity: dict):
         key = self._identity(identity)
         with self._db() as db:
