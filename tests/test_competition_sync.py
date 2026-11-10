@@ -123,6 +123,21 @@ class CompetitionTests(unittest.TestCase):
         reopened = Archive(self.store.path)
         self.assertEqual(reopened.latest(identity(), "fixtures")["payload"]["partidos"][0]["id"], "m1")
 
+    def test_images_and_unknown_fields_never_enter_archive(self):
+        self.store.follow(identity())
+        fixtures = {"partidos": [{"id": "p", "local": "Local",
+            "visitante": "Visitante", "img_local": "PRIVATE-IMAGE",
+            "escudo_visitante": "PRIVATE-CREST", "estado": "finished",
+            "marcador": {"local": 3, "visitante": 2}}]}
+        self.assertTrue(self.store.record(identity(), "fixtures", fixtures))
+        clean = self.store.latest(identity(), "fixtures")["payload"]
+        self.assertNotIn("PRIVATE", str(clean))
+        self.assertEqual(clean["partidos"][0]["marcador"]["local"], 3)
+        standings = {"clasificacion": [{"id": "a", "equipo": "Equipo",
+            "escudo": "PRIVATE-CREST", "ganados": 5}]}
+        self.assertTrue(self.store.record(identity(), "standings", standings))
+        self.assertNotIn("PRIVATE", str(self.store.latest(identity(), "standings")))
+        
     def test_stale_records_and_identity_separation(self):
         self.store.follow(identity())
         self.assertTrue(self.store.record(identity(), "standings", {"clasificacion": []},
