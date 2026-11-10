@@ -123,6 +123,28 @@ class CompetitionArchive:
             for season,phase,group,anchor,team,phase_label,group_label in rows
         ]
 
+    def update_display(self, identity: dict, display: dict):
+        """Refresh public labels only for an actively followed competition."""
+        key = self._identity(identity)
+        if type(display) is not dict:
+            raise ValueError("Etiquetas inválidas")
+        labels = []
+        for field in ("team_name", "phase_name", "group_name"):
+            value = display.get(field, "")
+            if type(value) is not str or len(value) > 120:
+                raise ValueError("Etiqueta inválida")
+            labels.append(value.strip())
+        with self._db() as db:
+            db.execute(
+                """UPDATE competitions SET
+                   team_name=CASE WHEN ?<>'' THEN ? ELSE team_name END,
+                   phase_name=CASE WHEN ?<>'' THEN ? ELSE phase_name END,
+                   group_name=CASE WHEN ?<>'' THEN ? ELSE group_name END
+                   WHERE season=? AND phase=? AND group_id=? AND followed=1""",
+                (labels[0], labels[0], labels[1], labels[1], labels[2], labels[2],
+                 *key),
+            )
+
     def selected_for_team(self, team_id: str, phase_id: str, group_id: str):
         """Resolve a consented group by stored official team and phase/group.
 
