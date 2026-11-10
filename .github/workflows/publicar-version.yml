@@ -1,0 +1,68 @@
+name: Publicar versión FBM
+on:
+  workflow_run:
+    workflows: ["Validación FBM"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar commit validado y rama principal
+        env:
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)"
+          if [[ "$VALIDATED_SHA" != "$main_sha" ]]; then
+            echo "Hay un commit posterior en main; se omite una publicación obsoleta."
+            echo "RELEASE_CURRENT=false" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_CURRENT=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.RELEASE_CURRENT == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Extraer versión exacta del manifiesto
+        if: env.RELEASE_CURRENT == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import json; print(json.load(open("custom_components/fbm/manifest.json", encoding="utf-8"))["version"])')"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(b[0-9]+)?$ ]]; then
+            echo "Versión inválida: $version" >&2; exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+
+      - name: Publicar release con versión legible para HACS
+        if: env.RELEASE_CURRENT == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "La release $TAG ya existe; no se modifica."
+            exit 0
+          fi
+          if [[ "$VERSION" == *b[0-9]* ]]; then
+            gh release create "$TAG" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --generate-notes --prerelease
+          else
+            gh release create "$TAG" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --generate-notes
+          fi
+          echo "Publicada release $TAG en $VALIDATED_SHA"
