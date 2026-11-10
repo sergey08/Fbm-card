@@ -71,10 +71,13 @@ def post_team_form(fields: dict[str, str]) -> dict:
         with open_request(request, timeout=12) as response:
             if response.status != 200:
                 raise TeamTransportError("http_non_200")
-            raw = response.read(131073)
+            # Full group calendars may exceed the former 128 KiB limit.
+            # Retain a strict 2 MiB ceiling and avoid streaming/logging payloads.
+            limit = 2 * 1024 * 1024 if action == "horariosJornadas" else 128 * 1024
+            raw = response.read(limit + 1)
     except (urllib.error.URLError, TimeoutError, OSError):
         raise TeamTransportError("network") from None
-    if len(raw) > 131072:
+    if len(raw) > limit:
         raise TeamTransportError("response_too_large")
     try:
         data = json.loads(raw)
