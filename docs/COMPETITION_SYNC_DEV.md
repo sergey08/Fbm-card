@@ -33,6 +33,10 @@ The archive now uses strict field allowlists for every source, excluding player 
 
 The phase/group lookup alone continues to return `season_verified=False`. The new two-team official detail verification may unblock storage; it still requires a real HA DEV validation. Never infer seasons from labels such as 26/27.
 
+### Native Home Assistant MCP-facing summary entity (DEV)
+
+The sensor platform registers one entity per FBM config entry, named `FBM Competiciones`, with stable unique ID `fbm_<entry_id>_competitions`. Its numeric state is the count of followed and verified competition groups. The `groups` attribute includes at most 50 triples `season_id`, `phase_id`, `group_id`, plus counts of teams/matches and observation timestamps. The sensor reads local SQLite every five minutes; it does not call FBM or create a database on startup. The normal HA MCP entity-state tool can read this sensor after installation. Full player details stay out of attributes. For detailed results, the existing admin-only WebSocket command `fbm/competition/analysis` remains the authenticated read path, but must be tested through a suitable MCP/HA WebSocket bridge before claiming direct MCP functionality.
+
 ### Next steps
 
 1. Verify an official season identifier and exact group membership in an authenticated FBM response, without collecting private player photos.
@@ -67,6 +71,10 @@ El archivo SQLite utiliza listas blancas de campos deportivos para clasificació
 ### Bloqueo conocido
 
 La consulta de fase/grupo por sí sola continúa sin verificar la temporada. La nueva comprobación de dos equipos podría permitir la sincronización, pero **todavía falta demostrarlo con datos reales en Home Assistant DEV**. No debe inferirse la temporada por una etiqueta como 26/27.
+
+### Sensor nativo de Home Assistant para el MCP (DEV)
+
+La plataforma de sensores crea **una sola entidad por configuración FBM**, llamada `FBM Competiciones`, con ID único estable `fbm_<entry_id>_competitions`. Su estado es el número de grupos seguidos; el atributo `groups` contiene como máximo 50 grupos con IDs oficiales de temporada/fase/grupo, cantidades de equipos/partidos y fechas de consulta. Lee SQLite cada cinco minutos, sin consultar a FBM ni crear la base de datos al arrancar. El MCP de Home Assistant podrá consultar el estado como el de cualquier otro sensor **después de instalarlo**. No se exponen fotos, nombres ni estadísticas personales en sus atributos. El análisis detallado continúa en el comando WebSocket de administrador `fbm/competition/analysis`, que necesita validación con el puente MCP antes de afirmar acceso directo.
 
 ### Siguientes tareas
 
