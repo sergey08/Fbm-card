@@ -28,6 +28,16 @@ class SafeDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("secret-team",str(shape))
         self.assertNotIn("Secret Team",str(shape))
 
+    def test_stats_shape_never_returns_private_values(self):
+        response={"error":"","puntosTotalesJugador":19,"key":"secret",
+                  "listaDatosPartido":[{"idPartido":"private-id","puntos":5}]}
+        global_shape=mod.safe_statistics_shape(response,"global")
+        matches_shape=mod.safe_statistics_shape(response,"matches")
+        self.assertIn("puntosTotalesJugador",global_shape["recognized"])
+        self.assertEqual(matches_shape["count"],1)
+        for text in ("secret","private-id","19"):
+            self.assertNotIn(text,str(global_shape)+str(matches_shape))
+
     def test_roster_shape_never_returns_private_values(self):
         raw={"error":"secret session error", "key":"token", "misJugadores":[
             {"id":"veryprivateid","nombre":"Private Student","puntosTotales":18,
