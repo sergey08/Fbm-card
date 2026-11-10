@@ -50,15 +50,19 @@ class SafeDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("private",str(result))
         self.assertEqual(mod._image_reference_kind("opaque_photo_ref"),"opaque_reference")
         self.assertEqual(mod._image_reference_kind(""),"empty")
+        self.assertEqual(mod._image_reference_kind("/images/player.png"),"relative_path")
+        self.assertEqual(mod._image_reference_kind("player.jpg"),"image_filename")
+        self.assertNotIn("player.jpg",str(result))
 
     def test_fixture_crest_diagnostic_reports_keys_only(self):
         payload={"error":"","partidos":[
-            {"IdEquipoLocal":"private-local","EscudoLocal":"private-crest",
+            {"IdEquipoLocal":"private-local","EscudoLocal":"private-crest","ImgEquipoLocal":"private-img",
              "IdEquipoVisitante":"private-away","EscudoVisitante":None}]}
         result=mod.safe_payload_shape(payload,kind="schedule")
         self.assertIn("EscudoLocal",result["match_image_fields"])
         self.assertEqual(result["match_image_types"]["EscudoLocal"],"opaque_reference")
         self.assertEqual(result["match_image_types"]["EscudoVisitante"],"null")
+        self.assertEqual(result["match_image_types"]["ImgEquipoLocal"],"opaque_reference")
         for value in ("private-local","private-away","private-crest"):
             self.assertNotIn(value,str(result))
 
