@@ -85,6 +85,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     restored = await client.async_restore()
     _LOGGER.info("FBM saved guest session restored: %s", restored)
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    # Automatic network requests are disabled by default and require
+    # explicit consent in the native Configure → Automatic menu.
+    auto_groups = entry.options.get("auto_groups") is True
+    auto_players = entry.options.get("auto_players") is True
+    if auto_groups:
+        from .competition_auto_sync import CompetitionAutoUpdater
+        service = CompetitionAutoUpdater(
+            hass, entry.entry_id, client,
+            hass.data[DOMAIN][entry.entry_id]["competitions_sqlite_path"],
+            CompetitionArchive)
+        await service.async_start(groups=True, players=auto_players)
+        hass.data[DOMAIN][entry.entry_id]["auto_updater"] = service
+
+    async def _options_updated(hass, updated_entry):
+        await hass.config_entries.async_reload(updated_entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(_options_updated))
     return True
 
 
@@ -92,6 +109,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Eliminar el estado de la entrada."""
     state = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if state is not None:
+        updater = state.get("auto_updater")
+        if updater is not None:
+            await updater.async_stop()
         await state["cliente_independiente"].async_disconnect()
         state["cache_consultas"].clear()
     return await hass.config_entries.async_unload_platforms(entry, ["sensor"])
