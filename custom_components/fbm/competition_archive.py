@@ -101,6 +101,28 @@ class CompetitionArchive:
             for season,phase,group,anchor in rows
         ]
 
+    def selected_for_team(self, team_id: str, phase_id: str, group_id: str):
+        """Resolve a consented group by stored official team and phase/group.
+
+        Return None if there are no matches or if the identity is ambiguous.
+        An unselected team cannot create or update another competition.
+        """
+        if (type(team_id) is not str or not team_id.strip() or len(team_id) > 512
+                or type(phase_id) is not str or not phase_id.strip()
+                or type(group_id) is not str or not group_id.strip()):
+            raise ValueError("Equipo o grupo no válido")
+        with self._db() as db:
+            rows = db.execute(
+                """SELECT season,phase,group_id FROM competitions
+                   WHERE followed=1 AND anchor_team_id=?
+                   AND phase=? AND group_id=?""",
+                (team_id, phase_id, group_id),
+            ).fetchall()
+        if len(rows) != 1:
+            return None
+        return {"season_id": rows[0][0], "phase_id": rows[0][1],
+                "group_id": rows[0][2], "season_verified": True}
+
     def is_followed(self, identity: dict) -> bool:
         """Check explicit opt-in without changing the archive."""
         key = self._identity(identity)
