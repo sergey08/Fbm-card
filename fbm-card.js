@@ -1495,7 +1495,7 @@ class FBMCompetitionCard extends HTMLElement {
           ? this._matches.filter(m=>String(m.jornada)===this._matchRound)
           : this._matches;
         const ordered=[...matches].sort((x,y)=>{
-          const normalize=v=>typeof v==="string" && /^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(v)
+          const normalize=v=>typeof v==="string" && v.length===10 && v.charAt(2)==="/" && v.charAt(5)==="/"
             ? v.slice(6)+v.slice(3,5)+v.slice(0,2) : String(v||"");
           return normalize(x.fecha).localeCompare(normalize(y.fecha));
         });
