@@ -215,6 +215,14 @@ class IndependentClient:
             ttl=120,
         )
 
+    async def async_player_detail_diagnostic(self, player_id: str) -> dict:
+        """Explicit diagnostic; no raw player data returned or cached."""
+        self._validate_team_id(player_id)
+        async with self._lock:
+            if self._adapter is None or not self._adapter.session_is_usable():
+                return {"ok": False, "stage": "session", "category": "not_connected"}
+            return await self._adapter.player_detail_diagnostic(player_id)
+
     async def async_player_statistics(self, player_id: str, team_id: str) -> dict:
         """Explicit read of a player of a verified team; no automatic sync."""
         self._validate_team_id(player_id)
