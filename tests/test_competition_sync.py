@@ -141,6 +141,40 @@ class CompetitionTests(unittest.TestCase):
                              for action, _ in client.calls))
         self.assertIsNone(self.store.latest(identity(), "fixtures"))
 
+    def test_stop_following_during_roster_fetch_prevents_further_requests(self):
+        self.store.follow(identity())
+        store = self.store
+        class RevokingClient(FakeClient):
+            async def async_team_roster(self, team):
+                result = await super().async_team_roster(team)
+                store.unfollow(identity())
+                return result
+        client = RevokingClient()
+        result = asyncio.run(sync_group(client, store, "a",
+                                        date(2026, 10, 1), date(2026, 11, 1)))
+        self.assertEqual(result["status"], "not_followed")
+        self.assertFalse(result["saved"])
+        self.assertEqual(sum(kind == "roster" for kind, _ in client.calls), 1)
+        self.assertIsNone(store.latest(identity(), "fixtures"))
+        self.assertIsNone(store.latest(identity(), "roster", "a"))
+
+    def test_idempotent_refresh_is_not_reported_as_failure(self):
+        self.store.follow(identity())
+        client = FakeClient()
+        async def twice():
+            first = await sync_group(client, self.store, "a",
+                                     date(2026, 10, 1), date(2026, 11, 1),
+                                     fetch_rosters=False)
+            second = await sync_group(client, self.store, "a",
+                                      date(2026, 10, 1), date(2026, 11, 1),
+                                      fetch_rosters=False)
+            return first, second
+        first, second = asyncio.run(twice())
+        self.assertEqual(first["status"], "ok")
+        self.assertEqual(second["status"], "ok")
+        self.assertTrue(second["saved"])
+        self.assertEqual(second["records_written"], 0)
+
     def test_unselected_competition_cannot_download_or_save_rosters(self):
         client = FakeClient()
         result = asyncio.run(sync_group(client, self.store, "a",
