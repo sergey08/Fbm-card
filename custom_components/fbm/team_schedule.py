@@ -65,6 +65,17 @@ def _normalize_matches(matches: list) -> list:
             record["img_local"] = local_image
         if away_image:
             record["img_visitante"] = away_image
+        # Reuse the verified APK crest endpoint used by the fixed-team header.
+        # Never treat a full image payload as a crest identifier.
+        for key, field, converted in (
+            ("imgEquipoLocal" if idx == 0 else "ImgEquipoLocal", "escudo_local", local_image),
+            ("imgEquipoVisitante" if idx == 0 else "ImgEquipoVisitante", "escudo_visitante", away_image),
+        ):
+            value = item.get(key)
+            if not converted and type(value) is str and 0 < len(value.strip()) <= 1024:
+                identifier = value.strip()
+                if all(32 < ord(char) < 127 for char in identifier):
+                    record[field] = identifier
         normalized.append(record)
     return normalized
 
