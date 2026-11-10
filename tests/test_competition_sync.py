@@ -33,6 +33,13 @@ class FakeClient:
         self.calls.append(("identity", team))
         return identity(self.verified)
 
+    async def async_verify_group_season(self, team_ids):
+        self.calls.append(("verify_season", tuple(team_ids)))
+        return {"season_verified": self.verified,
+                "season_id": "2026-27" if self.verified else None,
+                "season_evidence_status": "two_team_official_detail"
+                    if self.verified else "unverified_player_binding"}
+
     async def async_team_standings(self, team):
         self.calls.append(("standings", team))
         return {"clasificacion": [{"id": "a", "equipo": "A"},
@@ -61,7 +68,7 @@ class CompetitionTests(unittest.TestCase):
         result = asyncio.run(sync_group(client, self.store, "a",
                                        date(2026, 10, 1), date(2026, 11, 1)))
         self.assertEqual(result["status"], "season_unverified")
-        self.assertEqual(client.calls, [("identity", "a")])
+        self.assertEqual(client.calls, [("identity", "a"), ("standings", "a"), ("verify_season", ("a", "b"))])
         self.assertEqual(self.store.followed(), [])
 
     def test_preview_reads_group_without_players_or_storage(self):
@@ -76,6 +83,28 @@ class CompetitionTests(unittest.TestCase):
         self.assertEqual(len(client.calls), 3)
         self.assertFalse(any(kind == "roster" for kind, _ in client.calls))
         self.assertEqual(self.store.followed(), [])
+
+    def test_official_two_team_season_verification_allows_archive(self):
+        client = FakeClient(verified=False)
+        original = client.async_verify_group_season
+        async def confirm(team_ids):
+            self.assertEqual(team_ids, ["a", "b"])
+            return {"season_verified": True, "season_id": "official-season",
+                    "season_evidence_status": "two_team_official_detail"}
+        client.async_verify_group_season = confirm
+        result = asyncio.run(sync_group(client, self.store, "a",
+                                        date(2026,10,1), date(2026,11,1),
+                                        fetch_rosters=False))
+        self.assertTrue(result["saved"])
+        self.assertEqual(result["competition"]["season_id"], "official-season")
+        self.assertEqual(len(self.store.followed()), 1)
+
+    def test_rejects_selected_team_not_listed_in_group(self):
+        client = FakeClient(verified=False)
+        with self.assertRaises(ValueError):
+            asyncio.run(sync_group(client, self.store, "not-a-member",
+                                   date(2026,10,1), date(2026,11,1)))
+        self.assertFalse(any(kind == "verify_season" for kind, _ in client.calls))
 
     def test_full_group_deduped_and_photos_removed(self):
         client = FakeClient()
