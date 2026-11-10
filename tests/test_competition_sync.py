@@ -72,6 +72,23 @@ class CompetitionTests(unittest.TestCase):
         self.assertEqual(client.calls, [("identity", "a"), ("standings", "a"), ("verify_season", ("a", "b"))])
         self.assertEqual(self.store.followed(), [])
 
+    def test_sync_does_not_trust_group_flag_without_cross_check(self):
+        client = FakeClient(verified=True)
+        async def unverified(teams):
+            client.calls.append(("verify_season", tuple(teams)))
+            return {"season_verified": False,
+                    "season_evidence_status": "conflicting"}
+        client.async_verify_group_season = unverified
+        self.store.follow(identity())
+        result = asyncio.run(sync_group(
+            client, self.store, "a", date(2026, 10, 1), date(2026, 11, 1)))
+        self.assertEqual(result["status"], "season_unverified")
+        self.assertFalse(result["saved"])
+        self.assertIn(("verify_season", ("a", "b")), client.calls)
+        self.assertFalse(any(kind in ("schedule", "roster")
+                             for kind, _ in client.calls))
+        self.assertIsNone(self.store.latest(identity(), "fixtures"))
+
     def test_preview_reads_group_without_players_or_storage(self):
         client = FakeClient(verified=False)
         result = asyncio.run(preview_group(client, "a",
