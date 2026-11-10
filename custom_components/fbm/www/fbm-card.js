@@ -764,17 +764,30 @@ class FBMCard extends HTMLElement {
         card.append(this._element("h3", "Clasificación del grupo actual"));
         if (!state.standings.length) card.append(this._element("p", "No hay clasificación disponible.", "muted"));
         else {
+          const scroll = this._element("div", "", "fbm-table-scroll");
           const table = document.createElement("table"); table.className = "standings";
           const head = document.createElement("tr");
-          for (const title of ["Pos.", "Equipo", "PJ", "G", "P", "Pts"]) head.append(this._element("th", title));
+          for (const [title, numeric] of [["Pos.", true], ["Equipo", false], ["PJ", true], ["G", true], ["P", true], ["Pts", true]]) {
+            const cell = this._element("th", title, numeric ? "num" : "");
+            cell.scope = "col"; head.append(cell);
+          }
           const thead = document.createElement("thead"); thead.append(head); table.append(thead);
           const body = document.createElement("tbody");
           for (const team of state.standings) {
             const row = document.createElement("tr");
-            for (const field of ["posicion", "equipo", "jugados", "ganados", "perdidos", "puntos"]) row.append(this._element("td", team[field] ?? "—"));
+            if (pinned?.id && team.id === pinned.id) {
+              row.className = "fbm-current-team";
+              row.setAttribute("aria-label", "Tu equipo: " + (team.equipo || ""));
+            }
+            for (const [field, numeric] of [["posicion",true], ["equipo",false], ["jugados",true],
+                                            ["ganados",true], ["perdidos",true], ["puntos",true]]) {
+              const cell = this._element("td", team[field] ?? "—", numeric ? "num" : "");
+              if (field === "equipo") cell.classList.add("fbm-standing-name");
+              row.append(cell);
+            }
             body.append(row);
           }
-          table.append(body); card.append(table);
+          table.append(body); scroll.append(table); card.append(scroll);
         }
       }
       if (this._config.mostrar_horarios === true && state.schedule && Array.isArray(state.schedule.partidos) && (!fixed || state.tab === "partidos")) {
@@ -834,6 +847,13 @@ class FBMCard extends HTMLElement {
       ha-card{box-sizing:border-box;min-width:0}
       ha-card button{font:inherit}
       .fbm-section-subtitle{margin:8px 0 12px;color:var(--secondary-text-color,#6b7280);font-size:.85rem;font-weight:600}
+      .fbm-table-scroll{width:100%;max-width:100%;overflow-x:auto;border:1px solid var(--divider-color,#ddd);border-radius:12px;margin:10px 0}
+      .fbm-table-scroll .standings{display:table;width:100%;min-width:340px;margin:0}
+      .fbm-table-scroll .standings th{font-size:.74rem;text-transform:uppercase;letter-spacing:.025em;color:var(--secondary-text-color,#666);background:var(--secondary-background-color,#f6f6f6)}
+      .fbm-table-scroll .standings td{font-variant-numeric:tabular-nums;font-size:.82rem}
+      .fbm-table-scroll .standings td:first-child{font-weight:700;color:var(--primary-color,#1976d2)}
+      .fbm-standing-name{font-weight:600;line-height:1.35;min-width:145px;overflow-wrap:anywhere}
+      .fbm-table-scroll .fbm-current-team{background:color-mix(in srgb,var(--primary-color,#1976d2) 11%,var(--card-background-color,#fff));box-shadow:inset 3px 0 var(--primary-color,#1976d2)}
       .fbm-roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px;margin:12px 0}
       .fbm-player{min-width:0;border:1px solid var(--divider-color,#ddd);border-radius:14px;padding:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.04)}
       .fbm-player-open{grid-column:1/-1;border-color:var(--primary-color,#1976d2)}
