@@ -17,7 +17,8 @@
         "menu_options": {
           "search": "Buscar equipo para seguir competición",
           "manage": "Dejar de seguir una competición",
-          "refresh": "Actualizar una competición seguida"
+          "refresh": "Actualizar una competición seguida",
+          "automatic": "Actualización automática"
         }
       },
       "search": {
@@ -67,6 +68,14 @@
           "confirmar": "Confirmar actualización",
           "incluir_plantillas": "Descargar también plantillas y estadísticas disponibles"
         }
+      },
+      "automatic": {
+        "title": "Actualizar competiciones automáticamente",
+        "description": "Solo las competiciones que sigues. Clasificación y calendario cada 4 horas (un grupo por ciclo); estadísticas individuales en lotes de 5 cada 2 horas y pausa de 24 horas al completar una ronda. No descarga plantillas nuevas. Las dos opciones están desactivadas por defecto.",
+        "data": {
+          "auto_groups": "Actualizar resultados y clasificación automáticamente",
+          "auto_players": "Actualizar también estadísticas de jugadores ya archivados"
+        }
       }
     },
     "error": {
@@ -78,7 +87,8 @@
       "season_unverified": "Temporada todavía no verificada; no se guardan datos",
       "not_followed": "La competición ya no está seguida",
       "competition_changed": "La fase, el grupo o la temporada han cambiado. Selecciona la nueva competición desde el buscador.",
-      "cannot_refresh": "No se pudo actualizar la competición"
+      "cannot_refresh": "No se pudo actualizar la competición",
+      "auto_requires_groups": "Para actualizar jugadores, activa también la actualización de resultados."
     },
     "abort": {
       "none_followed": "No hay competiciones seguidas",
