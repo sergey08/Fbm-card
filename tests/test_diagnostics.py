@@ -66,6 +66,18 @@ class SafeDiagnosticsTests(unittest.TestCase):
         for value in ("private-local","private-away","private-crest"):
             self.assertNotIn(value,str(result))
 
+    def test_hex_photo_fingerprint_never_exposes_photo_or_url(self):
+        hex_utf16 = "https://appaficionfbm.gesdeportiva.es/images.ashx?secret=private".encode("utf-16le").hex()
+        shape = mod._image_reference_shape(hex_utf16)
+        self.assertEqual(shape["text_form"], "hex")
+        self.assertEqual(shape["hex_decoded_kind"], "utf16le_url")
+        self.assertNotIn("private", str(shape))
+        self.assertNotIn("https", str(shape))
+        png_hex = (bytes([137,80,78,71,13,10,26,10])+b"fixture").hex()
+        self.assertEqual(mod._image_reference_shape(png_hex)["hex_decoded_kind"], "png")
+        other = ("opaque-photo-identifier".encode("utf-8")).hex()
+        self.assertEqual(mod._image_reference_shape(other)["hex_decoded_kind"], "utf8_text")
+
     def test_photo_format_probe_reports_structure_not_photo_contents(self):
         import base64
         opaque = base64.b64encode(b"<svg xmlns='http://www.w3.org/2000/svg'></svg>").decode()
