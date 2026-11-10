@@ -42,7 +42,7 @@ async def run():
     menu = await flow.async_step_init()
     assert menu["type"] == "menu", menu
     assert menu["step_id"] == "init", menu
-    assert menu["menu_options"] == ["search", "manage", "refresh"], menu
+    assert menu["menu_options"] == ["search", "manage", "refresh", "automatic"], menu
 
     # Fail locally: no injected HA instance, client, credentials or network.
     invalid_search = await flow.async_step_search({"texto": "ab"})
