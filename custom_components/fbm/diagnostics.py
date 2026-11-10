@@ -71,9 +71,39 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
                     "object" if type(row[k]) is dict else
                     "array" if type(row[k]) is list else "other")
                     for k in keys_only}
+                if "Foto" in row:
+                    result["player_photo_reference"] = _image_reference_kind(row["Foto"])
         elif name in payload:
             result[name + "_type"] = type(v).__name__ if type(v) in (str, dict, int, bool, type(None)) else "other"
+    if kind == "schedule":
+        matches = payload.get("partidos")
+        if type(matches) is list and matches and type(matches[0]) is dict:
+            first = matches[0]
+            names = ("EscudoLocal", "EscudoVisitante", "escudoLocal",
+                     "escudoVisitante", "IdEquipoLocal", "IdEquipoVisitante",
+                     "idEquipoLocal", "idEquipoVisitante", "LogoLocal", "LogoVisitante")
+            result["match_image_fields"] = [key for key in names if key in first]
+            result["match_image_types"] = {
+                key: _image_reference_kind(first[key]) for key in names if key in first
+            }
     return result
+
+
+def _image_reference_kind(value: object) -> str:
+    """Classify an image reference without returning URLs, IDs or photographs."""
+    if value is None:
+        return "null"
+    if type(value) is not str:
+        return "other"
+    if not value.strip():
+        return "empty"
+    if value.startswith("https://"):
+        return "https_url"
+    if value.startswith("http://"):
+        return "http_url"
+    if value.startswith("data:"):
+        return "inline_data"
+    return "opaque_reference"
 
 
 def safe_player_detail_shape(payload: object) -> dict:
@@ -87,7 +117,8 @@ def safe_player_detail_shape(payload: object) -> dict:
     player_fields = ("id", "Id", "nombre", "Nombre", "nombreEquipo",
                      "NombreEquipo", "temporada", "Temporada",
                      "categoria", "Categoria", "partidosJugados",
-                     "PartidosJugados", "puntosTotales", "PuntosTotales")
+                     "PartidosJugados", "puntosTotales", "PuntosTotales",
+                     "Foto", "foto", "IdJugadorFoto", "idJugadorFoto")
     result = {"type": "object",
               "present": [k for k in fields if k in payload],
               "error_empty": payload.get("error") == ""}
@@ -99,6 +130,10 @@ def safe_player_detail_shape(payload: object) -> dict:
                                       "null" if item is None else "other")
             if type(item) is dict:
                 result["player_fields"] = [k for k in player_fields if k in item]
+                result["photo_fields"] = {
+                    k: _image_reference_kind(item[k]) for k in
+                    ("Foto", "foto", "IdJugadorFoto", "idJugadorFoto") if k in item
+                }
     for key in ("equipo", "Equipo"):
         if key in payload:
             result["team_type"] = "object" if type(payload[key]) is dict else "other"
