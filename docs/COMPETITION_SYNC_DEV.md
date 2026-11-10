@@ -23,6 +23,10 @@ On refresh, the archive resolves the explicit prior selection using its official
 
 The separate CI workflow `.github/workflows/ha-real-api-smoke.yml` installs the **real Home Assistant Core 2026.11.0** package in a fresh Python 3.14 environment and runs `tests/ha_real_api_smoke.py`. It confirms that the FBM OptionsFlow factory, native menu, invalid-search form and complete search → verify → follow → refresh fixtures → unfollow with retained SQLite history operate with actual Home Assistant and Probatio classes, **without importing or starting the production server**. It is an integration-flow API compatibility check using fake FBM responses and temporary SQLite, not a frontend/browser validation, live season check or end-to-end HA server deployment. The normal offline unit/JS tests remain separate.
 
+### Readable names in every competition menu
+
+The confirmation, followed-group manager, manual refresh picker and unfollow confirmation now display official **team name, season label, phase name and group name** rather than the opaque FBM API identifiers. The SQLite archive preserves opaque identifiers as internal keys and stores the public short labels in separate columns with backward-compatible migrations. Existing beta archives are populated with names on their next successful refresh; until then the menu shows a generic competition number and season rather than the raw identifier. The existing Lovelace card bundle is unchanged.
+
 ### Native competition manager (DEV)
 
 The integration's **Configure** button opens a native Home Assistant options flow. The selection now retains the **verified source-team identifier** in the competition row (`anchor_team_id`) to support future explicit refreshes of the group, without exposing it in the summary sensor. Existing DEV SQLite files are migrated in place, with historical snapshots preserved. No background jobs are started. The first implemented selection path is **Find team → Select team → Verify entire current competition → Confirm follow**. Searching uses the existing authenticated `async_search_teams` endpoint; the confirmation validates the official search season label, phase/group IDs and team membership in standings, without downloading any player details. If verification fails, nothing is followed or stored. The flow does not automatically download any rosters. **Manage → Select competition → Confirm unfollow** turns off following but preserves historical snapshots. It reuses the same SQLite archive as the WebSocket endpoints and summary sensor; duplicates are prevented by the season/phase/group composite key.
@@ -98,6 +102,10 @@ Al actualizar se reutiliza la selección voluntaria archivada, vinculada al equi
 ### Prueba de compatibilidad con Home Assistant 2026.11 real
 
 El flujo CI independiente `.github/workflows/ha-real-api-smoke.yml` instala **Home Assistant Core 2026.11.0 real** en Python 3.14 y ejecuta `tests/ha_real_api_smoke.py`. Comprueba el registro de OptionsFlow, el menú, los formularios y el recorrido buscar → verificar → seguir → actualizar partidos → dejar de seguir conservando históricos, usando clases reales de Home Assistant y Probatio, **sin arrancar el servidor de producción**. Es una prueba funcional del flujo con API real de HA, FBM simulado y SQLite temporal, no una prueba visual del frontend ni una sincronización real de temporada. Se mantienen aparte las pruebas aisladas habituales.
+
+### Nombres legibles en todos los menús de competiciones
+
+La confirmación, la lista de competiciones seguidas, el selector de actualización y la confirmación para dejar de seguir muestran el **nombre del equipo, temporada, fase y grupo**, no los identificadores internos de FBM. SQLite conserva los identificadores como claves técnicas y guarda los nombres públicos por separado, migrando sin borrar los históricos. Las competiciones ya guardadas en la beta recibirán automáticamente los nombres en su próxima actualización correcta; mientras tanto se muestra un número de competición y la temporada, nunca el código interno. El JavaScript de las tarjetas existentes no se modifica.
 
 ### Gestor de competiciones nativo (DEV)
 
