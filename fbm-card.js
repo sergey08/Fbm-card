@@ -545,15 +545,23 @@ class FBMCard extends HTMLElement {
                 if (opened.categoria) label.push(opened.categoria);
                 if (Number.isInteger(opened.partidos_jugados)) label.push("PJ " + opened.partidos_jugados);
                 if (Number.isInteger(opened.puntos_totales)) label.push("Puntos " + opened.puntos_totales);
+                if (typeof opened.media_puntos === "number" && Number.isFinite(opened.media_puntos))
+                  label.push("Media puntos " + opened.media_puntos);
                 if (typeof opened.puntos_por_partido === "number" && Number.isFinite(opened.puntos_por_partido))
                   label.push("Puntos/partido " + opened.puntos_por_partido);
+                if (typeof opened.minutos_por_partido === "number" && Number.isFinite(opened.minutos_por_partido))
+                  label.push("Min/partido " + opened.minutos_por_partido);
                 if (label.length) item.append(this._element("p", label.join(" · "), "muted"));
               }
               const detail = [];
               if (Number.isInteger(player.partidos_jugados)) detail.push("PJ " + player.partidos_jugados);
               if (Number.isInteger(player.puntos_totales)) detail.push("Puntos " + player.puntos_totales);
+              if (typeof player.media_puntos === "number" && Number.isFinite(player.media_puntos))
+                detail.push("Media puntos " + player.media_puntos);
               if (typeof player.puntos_por_partido === "number" && Number.isFinite(player.puntos_por_partido))
-                detail.push("Media " + player.puntos_por_partido);
+                detail.push("Puntos/partido " + player.puntos_por_partido);
+              if (typeof player.minutos_por_partido === "number" && Number.isFinite(player.minutos_por_partido))
+                detail.push("Min/partido " + player.minutos_por_partido);
               if (detail.length) item.append(this._element("p", detail.join(" · "), "muted"));
               card.append(item);
             }
