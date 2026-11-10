@@ -36,6 +36,18 @@ class RosterTests(unittest.TestCase):
         self.assertNotIn("club", player)
         self.assertNotIn("private-photo-url", str(result))
 
+    def test_verified_inline_photo_only(self):
+        import base64
+        png = base64.b64encode(b"\\x89PNG\\r\\n\\x1a\\n" + b"photo-fixture").decode()
+        result = mod.normalize_team_roster({"error":"", "misjugadores":[
+            {"Id":"p1","Nombre":"Jugador","Foto":png}
+        ]})
+        self.assertEqual(result["jugadores"][0]["foto"], "data:image/png;base64," + png)
+        invalid = mod.normalize_team_roster({"error":"", "misjugadores":[
+            {"Id":"p2","Nombre":"Jugador","Foto":"not-a-verified-image"}
+        ]})
+        self.assertNotIn("foto", invalid["jugadores"][0])
+
     def test_live_lowercase_roster_spelling(self):
         result = mod.normalize_team_roster({"error": "", "misjugadores": [
             {"id": "p1", "nombre": "Ejemplo"}
