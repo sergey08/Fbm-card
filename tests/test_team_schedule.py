@@ -3,10 +3,19 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-path = Path(__file__).resolve().parents[1] / 'custom_components/fbm/team_schedule.py'
-spec = importlib.util.spec_from_file_location('team_schedule_test', path)
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+import sys
+import types
+
+root = Path(__file__).resolve().parents[1] / "custom_components/fbm"
+pkg = types.ModuleType("fbm_image_test_schedule")
+pkg.__path__ = [str(root)]
+sys.modules[pkg.__name__] = pkg
+for name in ("image_references", "team_schedule"):
+    spec = importlib.util.spec_from_file_location(pkg.__name__ + "." + name, root / (name + ".py"))
+    loaded = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = loaded
+    spec.loader.exec_module(loaded)
+module = sys.modules[pkg.__name__ + ".team_schedule"]
 
 
 class TeamScheduleTests(unittest.TestCase):
