@@ -31,27 +31,41 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         value = identity.get(field)
         if type(value) is not str or not value.strip():
             raise ValueError("No hay grupo oficial verificado")
-    if identity.get("season_verified") is not True:
-        return {
-            "status": "season_unverified",
-            "group_verified": True,
-            "season_evidence_status": identity.get("season_evidence_status", "none"),
-            "saved": False,
-        }
-    group = {
-        "season_id": identity["season_id"], "phase_id": identity["phase_id"],
-        "group_id": identity["group_id"], "season_verified": True,
-    }
+    # First check official membership in the selected phase/group.
+    # This must precede player-detail verification; only those official
+    # member IDs are eligible to corroborate a season.
     standings = await client.async_team_standings(team_id)
     rows = standings.get("clasificacion") if type(standings) is dict else None
-    if type(rows) is not list or not rows or len(rows) > MAX_TEAMS:
-        raise ValueError("Clasificación de grupo no válida o demasiado grande")
+    if type(rows) is not list or len(rows) < 2 or len(rows) > MAX_TEAMS:
+        raise ValueError("Clasificación de grupo no válida")
     team_ids = []
     for row in rows:
         tid = row.get("id") if type(row) is dict else None
         if type(tid) is not str or not tid.strip() or len(tid) > 512 or tid in team_ids:
             raise ValueError("Identificador de equipo duplicado o inválido")
         team_ids.append(tid)
+    if team_id not in team_ids:
+        raise ValueError("El equipo no figura en la clasificación del grupo")
+    # The phase response alone cannot attest to the season. Two distinct
+    # officially listed teams must return matching official player-detail
+    # idTemporadaActual, with player/team identity verified inside the adapter.
+    if identity.get("season_verified") is True:
+        verified = identity
+    else:
+        verified = await client.async_verify_group_season(team_ids)
+    if verified.get("season_verified") is not True:
+        return {
+            "status": "season_unverified", "group_verified": True,
+            "season_evidence_status": verified.get("season_evidence_status", "none"),
+            "saved": False,
+        }
+    season_id = verified.get("season_id")
+    if type(season_id) is not str or not season_id.strip():
+        raise ValueError("La temporada no está verificada")
+    group = {
+        "season_id": season_id, "phase_id": identity["phase_id"],
+        "group_id": identity["group_id"], "season_verified": True,
+    }
     fixtures = await client.async_team_schedule(team_id, start, end)
     if type(fixtures) is not dict or type(fixtures.get("partidos")) is not list:
         raise ValueError("Calendario oficial no válido")
