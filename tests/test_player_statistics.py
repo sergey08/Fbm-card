@@ -96,6 +96,24 @@ class PlayerStatsTests(unittest.TestCase):
         for value in ("private1","private2","Private Rival","--"):
             self.assertNotIn(value,str(result))
 
+    def test_official_dashes_are_missing_not_zero(self):
+        response={"error":"","listaDatosPartido":[
+            {"IdPartido":"match-1","Puntos":12,"FaltaCometida":2,
+             "Asistencia":"-","FaltaRecibida":"--",
+             "RebotesTotal":"—","RebotesDefensivos":"–",
+             "Recuperaciones":"-","Perdidas":"-","Valoracion":-3}
+        ]}
+        parsed=stats.normalize_player_match_list(response)["partidos"][0]
+        self.assertEqual(parsed["puntos"],12)
+        self.assertEqual(parsed["faltas_cometidas"],2)
+        self.assertEqual(parsed["valoracion"],-3)
+        for key in ("asistencias","faltas_recibidas","rebotes",
+                    "rebotes_defensivos","recuperaciones","perdidas"):
+            self.assertIsNone(parsed[key])
+        with self.assertRaises(stats.PlayerStatisticsError):
+            stats.normalize_player_match_list({"error":"","listaDatosPartido":[
+                {"IdPartido":"match-2","Asistencia":"unknown"}]})
+
     def test_reject_mixed_match_casing(self):
         with self.assertRaises(stats.PlayerStatisticsError):
             stats.normalize_player_match_list({"error":"","listaDatosPartido":[
