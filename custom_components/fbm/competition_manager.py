@@ -37,6 +37,22 @@ async def identify_competition(client, team_id: str) -> dict:
             "season_verified": True}
 
 
+async def competition_season_diagnostic(client, team_id: str) -> dict:
+    """Metadata-only season cross-check with two teams, never return raw IDs.
+
+    This is deliberately distinct from follow/sync: it does not modify HA
+    configuration or download the whole group. Private player DTOs are kept
+    solely inside the existing adapter.
+    """
+    selected = await identify_competition(client, team_id)
+    return {
+        "status": selected["status"],
+        "group_verified": True,
+        "team_count": selected["team_count"],
+        "season_match_verified": selected["status"] == "verified",
+    }
+
+
 def group_selection(competition: dict) -> dict:
     """A verified identity suitable for CompetitionArchive.follow/unfollow."""
     if type(competition) is not dict or competition.get("status") != "verified":
