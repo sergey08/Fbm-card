@@ -18,6 +18,7 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 - `fbm/competition/preview`: `entry_id`, `equipo`, `desde`, `hasta`. Fetches official group membership and fixtures without saving or requesting player rosters, even when season is unverified.
 - `fbm/competition/sync`: `entry_id`, `equipo`, `desde`, `hasta`, `incluir_plantillas` (boolean)
 - `fbm/competition/list`: `entry_id`
+- `fbm/competition/analysis`: `entry_id`, `season_id`, `phase_id`, `group_id`. Offline comparison of every team in the group using archived standings, finished matches with valid scores, and official player total points where rosters exist. Returns safe missing-data markers, observation timestamps, and no images. This is a Home Assistant admin WebSocket command, **not yet a direct MCP tool**.
 - `fbm/competition/latest`: `entry_id`, `season_id`, `phase_id`, `group_id`, `source` (`standings`, `fixtures`, `roster`), `subject` (team ID for roster, empty string otherwise)
 
 Sync uses the already-validated official FBM guest identity, team-group identification, standings, schedule and roster APIs. It requests at most 20 distinct teams, sequentially, with a small inter-request delay. It does not trigger on integration startup, search or card render. Failure of one roster retains earlier valid snapshots; errors are summarized, never returned verbatim.
@@ -55,7 +56,7 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 
 ### Comandos de desarrollo
 
-Los comandos WebSocket `fbm/competition/preview`, `fbm/competition/sync`, `fbm/competition/list` y `fbm/competition/latest` requieren permisos de administrador. La vista previa consulta equipos y calendario del grupo sin persistencia ni descargas de plantillas, incluso cuando la temporada no esté verificada. La sincronización usa la identidad invitada ya existente, limita la descarga a 20 equipos y consulta plantillas secuencialmente, sin solicitudes automáticas al iniciar HA.
+Los comandos WebSocket `fbm/competition/preview`, `fbm/competition/sync`, `fbm/competition/list`, `fbm/competition/latest` y `fbm/competition/analysis` requieren permisos de administrador. `analysis` compara todos los equipos del grupo usando la clasificación y los partidos finalizados con marcador disponible, y ordena anotadores solo cuando FBM publica sus puntos totales. Trabaja exclusivamente sobre los datos archivados y devuelve fechas de observación. **Todavía no es una herramienta MCP directa.** La vista previa consulta equipos y calendario del grupo sin persistencia ni descargas de plantillas, incluso cuando la temporada no esté verificada. La sincronización usa la identidad invitada ya existente, limita la descarga a 20 equipos y consulta plantillas secuencialmente, sin solicitudes automáticas al iniciar HA.
 
 ### Verificación cruzada de temporada (nuevo código DEV)
 
