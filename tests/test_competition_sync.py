@@ -89,7 +89,7 @@ class GroupTests(unittest.TestCase):
         self.client.phase="another"
         result=self.run_sync(fetch_rosters=True,expected_competition={
             "season_id":"26/27","phase_id":"phase1","group_id":"group1"})
-        self.assertEqual(result["status"],"not_followed")
+        self.assertEqual(result["status"],"competition_changed")
         self.assertNotIn("schedule",self.client.calls)
 
     def test_expected_season_mismatch_blocks(self):
