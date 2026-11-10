@@ -160,6 +160,22 @@ class GroupTests(unittest.TestCase):
                 db.execute("INSERT INTO competitions VALUES ('26/27','p','g',1)")
             self.assertEqual(Archive(path).followed_with_anchor()[0]["anchor_team_id"],"")
 
+    def test_only_official_club_crest_urls_survive_archive(self):
+        self.select()
+        valid = ("https://appaficionfbm.gesdeportiva.es/imagenes.ashx"
+                 "?tipo=escudo&id=ABC123")
+        payload={"clasificacion":[
+            {"id":"a","equipo":"A","escudo":valid},
+            {"id":"b","equipo":"B","escudo":"PRIVATE_IMAGE"},
+            {"id":"c","equipo":"C",
+             "escudo":"https://appaficionfbm.gesdeportiva.es.evil.test/imagenes.ashx?tipo=escudo&id=123"},
+        ]}
+        self.assertTrue(self.archive.record(identity(),"standings",payload))
+        rows=self.archive.latest(identity(),"standings")["payload"]["clasificacion"]
+        self.assertEqual(rows[0]["escudo"],valid)
+        self.assertNotIn("escudo",rows[1])
+        self.assertNotIn("escudo",rows[2])
+
     def test_sanitization_and_preserved_history(self):
         self.select()
         fixture={"partidos":[{"id":"m","local":"A","visitante":"B",
