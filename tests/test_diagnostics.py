@@ -60,9 +60,9 @@ class SafeDiagnosticsTests(unittest.TestCase):
              "IdEquipoVisitante":"private-away","EscudoVisitante":None}]}
         result=mod.safe_payload_shape(payload,kind="schedule")
         self.assertIn("EscudoLocal",result["match_image_fields"])
-        self.assertEqual(result["match_image_types"]["EscudoLocal"],"opaque_reference")
-        self.assertEqual(result["match_image_types"]["EscudoVisitante"],"null")
-        self.assertEqual(result["match_image_types"]["ImgEquipoLocal"],"opaque_reference")
+        self.assertEqual(result["match_image_types"]["EscudoLocal"]["kind"],"opaque_reference")
+        self.assertEqual(result["match_image_types"]["EscudoVisitante"]["kind"],"null")
+        self.assertEqual(result["match_image_types"]["ImgEquipoLocal"]["kind"],"opaque_reference")
         for value in ("private-local","private-away","private-crest"):
             self.assertNotIn(value,str(result))
 
