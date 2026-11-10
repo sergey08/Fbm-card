@@ -9,5 +9,53 @@
     "abort": {
       "already_configured": "La integración FBM ya está configurada."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "FBM competition manager",
+        "menu_options": {
+          "search": "Find team to follow competition",
+          "manage": "Unfollow competition"
+        }
+      },
+      "search": {
+        "title": "Search for an FBM team",
+        "data": {
+          "texto": "Team name"
+        }
+      },
+      "select": {
+        "title": "Select team",
+        "data": {
+          "equipo": "Team"
+        }
+      },
+      "confirm": {
+        "title": "Follow entire competition",
+        "description": "Team: {team}. Official group: {group}. Selection does not automatically download rosters.",
+        "data": {
+          "confirmar": "I confirm following this competition"
+        }
+      },
+      "manage": {
+        "title": "Unfollow a competition",
+        "description": "The competition will no longer be followed. Historic snapshots remain.",
+        "data": {
+          "competicion": "Competition"
+        }
+      }
+    },
+    "error": {
+      "invalid_search": "Enter at least three characters",
+      "no_teams": "No teams found",
+      "cannot_connect": "Could not query FBM",
+      "invalid_selection": "Invalid selection",
+      "cannot_verify": "Could not verify competition",
+      "season_unverified": "Season not yet verified; no data saved"
+    },
+    "abort": {
+      "none_followed": "No followed competitions"
+    }
   }
 }
