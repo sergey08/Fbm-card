@@ -4,6 +4,8 @@ The APK's EquipoPartidoDto/ResultadosDto expose camelCase fields. Keep the
 older experimental PascalCase mapping for compatibility, without mixing them.
 """
 from __future__ import annotations
+from .image_references import image_data_uri
+
 
 
 class TeamScheduleError(ValueError):
@@ -56,6 +58,13 @@ def _normalize_matches(matches: list) -> list:
                     local.isascii() and away.isascii() and
                     local.isdecimal() and away.isdecimal()):
                 record["marcador"] = {"local": int(local), "visitante": int(away)}
+        # APK EquipoPartidoDto exposes images with these exact names.
+        local_image = image_data_uri(item.get("imgEquipoLocal" if idx == 0 else "ImgEquipoLocal"), max_bytes=65536)
+        away_image = image_data_uri(item.get("imgEquipoVisitante" if idx == 0 else "ImgEquipoVisitante"), max_bytes=65536)
+        if local_image:
+            record["img_local"] = local_image
+        if away_image:
+            record["img_visitante"] = away_image
         normalized.append(record)
     return normalized
 
