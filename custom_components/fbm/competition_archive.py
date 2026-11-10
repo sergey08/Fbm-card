@@ -13,7 +13,7 @@ import sqlite3
 class CompetitionArchive:
     """Versioned snapshots deduplicated by verified competition identity."""
 
-    SOURCES = frozenset({"standings", "fixtures", "roster"})
+    SOURCES = frozenset({"standings", "fixtures", "roster", "player_stats"})
     MAX_JSON_BYTES = 1024 * 1024
 
     def __init__(self, path: str):
@@ -193,13 +193,59 @@ class CompetitionArchive:
         key = self._identity(identity)
         if source not in self.SOURCES or type(payload) is not dict:
             raise ValueError("Fuente de datos no autorizada")
-        expected = {"standings": "clasificacion", "fixtures": "partidos", "roster": "jugadores"}[source]
+        expected = {"standings": "clasificacion", "fixtures": "partidos", "roster": "jugadores", "player_stats": "partidos"}[source]
         if type(payload.get(expected)) is not list:
             raise ValueError("Datos normalizados incompletos")
-        if source != "roster" and subject:
-            raise ValueError("El sujeto solo se usa para plantillas")
-        if source == "roster" and (type(subject) is not str or not subject or len(subject) > 512):
+        if source in ("standings", "fixtures") and subject:
+            raise ValueError("El sujeto solo se usa para plantillas o estadísticas")
+        if source in ("roster", "player_stats") and (type(subject) is not str or not subject or len(subject) > 512):
             raise ValueError("ID de equipo no válido")
+        if source == "player_stats":
+            # These are normalized, per-match sporting numbers only. The
+            # player ID is the snapshot subject; do not duplicate names,
+            # personal profile or network DTOs in each match.
+            allowed = {"id_partido", "fecha", "rival", "local", "puntos",
+                       "asistencias", "faltas_cometidas", "faltas_recibidas",
+                       "rebotes", "rebotes_defensivos", "rebotes_ofensivos",
+                       "recuperaciones", "perdidas", "valoracion"}
+            matches = []
+            for match in payload["partidos"]:
+                if type(match) is not dict:
+                    raise ValueError("Estadística de partido inválida")
+                ident = match.get("id_partido")
+                if type(ident) is not str or not ident or len(ident) > 512:
+                    raise ValueError("Partido sin identificador")
+                clean = {k: v for k, v in match.items() if k in allowed}
+                for field in ("puntos", "asistencias", "faltas_cometidas",
+                              "faltas_recibidas", "rebotes", "rebotes_defensivos",
+                              "rebotes_ofensivos", "recuperaciones", "perdidas",
+                              "valoracion"):
+                    value = clean.get(field)
+                    if value is not None and (type(value) not in (int, float)
+                            or abs(value) > 10000):
+                        raise ValueError("Estadística inválida")
+                matches.append(clean)
+            if len(matches) > 1000 or len({m["id_partido"] for m in matches}) != len(matches):
+                raise ValueError("Partidos repetidos o excesivos")
+            globals_input = payload.get("globales")
+            global_allowed = {"puntos_totales", "media_puntos", "asistencias",
+                              "faltas_cometidas", "faltas_recibidas", "rebotes",
+                              "rebotes_defensivos", "rebotes_ofensivos",
+                              "recuperaciones", "perdidas", "valoracion"}
+            if type(globals_input) is not dict:
+                raise ValueError("Estadísticas globales incompletas")
+            global_clean = {}
+            for k in global_allowed:
+                value = globals_input.get(k)
+                if value is not None and (type(value) not in (int, float)
+                        or abs(value) > 1000000):
+                    raise ValueError("Estadística global inválida")
+                global_clean[k] = value
+            payload = {"globales": global_clean, "partidos": matches}
+            encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+            if len(encoded.encode("utf-8")) > self.MAX_JSON_BYTES:
+                raise ValueError("Instantánea demasiado grande")
+            return self._write_snapshot(key, source, subject, encoded, observed_at)
         # Persist explicit normalized sporting fields only. This excludes
         # photographs, image URLs, original DTO extras and future unknown fields.
         approved = {
@@ -223,6 +269,9 @@ class CompetitionArchive:
         encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
         if len(encoded.encode("utf-8")) > self.MAX_JSON_BYTES:
             raise ValueError("Instantánea demasiado grande")
+        return self._write_snapshot(key, source, subject, encoded, observed_at)
+
+    def _write_snapshot(self, key, source, subject, encoded, observed_at):
         timestamp = observed_at or datetime.now(timezone.utc).isoformat()
         at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         if at.tzinfo is None:
