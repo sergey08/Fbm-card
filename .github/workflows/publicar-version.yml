@@ -59,7 +59,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             # HACS muestra hashes si solo encuentra pre-releases y la opción beta no está activada.
             # Mantener el sufijo bN en el tag, pero hacer visible esta release al canal normal.
-            gh release edit "$TAG" --prerelease=false
+            gh release edit "$TAG" --prerelease=false --latest
             echo "Release existente $TAG marcada como disponible para HACS."
             exit 0
           fi
