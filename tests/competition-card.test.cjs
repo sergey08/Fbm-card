@@ -69,6 +69,15 @@ test("competition card shows standings and loads roster on team click",async()=>
   back.listeners.click();
   assert.equal(c._teamId,null);
 });
+test("competition card uses only verified official crest URLs",()=>{
+  const c=card();
+  const official="https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=ABC123";
+  assert.equal(c._verifiedCrest(official),official);
+  assert.equal(c._verifiedCrest("PRIVATE_IMAGE"),"");
+  assert.equal(c._verifiedCrest("http://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=ABC123"),"");
+  assert.equal(c._verifiedCrest("https://appaficionfbm.gesdeportiva.es.bad.test/imagenes.ashx?tipo=escudo&id=ABC123"),"");
+});
+
 test("competition card rejects invalid sensor and group index",()=>{
   assert.throws(()=>card().setConfig({entity:"light.kitchen"}),/sensor/);
   assert.throws(()=>card().setConfig({group_index:-1}),/Índice/);
