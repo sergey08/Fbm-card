@@ -27,6 +27,16 @@ class RosterTests(unittest.TestCase):
         self.assertNotIn("club", player)
         self.assertNotIn("private-photo-url", str(result))
 
+    def test_live_lowercase_roster_spelling(self):
+        result = mod.normalize_team_roster({"error": "", "misjugadores": [
+            {"id": "p1", "nombre": "Ejemplo"}
+        ]})
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["jugadores"][0]["id"], "p1")
+        with self.assertRaises(mod.PlayerRosterError):
+            mod.normalize_team_roster({"error": "", "misjugadores": [],
+                                       "misJugadores": []})
+
     def test_stats_missing_not_fabricated(self):
         result = mod.normalize_team_roster({"error": "", "misJugadores": [
             {"id": "b", "nombre": "Ejemplo"}
