@@ -66,7 +66,7 @@ def _read_competition_summary(path: str) -> dict:
                     ranking.append({
                         key: item[key] for key in (
                             "id", "equipo", "posicion", "jugados",
-                            "ganados", "perdidos", "puntos"
+                            "ganados", "perdidos", "puntos", "escudo"
                         ) if key in item and type(item[key]) in (str, int)
                     })
             recent_results = []
