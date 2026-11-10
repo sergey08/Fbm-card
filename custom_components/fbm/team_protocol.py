@@ -13,6 +13,14 @@ from .device_protocol import open_request
 TEAM_URL = "https://appaficionfbm.gesdeportiva.es/v2/equipo.ashx"
 
 
+class TeamTransportError(RuntimeError):
+    """Fixed diagnostic category; never carries server text or form values."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__("FBM team request failed")
+
+
 def phases_fields(device_id: str, key: str, team_id: str) -> dict[str, str]:
     if any(not isinstance(x, str) or not x.strip() for x in (device_id, key, team_id)):
         raise ValueError("Faltan identificadores de equipo o sesion")
@@ -62,16 +70,16 @@ def post_team_form(fields: dict[str, str]) -> dict:
     try:
         with open_request(request, timeout=12) as response:
             if response.status != 200:
-                raise RuntimeError("Respuesta HTTP de equipo no valida")
+                raise TeamTransportError("http_non_200")
             raw = response.read(131073)
     except (urllib.error.URLError, TimeoutError, OSError):
-        raise RuntimeError("No se pudo consultar el equipo") from None
+        raise TeamTransportError("network") from None
     if len(raw) > 131072:
-        raise RuntimeError("Respuesta de equipo demasiado grande")
+        raise TeamTransportError("response_too_large")
     try:
         data = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
-        raise RuntimeError("Respuesta de equipo no es JSON valido") from None
+        raise TeamTransportError("invalid_json") from None
     if not isinstance(data, dict):
-        raise RuntimeError("Respuesta de equipo inesperada")
+        raise TeamTransportError("non_object_json")
     return data
