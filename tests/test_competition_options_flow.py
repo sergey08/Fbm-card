@@ -105,7 +105,7 @@ class FakeClient:
     async def async_verify_group_season(self, teams):
         self.calls.append("season")
         return {"season_verified": self.verified,
-                "season_id": "verified-season" if self.verified else None}
+                "season_id": "26/27" if self.verified else None}
 
 
 class FakeHass:
@@ -143,7 +143,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             Archive(str(self.path)).followed_with_anchor()[0]["anchor_team_id"],
             "team-A")
-        selection = {"season_id": "verified-season", "phase_id": "phase",
+        selection = {"season_id": "26/27", "phase_id": "phase",
                      "group_id": "group", "season_verified": True}
         Archive(str(self.path)).record(
             selection, "standings", {"clasificacion": [{"id": "team-A"}]})
@@ -173,7 +173,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["type"], "create_entry")
         self.assertIn("schedule", self.client.calls)
         self.assertNotIn("roster", self.client.calls)
-        identity = {"season_verified": True, "season_id": "verified-season",
+        identity = {"season_verified": True, "season_id": "26/27",
                     "phase_id": "phase", "group_id": "group"}
         archive = Archive(str(self.path))
         self.assertEqual(len(archive.latest(identity, "fixtures")["payload"]["partidos"]), 1)
@@ -206,7 +206,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["errors"]["base"], "competition_changed")
         self.assertNotIn("schedule", self.client.calls)
         self.assertNotIn("roster", self.client.calls)
-        selected = {"season_verified": True, "season_id": "verified-season",
+        selected = {"season_verified": True, "season_id": "26/27",
                     "phase_id": "phase", "group_id": "group"}
         self.assertTrue(Archive(str(self.path)).is_followed(selected))
         self.assertIsNone(Archive(str(self.path)).latest(selected, "fixtures"))
@@ -215,16 +215,16 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.flow.async_step_refresh())["reason"], "none_followed")
         self.assertFalse(self.path.exists())
         Archive(str(self.path)).follow({
-            "season_verified": True, "season_id": "verified-season",
+            "season_verified": True, "season_id": "26/27",
             "phase_id": "phase", "group_id": "group"})
         self.assertEqual(
             (await self.flow.async_step_refresh())["reason"], "no_refreshable_groups")
 
     async def test_invalid_season_never_writes_competition(self):
-        self.client.verified = False
         await self.flow.async_step_search({"texto": "pinto"})
+        self.flow._results["team-A"]["temporada"] = "26/29"
         result = await self.flow.async_step_select({"equipo": "team-A"})
-        self.assertEqual(result["errors"]["base"], "season_unverified")
+        self.assertEqual(result["errors"]["base"], "cannot_verify")
         result = await self.flow.async_step_confirm({"confirmar": True})
         self.assertEqual(result["errors"]["base"], "season_unverified")
         self.assertFalse(self.path.exists())
