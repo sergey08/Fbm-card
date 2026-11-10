@@ -56,7 +56,21 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
         if isinstance(v, list):
             result[name + "_count"] = len(v)
             if kind == "roster" and v and type(v[0]) is dict:
-                result["first_row_present"] = sorted(k for k in ROSTER_ROW_KEYS if k in v[0])
+                row = v[0]
+                result["first_row_present"] = sorted(k for k in ROSTER_ROW_KEYS if k in row)
+                # Only key names and type labels; never the player/ID values.
+                keys_only = sorted(k for k in row if type(k) is str
+                                   and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,39}", k)
+                                   and k.lower() not in {"key", "authorization", "token", "id_dispositivo",
+                                                         "uid", "password", "secret", "cookie", "session"})[:50]
+                result["first_row_keys"] = keys_only
+                result["first_row_types"] = {k: ("null" if row[k] is None else
+                    "string" if type(row[k]) is str else
+                    "number" if type(row[k]) in (int, float) else
+                    "boolean" if type(row[k]) is bool else
+                    "object" if type(row[k]) is dict else
+                    "array" if type(row[k]) is list else "other")
+                    for k in keys_only}
         elif name in payload:
             result[name + "_type"] = type(v).__name__ if type(v) in (str, dict, int, bool, type(None)) else "other"
     return result
