@@ -45,6 +45,30 @@ class PlayerDetailTests(unittest.TestCase):
         self.assertNotIn("secret", str(result))
         self.assertNotIn("private", str(result))
 
+    def test_live_pascalcase_detail_with_missing_total_points(self):
+        response={"error":"","jugador":{
+            "Id":"p1","Nombre":"Jugador ejemplo","NombreEquipo":"Equipo",
+            "Temporada":"26/27","Categoria":"Senior",
+            "PartidosJugados":5,"PuntosTotales":-1,
+            "MediaPuntos":7,"PuntosPorPartido":7.0,
+            "MinutosPorPartido":12.5,"Foto":"private-image"}}
+        result=mod.normalize_player_detail(response,"p1")["jugador"]
+        self.assertEqual(result["nombre"],"Jugador ejemplo")
+        self.assertEqual(result["partidos_jugados"],5)
+        self.assertIsNone(result["puntos_totales"])
+        self.assertEqual(result["minutos_por_partido"],12.5)
+        self.assertNotIn("Foto",result)
+        self.assertNotIn("private-image",str(result))
+
+    def test_mixed_detail_case_and_mismatched_id_rejected(self):
+        for response in (
+            {"error":"","jugador":{"Id":"p1","Nombre":"Player","puntosTotales":2}},
+            {"error":"","jugador":{"Id":"wrong","Nombre":"Player"}},
+            {"error":"","jugador":{"Id":"p1","Nombre":"Player","PuntosTotales":-2}},
+        ):
+            with self.assertRaises(mod.PlayerDetailError):
+                mod.normalize_player_detail(response,"p1")
+
     def test_reject_mismatched_id_or_bad_stats(self):
         for data in (
             {"error": "", "jugador": {"id": "other", "nombre": "Prueba"}},
