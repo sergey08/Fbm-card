@@ -150,6 +150,22 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.updater.health["players"]["status"],"failed")
         self.assertNotIn("private",str(self.updater.health))
 
+    async def test_group_archive_failure_is_contained(self):
+        with patch.object(self.updater, "_archive_and_groups",
+                          new_callable=AsyncMock) as load:
+            load.side_effect=OSError("private archive path")
+            await self.updater._run_group()
+        self.assertEqual(self.updater.health["groups"]["status"], "failed")
+        self.assertNotIn("private", str(self.updater.health))
+
+    async def test_player_archive_failure_is_contained(self):
+        with patch.object(self.updater, "_archive_and_groups",
+                          new_callable=AsyncMock) as load:
+            load.side_effect=OSError("private archive path")
+            await self.updater._run_players()
+        self.assertEqual(self.updater.health["players"]["status"], "failed")
+        self.assertNotIn("private", str(self.updater.health))
+
     async def test_partial_group_refresh_is_not_reported_as_failure(self):
         with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
             sync.return_value={"status":"partial"}
