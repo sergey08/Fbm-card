@@ -306,6 +306,12 @@ class FBMCard extends HTMLElement {
     const roster = state.playersTeamId === teamId && state.playersEntryId === entryId
       ? state.players : null;
     if (!Array.isArray(roster) || !roster.some(player => player.id === playerId)) return;
+    if (state.playerDetailTeamId === teamId && state.playerDetailPlayerId === playerId && state.playerDetail) {
+      state.playerDetail = null; state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
+      state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+      this._render();
+      return;
+    }
     state.busy = true; state.message = ""; state.playerDetail = null;
     state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
     state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
@@ -587,7 +593,7 @@ class FBMCard extends HTMLElement {
               const person = this._element("div", "", "fbm-player-identity");
               person.append(this._element("strong", player.nombre, "fbm-player-name"));
               person.append(this._element("span", "Temporada " + (player.temporada || pinned.temporada || "FBM"), "fbm-player-caption"));
-              const detailButton = this._element("button", opened ? "Ficha abierta" : "Ver ficha", "fbm-action");
+              const detailButton = this._element("button", opened ? "Cerrar ficha" : "Ver ficha", "fbm-action");
               detailButton.type = "button";
               detailButton.disabled = state.busy;
               detailButton.setAttribute("aria-expanded", String(!!opened));
