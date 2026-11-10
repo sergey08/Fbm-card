@@ -113,6 +113,29 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(stored[newer.storage.key]["players"]["team_index"],1)
         await newer.async_stop()
 
+    async def test_scheduler_health_status_without_player_details(self):
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"ok"}
+            await self.updater._run_group()
+        health=self.updater.health["groups"]
+        self.assertEqual(health["status"],"ok")
+        self.assertIsInstance(health["last_run"],str)
+        self.assertNotIn("anchor",str(health))
+
+    async def test_scheduler_group_failure_keeps_last_good_snapshot(self):
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
+            sync.side_effect=ValueError("hidden API details")
+            await self.updater._run_group()
+        self.assertEqual(self.updater.health["groups"]["status"],"failed")
+        self.assertNotIn("hidden",str(self.updater.health))
+
+    async def test_scheduler_player_health_is_bounded(self):
+        with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"ok","next_offset":5}
+            await self.updater._run_players()
+        self.assertEqual(self.updater.health["players"]["status"],"ok")
+        self.assertNotIn("team_index",str(self.updater.health))
+
     async def test_unfollow_blocks_group_and_player_requests(self):
         archive=Archive(self.path)
         archive.unfollow(IDENT)
