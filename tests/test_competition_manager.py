@@ -42,6 +42,17 @@ class CompetitionManagerTests(unittest.TestCase):
             "group_id": "g", "season_verified": True})
         self.assertEqual(client.calls, ["identity", "standings", "verify"])
 
+    def test_group_metadata_cannot_bypass_independent_season_check(self):
+        client = OfficialTeamClient(season=None)
+        async def misleading_identity(team_id):
+            client.calls.append("identity")
+            return {"season_verified": True, "season_id": "unproven-season",
+                    "phase_id": "f", "group_id": "g"}
+        client.async_team_group_identity = misleading_identity
+        result = asyncio.run(mod.identify_competition(client, "a"))
+        self.assertEqual(result["status"], "season_unverified")
+        self.assertEqual(client.calls, ["identity", "standings", "verify"])
+
     def test_diagnostic_only_returns_flags_not_private_ids(self):
         success = asyncio.run(
             mod.competition_season_diagnostic(OfficialTeamClient(), "a"))
