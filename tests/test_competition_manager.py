@@ -32,6 +32,8 @@ class ManagerTests(unittest.TestCase):
         client=FakeClient()
         result=asyncio.run(mod.identify_competition(client,"a","26/27"))
         self.assertEqual(result["season_id"],"26/27")
+        self.assertEqual(result["phase_name"],"Fase")
+        self.assertEqual(result["group_name"],"Grupo")
         self.assertEqual(result["season_source"],"official_team_search")
         self.assertEqual(result["status"],"verified")
         self.assertEqual(client.calls,["identity","standings"])
