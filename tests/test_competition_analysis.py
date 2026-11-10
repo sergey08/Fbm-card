@@ -70,6 +70,23 @@ class AnalysisTests(unittest.TestCase):
         result = mod.competition_analysis(ambiguous, fixtures)
         self.assertEqual(result["partidos_con_marcador"], 0)
 
+    def test_explicit_match_points_are_aggregated_without_inventing_missing(self):
+        standings = {"clasificacion": [
+            {"id": "a", "equipo": "Pinto"}, {"id": "b", "equipo": "Parla"}]}
+        fixtures = {"partidos": []}
+        rosters = {"a": {"jugadores": [
+            {"id": "p1", "nombre": "Jugador 1", "puntos_totales": None}]}}
+        individual = {"p1": {"globales": {"puntos_totales": None},
+                             "partidos": [
+                                 {"id_partido": "m1", "puntos": 9},
+                                 {"id_partido": "m2", "puntos": None},
+                                 {"id_partido": "m3", "puntos": 7}]}}
+        result = mod.competition_analysis(standings, fixtures, rosters, individual)
+        self.assertEqual(result["jugadores_con_puntos_por_partido"], 1)
+        self.assertEqual(result["anotadores"][0]["puntos_totales"], 16)
+        self.assertEqual(result["anotadores"][0]["partidos_con_puntos"], 2)
+        self.assertEqual(result["anotadores"][0]["origen"], "suma_de_partidos_disponibles")
+
     def test_duplicate_team_ids_rejected(self):
         standings = {"clasificacion": [
             {"id": "a", "equipo": "Pinto"}, {"id": "a", "equipo": "Other"}]}
