@@ -57,6 +57,17 @@ class TeamScheduleTests(unittest.TestCase):
         self.assertEqual(game["img_local"],"data:image/png;base64,"+png)
         self.assertNotIn("img_visitante",game)
 
+    def test_crest_references_preserved_for_proven_apk_url_builder(self):
+        match={"IdPartido":"p1", "NombreEquipoLocal":"A", "NombreEquipoVisitante":"B",
+               "ImgEquipoLocal":"crest-id-A","ImgEquipoVisitante":"crest-id-B"}
+        result=module.normalize_team_schedule({"error":"","jornadaActual":1,"partidos":[match]})
+        self.assertEqual(result["partidos"][0]["escudo_local"],"crest-id-A")
+        self.assertEqual(result["partidos"][0]["escudo_visitante"],"crest-id-B")
+        self.assertNotIn("img_local", result["partidos"][0])
+        too_large={**match,"ImgEquipoLocal":"x"*1100}
+        other=module.normalize_team_schedule({"error":"","jornadaActual":1,"partidos":[too_large]})
+        self.assertNotIn("escudo_local", other["partidos"][0])
+
     def test_real_apk_camelcase_dto_fields(self):
         # Names and types from EquipoPartidoDto and ResultadosDto in APK 5.0.42.
         payload = {"error": "", "jornadaActual": 7, "partidos": [
