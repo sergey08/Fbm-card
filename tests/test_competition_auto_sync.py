@@ -136,6 +136,26 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.updater.health["players"]["status"],"ok")
         self.assertNotIn("team_index",str(self.updater.health))
 
+    async def test_unexpected_group_error_is_contained(self):
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
+            sync.side_effect=TypeError("private service failure")
+            await self.updater._run_group()
+        self.assertEqual(self.updater.health["groups"]["status"],"failed")
+        self.assertNotIn("private",str(self.updater.health))
+
+    async def test_unexpected_player_error_is_contained(self):
+        with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
+            sync.side_effect=RuntimeError("private player details")
+            await self.updater._run_players()
+        self.assertEqual(self.updater.health["players"]["status"],"failed")
+        self.assertNotIn("private",str(self.updater.health))
+
+    async def test_partial_group_refresh_is_not_reported_as_failure(self):
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"partial"}
+            await self.updater._run_group()
+        self.assertEqual(self.updater.health["groups"]["status"],"ok")
+
     async def test_unfollow_blocks_group_and_player_requests(self):
         archive=Archive(self.path)
         archive.unfollow(IDENT)
