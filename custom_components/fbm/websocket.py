@@ -450,8 +450,20 @@ async def ws_competition_analysis(hass, connection, msg):
                 archive.latest, identity, "roster", tid)
             if result is not None:
                 rosters[tid] = result["payload"]
+        # Admin-only player stats stay outside ordinary HA sensor state.
+        individual = {}
+        for roster in rosters.values():
+            for person in roster.get("jugadores", []):
+                pid = person.get("id") if type(person) is dict else None
+                if type(pid) is not str:
+                    continue
+                result = await hass.async_add_executor_job(
+                    archive.latest, identity, "player_stats", pid)
+                if result is not None:
+                    individual[pid] = result["payload"]
         report = await hass.async_add_executor_job(
-            competition_analysis, standing["payload"], fixtures["payload"], rosters)
+            competition_analysis, standing["payload"], fixtures["payload"],
+            rosters, individual)
         report["observed_at"] = {
             "standings": standing["observed_at"],
             "fixtures": fixtures["observed_at"],
