@@ -181,6 +181,25 @@ def _image_reference_shape(value: object) -> dict:
             else:
                 subtype = "opaque_text"
             result["utf16le_reference_form"] = subtype
+            # Inspect the inner Base64 only for its binary signature.
+            # Never expose content, sizes, or identifiers from decoded data.
+            if subtype == "base64_or_identifier":
+                try:
+                    import base64
+                    import binascii
+                    if (len(decoded_text) % 4 == 0 and
+                            re.fullmatch(r"[A-Za-z0-9+/]*={0,2}", decoded_text)):
+                        sample = base64.b64decode(decoded_text[:min(len(decoded_text), 128)],
+                                                  validate=True)
+                        result["utf16le_inner_magic"] = (
+                            "png" if sample.startswith(bytes([137,80,78,71,13,10,26,10])) else
+                            "jpeg" if sample.startswith(bytes([255,216,255])) else
+                            "webp" if sample.startswith(b"RIFF") and sample[8:12] == b"WEBP" else
+                            "other")
+                    else:
+                        result["utf16le_inner_magic"] = "invalid_base64"
+                except (ValueError, binascii.Error):
+                    result["utf16le_inner_magic"] = "invalid_base64"
             # Report presence of the official host only as a boolean.
             result["official_fbm_host_present"] = (
                 "appaficionfbm.gesdeportiva.es" in lowered)

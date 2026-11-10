@@ -1,6 +1,6 @@
 """Validate official FBM inline image data, without external URLs or guesses.
 
-Only bounded, base64-encoded PNG/JPEG/WebP image content is accepted.
+Only bounded verified PNG/JPEG/WebP bytes are accepted (base64, hex, or hex/UTF-16LE/base64).
 Invalid, unsupported or large references are quietly omitted.
 """
 from __future__ import annotations
@@ -26,6 +26,18 @@ def image_data_uri(value: object, *, max_bytes: int = 131072) -> str | None:
             raw = bytes.fromhex(text)
         except ValueError:
             return None
+        # Some FBM references contain hex(UTF-16LE(base64(image))).
+        # Only unwrap this specific encoding and only accept an actual
+        # image signature below. Never turn opaque references into URLs.
+        if (len(raw) % 2 == 0 and len(raw) >= 16
+                and all(raw[i] == 0 for i in range(1, min(len(raw), 48), 2))):
+            try:
+                inner = raw.decode("utf-16le", errors="strict").strip()
+                if (len(inner) <= 4 * max_bytes // 3 + 4 and len(inner) % 4 == 0
+                        and _BASE64.fullmatch(inner)):
+                    raw = base64.b64decode(inner, validate=True)
+            except (UnicodeError, ValueError, binascii.Error):
+                return None
     else:
         if not text or len(text) % 4 != 0 or not _BASE64.fullmatch(text):
             return None
