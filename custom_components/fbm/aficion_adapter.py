@@ -146,6 +146,45 @@ class AficionFBMAdapter:
             "source": "FBM",
         }
 
+    async def verify_group_season(self, team_ids: list[str]) -> dict:
+        """Cross-check season through two official player/team detail bindings.
+
+        The season is not inferred from a display year or a team title.
+        Requires two distinct teams, each with a current roster member whose
+        player detail explicitly binds that player and team to the same
+        official idTemporadaActual. Private DTOs stay inside this method.
+        """
+        if type(team_ids) is not list or not 2 <= len(team_ids) <= 20:
+            raise ValueError("Participantes oficiales no validados")
+        if len(set(team_ids)) != len(team_ids):
+            raise ValueError("Equipos repetidos")
+        selected = team_ids[:2]
+        official_seasons = []
+        for team_id in selected:
+            if type(team_id) is not str or not team_id.strip() or len(team_id) > 512:
+                raise ValueError("Equipo no válido")
+            roster = await self.team_roster(team_id)
+            players = roster.get("jugadores") if type(roster) is dict else None
+            if type(players) is not list or not players:
+                return {"season_verified": False, "season_evidence_status": "missing_player"}
+            player_id = players[0].get("id")
+            if type(player_id) is not str or not player_id:
+                return {"season_verified": False, "season_evidence_status": "missing_player"}
+            device_id, key = self._team_key()
+            raw = await asyncio.to_thread(
+                post_player_detail_form,
+                player_detail_fields(device_id, key, player_id)
+            )
+            try:
+                bound = verified_player_stats_context(raw, player_id, team_id)
+            except ValueError:
+                return {"season_verified": False, "season_evidence_status": "unverified_player_binding"}
+            official_seasons.append(bound["id_temporada"])
+        if len(set(official_seasons)) != 1:
+            return {"season_verified": False, "season_evidence_status": "conflicting"}
+        return {"season_verified": True, "season_id": official_seasons[0],
+                "season_evidence_status": "two_team_official_detail"}
+
     async def _team_schedule_response(self, team_id: str, start: date, end: date,
                                       round_id: str | None = None) -> dict:
         """One shared official request path for normal view and DEV probe."""
