@@ -88,3 +88,37 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         "records_written": sum(bool(v) for v in results.values()),
         "competition": {k: group[k] for k in ("season_id", "phase_id", "group_id")},
     }
+
+
+async def preview_group(client, team_id: str, start: date, end: date) -> dict:
+    """Read-only official group preview; does not fetch players or persist data."""
+    if type(team_id) is not str or not team_id.strip() or len(team_id) > 512:
+        raise ValueError("Equipo no válido")
+    if (type(start) is not date or type(end) is not date or start > end
+            or (end - start).days > MAX_RANGE_DAYS):
+        raise ValueError("Periodo no válido")
+    identity = await client.async_team_group_identity(team_id)
+    if not identity.get("group_id") or not identity.get("phase_id"):
+        raise ValueError("Grupo oficial no disponible")
+    standings = await client.async_team_standings(team_id)
+    fixtures = await client.async_team_schedule(team_id, start, end)
+    rows = standings.get("clasificacion") if type(standings) is dict else None
+    matches = fixtures.get("partidos") if type(fixtures) is dict else None
+    if (type(rows) is not list or len(rows) > MAX_TEAMS
+            or type(matches) is not list or len(matches) > 500):
+        raise ValueError("Respuesta oficial demasiado grande")
+    return {
+        "status": "preview",
+        "persisted": False,
+        "group_id": identity["group_id"],
+        "phase_id": identity["phase_id"],
+        "season_verified": identity.get("season_verified") is True,
+        "season_evidence_status": identity.get("season_evidence_status", "none"),
+        "group_name": identity.get("group_name"),
+        "phase_name": identity.get("phase_name"),
+        "team_count": len(rows),
+        "match_count": len(matches),
+        "teams": [{"id": row["id"], "name": row["equipo"]}
+                  for row in rows if type(row) is dict
+                  and type(row.get("id")) is str and type(row.get("equipo")) is str],
+    }
