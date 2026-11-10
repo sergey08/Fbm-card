@@ -15,7 +15,7 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 
 ### Real Home Assistant 2026.11 API compatibility test
 
-The separate CI workflow `.github/workflows/ha-real-api-smoke.yml` installs the **real Home Assistant Core 2026.11.0** package in a fresh Python 3.14 environment and runs `tests/ha_real_api_smoke.py`. It confirms that the FBM OptionsFlow factory, native menu, and invalid-search form work with actual Home Assistant and Probatio classes, **without importing or starting the production server**. It is an API compatibility smoke test, not a frontend/browser validation, live season check or end-to-end integration deployment. The normal offline unit/JS tests remain separate.
+The separate CI workflow `.github/workflows/ha-real-api-smoke.yml` installs the **real Home Assistant Core 2026.11.0** package in a fresh Python 3.14 environment and runs `tests/ha_real_api_smoke.py`. It confirms that the FBM OptionsFlow factory, native menu, invalid-search form and complete search → verify → follow → refresh fixtures → unfollow with retained SQLite history operate with actual Home Assistant and Probatio classes, **without importing or starting the production server**. It is an integration-flow API compatibility check using fake FBM responses and temporary SQLite, not a frontend/browser validation, live season check or end-to-end HA server deployment. The normal offline unit/JS tests remain separate.
 
 ### Native competition manager (DEV)
 
@@ -85,7 +85,7 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 
 ### Prueba de compatibilidad con Home Assistant 2026.11 real
 
-El flujo CI independiente `.github/workflows/ha-real-api-smoke.yml` instala **Home Assistant Core 2026.11.0 real** en Python 3.14 y ejecuta `tests/ha_real_api_smoke.py`. Comprueba el registro de OptionsFlow, su menú y el formulario de búsqueda inválida usando clases reales de Home Assistant y Probatio, **sin arrancar el servidor de producción**. Es una prueba de compatibilidad de API, no una prueba visual del frontend ni una sincronización real de temporada. Se mantienen aparte las pruebas aisladas habituales.
+El flujo CI independiente `.github/workflows/ha-real-api-smoke.yml` instala **Home Assistant Core 2026.11.0 real** en Python 3.14 y ejecuta `tests/ha_real_api_smoke.py`. Comprueba el registro de OptionsFlow, el menú, los formularios y el recorrido buscar → verificar → seguir → actualizar partidos → dejar de seguir conservando históricos, usando clases reales de Home Assistant y Probatio, **sin arrancar el servidor de producción**. Es una prueba funcional del flujo con API real de HA, FBM simulado y SQLite temporal, no una prueba visual del frontend ni una sincronización real de temporada. Se mantienen aparte las pruebas aisladas habituales.
 
 ### Gestor de competiciones nativo (DEV)
 
