@@ -130,6 +130,14 @@ async def _player_statistics(client, msg):
     return await client.async_player_statistics(player_id, team_id)
 
 
+async def _player_stats_diagnostic(client, msg):
+    player_id, team_id = msg["jugador"], msg["equipo"]
+    if any(type(x) is not str or not x.strip() or len(x) > 512
+           for x in (player_id, team_id)):
+        raise ValueError("Identificadores deportivos no válidos")
+    return await client.async_player_statistics_diagnostic(player_id, team_id)
+
+
 async def _diagnostic(client, msg):
     kind = msg["kind"]
     team_id = msg["equipo"]
@@ -277,6 +285,13 @@ async def ws_player_stats(hass, connection, msg):
     await _dispatch(hass, connection, msg, _player_statistics)
 
 
+@websocket_api.websocket_command({"type": "fbm/player/stats_diagnostic", probatio.Required("entry_id"): str, probatio.Required("jugador"): str, probatio.Required("equipo"): str})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_player_stats_diagnostic(hass, connection, msg):
+    await _dispatch(hass, connection, msg, _player_stats_diagnostic)
+
+
 @websocket_api.websocket_command({"type": "fbm/team/diagnostic", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("kind"): str, probatio.Required("desde"): str, probatio.Required("hasta"): str})
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -292,7 +307,7 @@ async def ws_standings(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic):
         websocket_api.async_register_command(hass, command)
 
 
