@@ -47,6 +47,16 @@ class TeamScheduleTests(unittest.TestCase):
         self.assertEqual(result[1]['estado'], 'scheduled')
         self.assertTrue(all(match['marcador'] is None for match in result[1:]))
 
+    def test_embedded_team_logos_only_when_valid_images(self):
+        import base64
+        png = base64.b64encode(bytes([137,80,78,71,13,10,26,10])+b"crest").decode()
+        match={"IdPartido":"m1","NombreEquipoLocal":"A","NombreEquipoVisitante":"B",
+               "ImgEquipoLocal":png,"ImgEquipoVisitante":"not-an-image"}
+        result=module.normalize_team_schedule({"error":"","jornadaActual":1,"partidos":[match]})
+        game=result["partidos"][0]
+        self.assertEqual(game["img_local"],"data:image/png;base64,"+png)
+        self.assertNotIn("img_visitante",game)
+
     def test_real_apk_camelcase_dto_fields(self):
         # Names and types from EquipoPartidoDto and ResultadosDto in APK 5.0.42.
         payload = {"error": "", "jornadaActual": 7, "partidos": [
