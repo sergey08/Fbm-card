@@ -605,7 +605,7 @@ class FBMCard extends HTMLElement {
               if (numeric(player.puntos_por_partido)) overview.append(chip("Puntos/partido", player.puntos_por_partido, true));
               if (numeric(player.minutos_por_partido)) overview.append(chip("Min/partido", player.minutos_por_partido));
               if (numeric(player.puntos_totales)) overview.append(chip("Puntos totales", player.puntos_totales));
-              if (overview.childElementCount) item.append(overview);
+              if ([player.partidos_jugados, player.puntos_por_partido, player.minutos_por_partido, player.puntos_totales].some(numeric)) item.append(overview);
               if (opened) {
                 const details = this._element("div", "", "fbm-player-detail");
                 const meta = [opened.equipo, opened.temporada, opened.categoria].filter(Boolean);
@@ -646,7 +646,7 @@ class FBMCard extends HTMLElement {
                     for (const [key, label] of matchColumns) {
                       if (numeric(game[key])) matchGrid.append(chip(label, game[key], key === "puntos"));
                     }
-                    if (matchGrid.childElementCount) match.append(matchGrid);
+                    if (matchColumns.some(([key]) => numeric(game[key]))) match.append(matchGrid);
                     details.append(match);
                   }
                 }
