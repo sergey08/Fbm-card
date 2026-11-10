@@ -22,9 +22,15 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 
 Sync uses the already-validated official FBM guest identity, team-group identification, standings, schedule and roster APIs. It requests at most 20 distinct teams, sequentially, with a small inter-request delay. It does not trigger on integration startup, search or card render. Failure of one roster retains earlier valid snapshots; errors are summarized, never returned verbatim.
 
+### Official season corroboration (new DEV code)
+
+The official player detail DTO contains `idTemporadaActual` along with the exact player/team association. Before persistence, the sync now verifies that the selected team belongs to the official standings and checks matching `idTemporadaActual` values from one roster member of each of two distinct teams in that same group. If either detail cannot be verified or the season IDs conflict, the operation returns `season_unverified` without storing data. This is an implementation backed by already-tested DTO fields, **not yet tested live with two current group members**.
+
+The archive now uses strict field allowlists for every source, excluding player photographs, team crests, image URLs, raw payload extras and unrecognized future fields.
+
 ### Important blocker
 
-The existing `async_team_group_identity()` confirms the phase and group, but currently sets `season_verified=False` even when a possible season identifier is present. **The DEV prototype intentionally returns `season_unverified` without writing data until the season identifier is verified against an authoritative FBM response.** Never mix different seasons using a guessed name such as 26/27.
+The phase/group lookup alone continues to return `season_verified=False`. The new two-team official detail verification may unblock storage; it still requires a real HA DEV validation. Never infer seasons from labels such as 26/27.
 
 ### Next steps
 
@@ -51,9 +57,15 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 
 Los comandos WebSocket `fbm/competition/preview`, `fbm/competition/sync`, `fbm/competition/list` y `fbm/competition/latest` requieren permisos de administrador. La vista previa consulta equipos y calendario del grupo sin persistencia ni descargas de plantillas, incluso cuando la temporada no esté verificada. La sincronización usa la identidad invitada ya existente, limita la descarga a 20 equipos y consulta plantillas secuencialmente, sin solicitudes automáticas al iniciar HA.
 
+### Verificación cruzada de temporada (nuevo código DEV)
+
+Las fichas oficiales de jugador incluyen `idTemporadaActual` y la vinculación explícita jugador-equipo. Antes de guardar datos, la sincronización verifica que el equipo seleccionado pertenece a la clasificación y comprueba que un jugador de cada uno de dos equipos distintos del grupo tiene el mismo identificador de temporada, con asociaciones oficiales verificadas. Si faltan datos o hay discrepancias, se devuelve `season_unverified` y no se almacena nada. **Falta validar la comprobación con miembros reales del grupo en HA DEV.**
+
+El archivo SQLite utiliza listas blancas de campos deportivos para clasificación, partidos y jugadores; excluye fotos, escudos, URLs de imágenes y campos adicionales desconocidos.
+
 ### Bloqueo conocido
 
-El método actual identifica oficialmente fase y grupo, pero **todavía no verifica la temporada**. Por eso este prototipo devuelve `season_unverified` y no guarda históricos hasta confirmar un identificador oficial de temporada. No debe deducirse usando el texto 26/27.
+La consulta de fase/grupo por sí sola continúa sin verificar la temporada. La nueva comprobación de dos equipos podría permitir la sincronización, pero **todavía falta demostrarlo con datos reales en Home Assistant DEV**. No debe inferirse la temporada por una etiqueta como 26/27.
 
 ### Siguientes tareas
 
