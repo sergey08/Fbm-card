@@ -39,9 +39,11 @@ test("competition card shows standings and loads roster on team click",async()=>
     if(request.type==="fbm/client/entries")return {entries:["entry"]};
     if(request.type==="fbm/competition/team_roster")
       return {jugadores:[{id:"p1",nombre:"Jugador de prueba"}],
-        partidos:[{local:"Equipo A",visitante:"Equipo B",fecha:"12/11/2026",marcador:{local:44,visitante:39}}]};
+        partidos:[{local:"Equipo A",visitante:"Equipo B",fecha:"12/11/2026",jornada:3,marcador:{local:44,visitante:39}},
+          {local:"Equipo B",visitante:"Equipo A",fecha:"19/11/2026",jornada:4}]};
     if(request.type==="fbm/competition/team_player_stats")
-      return {estadisticas:{globales:{puntos_totales:22,media_puntos:11},partidos:[]}};
+      return {estadisticas:{globales:{puntos_totales:22,media_puntos:11},
+        partidos:[{fecha:"12/11/2026",rival:"Equipo B",puntos:12,asistencias:2}]}};
     throw Error("Unexpected call");
   }};
   const buttons=walk(c.shadowRoot,x=>x.tagName==="button");
@@ -52,11 +54,17 @@ test("competition card shows standings and loads roster on team click",async()=>
   assert.equal(c._roster.length,1);
   assert.ok(walk(c.shadowRoot,x=>x.textContent==="Jugador de prueba").length);
   assert.ok(walk(c.shadowRoot,x=>String(x.textContent).includes("Equipo A 44 – 39 Equipo B")).length);
+  assert.ok(walk(c.shadowRoot,x=>x.tagName==="option" && x.textContent==="Jornada 3").length);
+  const rounds=walk(c.shadowRoot,x=>x.tagName==="select")[0];
+  rounds.listeners.change({target:{value:"3"}});
+  assert.ok(walk(c.shadowRoot,x=>String(x.textContent).includes("Equipo A 44 – 39 Equipo B")).length);
+  assert.equal(walk(c.shadowRoot,x=>String(x.textContent).includes("Equipo B vs Equipo A")).length,0);
   const playerButton=walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Jugador de prueba")[0];
   playerButton.listeners.click();
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(calls.includes("fbm/competition/team_player_stats"));
   assert.ok(walk(c.shadowRoot,x=>x.textContent==="Puntos totales: 22").length);
+  assert.ok(walk(c.shadowRoot,x=>String(x.textContent).includes("Pts: 12")).length);
   const back=walk(c.shadowRoot,x=>x.textContent==="‹ Volver a clasificación")[0];
   back.listeners.click();
   assert.equal(c._teamId,null);
