@@ -48,6 +48,7 @@ class BridgeTests(unittest.TestCase):
             async_team_schedule_probe=AsyncMock(return_value={'shape':'object','recognized':['partidos'],'entry_fields':[],'counts':{'partidos':0},'has_error':False}),
             async_team_standings=AsyncMock(return_value={'clasificacion': []}),
             async_team_roster=AsyncMock(return_value={'jugadores': [], 'total': 0}),
+            async_player_detail_diagnostic=AsyncMock(return_value={'ok':False,'stage':'normalize','shape':{'present':['Jugador']}}),
             async_player_detail=AsyncMock(return_value={'jugador':{'id':'p1','nombre':'Prueba'},'fuente':'FBM'}),
             async_player_statistics=AsyncMock(return_value={'jugador':'p1','equipo':'team','globales':{},'partidos':{}}),
             async_team_diagnostic=AsyncMock(return_value={'ok': False, 'stage': 'normalize', 'category': 'invalid_payload_or_parameters'}),
@@ -57,7 +58,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_admin_required_for_all_commands(self):
         self.connection.user.is_admin = False
-        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings, module.ws_group_identity, module.ws_schedule_probe, module.ws_roster, module.ws_player_detail, module.ws_player_stats, module.ws_diagnostic):
+        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings, module.ws_group_identity, module.ws_schedule_probe, module.ws_roster, module.ws_player_detail, module.ws_player_stats, module.ws_diagnostic, module.ws_player_detail_diagnostic):
             with self.subTest(command=command), self.assertRaises(PermissionError):
                 run_immediate(command(self.hass, self.connection, {'id': 1, 'entry_id': 'entry'}))
         self.client.async_register.assert_not_awaited()
@@ -141,6 +142,13 @@ class BridgeTests(unittest.TestCase):
         run_immediate(module.ws_diagnostic(self.hass, self.connection,
             {'id': 60, 'entry_id': 'entry', 'equipo': 'team', 'kind': 'roster'}))
         self.client.async_team_diagnostic.assert_awaited_once_with('team', 'roster')
+        self.connection.send_result.assert_called_once()
+        self.assertNotIn('secret', str(self.connection.send_result.call_args))
+
+    def test_admin_player_detail_diagnostic(self):
+        run_immediate(module.ws_player_detail_diagnostic(self.hass, self.connection,
+            {'id': 71, 'entry_id': 'entry', 'jugador': 'official-id'}))
+        self.client.async_player_detail_diagnostic.assert_awaited_once_with('official-id')
         self.connection.send_result.assert_called_once()
         self.assertNotIn('secret', str(self.connection.send_result.call_args))
 
