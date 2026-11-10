@@ -570,7 +570,7 @@ class FBMCard extends HTMLElement {
             card.append(this._element("div", roster.length + " jugadores · Datos oficiales FBM", "fbm-section-subtitle"));
             const collection = this._element("div", "", "fbm-roster");
             const numeric = value => typeof value === "number" && Number.isFinite(value);
-            const format = value => numeric(value) ? String(value) : "—";
+            const format = value => String(value);
             const chip = (label, value, emphasize = false) => {
               const el = this._element("div", "", emphasize ? "fbm-stat fbm-stat-primary" : "fbm-stat");
               el.append(this._element("span", label, "fbm-stat-label"));
@@ -601,11 +601,11 @@ class FBMCard extends HTMLElement {
               header.append(person, detailButton);
               item.append(header);
               const overview = this._element("div", "", "fbm-stat-grid");
-              overview.append(chip("Partidos", player.partidos_jugados));
-              overview.append(chip("Puntos/partido", player.puntos_por_partido, true));
-              overview.append(chip("Min/partido", player.minutos_por_partido));
+              if (numeric(player.partidos_jugados)) overview.append(chip("Partidos", player.partidos_jugados));
+              if (numeric(player.puntos_por_partido)) overview.append(chip("Puntos/partido", player.puntos_por_partido, true));
+              if (numeric(player.minutos_por_partido)) overview.append(chip("Min/partido", player.minutos_por_partido));
               if (numeric(player.puntos_totales)) overview.append(chip("Puntos totales", player.puntos_totales));
-              item.append(overview);
+              if (overview.childElementCount) item.append(overview);
               if (opened) {
                 const details = this._element("div", "", "fbm-player-detail");
                 const meta = [opened.equipo, opened.temporada, opened.categoria].filter(Boolean);
@@ -632,7 +632,7 @@ class FBMCard extends HTMLElement {
                     const globalGrid = this._element("div", "", "fbm-stat-grid");
                     for (const [key, label] of available) globalGrid.append(chip(label, globals[key]));
                     details.append(globalGrid);
-                  } else details.append(this._element("p", "Estadísticas globales no disponibles en FBM.", "fbm-player-caption"));
+                  }
                   const games = Array.isArray(stats.partidos?.partidos) ? stats.partidos.partidos : [];
                   details.append(this._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
                   if (!games.length) details.append(this._element("p", "No hay partidos con estadísticas disponibles.", "fbm-player-caption"));
@@ -643,8 +643,10 @@ class FBMCard extends HTMLElement {
                     matchHeader.append(this._element("span", game.fecha || "Fecha pendiente", "fbm-player-caption"));
                     match.append(matchHeader);
                     const matchGrid = this._element("div", "", "fbm-stat-grid fbm-match-grid");
-                    for (const [key, label] of matchColumns) matchGrid.append(chip(label, game[key], key === "puntos"));
-                    match.append(matchGrid);
+                    for (const [key, label] of matchColumns) {
+                      if (numeric(game[key])) matchGrid.append(chip(label, game[key], key === "puntos"));
+                    }
+                    if (matchGrid.childElementCount) match.append(matchGrid);
                     details.append(match);
                   }
                 }
