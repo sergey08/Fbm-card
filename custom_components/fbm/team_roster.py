@@ -70,3 +70,50 @@ def normalize_team_roster(response: object) -> dict:
             item[target] = value
         players.append(item)
     return {"jugadores": players, "total": len(players)}
+
+
+def diagnose_roster_rows(response: object) -> dict:
+    """Aggregate fixed error categories and type distributions, never values.
+
+    Reuses the production parser for each row, so diagnostic observations
+    cannot silently bypass its strict accepted shapes. No names/IDs returned.
+    """
+    if type(response) is not dict or response.get("error") != "":
+        return {"status": "invalid_response"}
+    keys = [k for k in ("misJugadores", "misjugadores") if k in response]
+    if len(keys) != 1 or type(response[keys[0]]) is not list:
+        return {"status": "invalid_roster"}
+    rows = response[keys[0]]
+    problems = {}
+    number_types = {}
+    labels = {
+        "Jugador inválido": "row_not_object",
+        "Jugador sin identificador y nombre de un formato conocido": "id_or_name_format",
+        "Jugador incompleto o repetido": "missing_or_duplicated_id",
+        "Campos de dos variantes mezclados": "mixed_variants",
+        "Campo de texto no válido": "invalid_text",
+        "Estadística entera no válida": "invalid_integer",
+        "Promedio no válido": "invalid_average",
+    }
+    for raw in rows:
+        if type(raw) is dict:
+            for field in ("PartidosJugados", "PuntosTotales", "MediaPuntos",
+                          "PuntosPorPartido", "MinutosPorPartido",
+                          "partidosJugados", "puntosTotales", "mediaPuntos",
+                          "puntosPorPartido", "minutosPorPartido"):
+                if field in raw:
+                    value = raw[field]
+                    kind = ("null" if value is None else
+                            "bool" if type(value) is bool else
+                            "int" if type(value) is int else
+                            "float" if type(value) is float else
+                            "str" if type(value) is str else "other")
+                    dist = number_types.setdefault(field, {})
+                    dist[kind] = dist.get(kind, 0) + 1
+        try:
+            normalize_team_roster({"error": "", keys[0]: [raw]})
+        except PlayerRosterError as exc:
+            code = labels.get(str(exc), "other_validation")
+            problems[code] = problems.get(code, 0) + 1
+    return {"status": "diagnosed", "total": len(rows),
+            "validation_errors": problems, "numeric_types": number_types}
