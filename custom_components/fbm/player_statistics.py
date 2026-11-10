@@ -74,24 +74,37 @@ def normalize_player_match_list(response: object) -> dict:
         raise PlayerStatisticsError("Lista de partidos no válida")
     matches = []
     seen = set()
+    variants = (
+        ({"id": "idPartido", "fecha": "fechaPartido", "rival": "nombreEquipoRival",
+          "local": "local"}, _MATCH_NUMBERS),
+        ({"id": "IdPartido", "fecha": "FechaPartido", "rival": "NombreEquipoRival",
+          "local": "Local"}, {source[0].upper() + source[1:]: output for source, output in _MATCH_NUMBERS.items()}),
+    )
     for row in rows:
-        if not isinstance(row, dict):
+        if type(row) is not dict:
             raise PlayerStatisticsError("Partido inválido")
-        match_id = row.get("idPartido")
-        if type(match_id) is not str or not match_id.strip() or len(match_id) > 512 or match_id in seen:
+        found = [v for v in variants if type(row.get(v[0]["id"])) is str]
+        if len(found) != 1:
+            raise PlayerStatisticsError("Identificador de partido ausente o ambiguo")
+        fields, numbers = found[0]
+        other_fields, other_numbers = variants[1] if found[0] is variants[0] else variants[0]
+        if any(k in row for k in (*other_fields.values(), *other_numbers)):
+            raise PlayerStatisticsError("Mezcla de formatos de estadísticas de partido")
+        match_id = row[fields["id"]]
+        if not match_id.strip() or len(match_id) > 512 or match_id in seen:
             raise PlayerStatisticsError("ID de partido ausente o repetido")
         seen.add(match_id)
         record = {"id_partido": match_id}
-        for field, output in (("fechaPartido", "fecha"), ("nombreEquipoRival", "rival")):
-            value = row.get(field)
+        for dest in ("fecha", "rival"):
+            value = row.get(fields[dest])
             if value is not None and (type(value) is not str or len(value) > 256):
                 raise PlayerStatisticsError("Dato de partido inválido")
-            record[output] = value
-        local = row.get("local")
+            record[dest] = value
+        local = row.get(fields["local"])
         if local is not None and type(local) is not bool:
             raise PlayerStatisticsError("Localía inválida")
         record["local"] = local
-        for source, output in _MATCH_NUMBERS.items():
+        for source, output in numbers.items():
             record[output] = _number(row.get(source), signed=output == "valoracion")
         matches.append(record)
     return {"partidos": matches, "total": len(matches)}
