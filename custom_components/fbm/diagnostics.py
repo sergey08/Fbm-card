@@ -74,3 +74,32 @@ def safe_payload_shape(payload: object, *, kind: str) -> dict:
         elif name in payload:
             result[name + "_type"] = type(v).__name__ if type(v) in (str, dict, int, bool, type(None)) else "other"
     return result
+
+
+def safe_player_detail_shape(payload: object) -> dict:
+    """Known structural keys only; never values or arbitrary response keys."""
+    if type(payload) is not dict:
+        return {"type": "non_object"}
+    fields = ("jugador", "Jugador", "equipo", "Equipo",
+              "idComponenteClub", "IdComponenteClub",
+              "idTemporadaActual", "IdTemporadaActual",
+              "error", "resultado", "ruta", "opcion")
+    player_fields = ("id", "Id", "nombre", "Nombre", "nombreEquipo",
+                     "NombreEquipo", "temporada", "Temporada",
+                     "categoria", "Categoria", "partidosJugados",
+                     "PartidosJugados", "puntosTotales", "PuntosTotales")
+    result = {"type": "object",
+              "present": [k for k in fields if k in payload],
+              "error_empty": payload.get("error") == ""}
+    for key in ("jugador", "Jugador"):
+        if key in payload:
+            item = payload[key]
+            result["player_type"] = ("object" if type(item) is dict else
+                                      "array" if type(item) is list else
+                                      "null" if item is None else "other")
+            if type(item) is dict:
+                result["player_fields"] = [k for k in player_fields if k in item]
+    for key in ("equipo", "Equipo"):
+        if key in payload:
+            result["team_type"] = "object" if type(payload[key]) is dict else "other"
+    return result
