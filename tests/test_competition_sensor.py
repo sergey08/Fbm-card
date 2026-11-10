@@ -48,9 +48,14 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
                         "phase_id": "phase", "group_id": "group"}
             archive.follow(identity)
             archive.record(identity, "standings", {"clasificacion": [
-                {"id": "team1", "equipo": "Team", "escudo": "PRIVATE_IMAGE"}]})
+                {"id": "team1", "equipo": "Team", "posicion": 1,
+                 "ganados": 4, "perdidos": 0, "escudo": "PRIVATE_IMAGE"}]})
             archive.record(identity, "fixtures", {"partidos": [
-                {"id": "game1", "local": "Team", "visitante": "Other"}]})
+                {"id": "game1", "local": "Team", "visitante": "Other",
+                 "estado": "finished", "fecha": "2026-11-01",
+                 "marcador": {"local": 45, "visitante": 38},
+                 "direccion": "PRIVATE_VENUE"},
+            ]})
             archive.record(identity, "roster", {"jugadores": [
                 {"id": "player", "nombre": "PRIVATE_CHILD", "foto": "PRIVATE_IMAGE"}]},
                 subject="team1")
@@ -60,6 +65,14 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(summary["groups"][0]["matches"], 1)
             self.assertNotIn("PRIVATE_CHILD", str(summary))
             self.assertNotIn("PRIVATE_IMAGE", str(summary))
+            self.assertNotIn("PRIVATE_VENUE", str(summary))
+            self.assertEqual(summary["groups"][0]["ranking"], [{
+                "equipo": "Team", "posicion": 1, "ganados": 4, "perdidos": 0
+            }])
+            self.assertEqual(summary["groups"][0]["recent_results"], [{
+                "local": "Team", "visitante": "Other", "fecha": "2026-11-01",
+                "marcador": {"local": 45, "visitante": 38},
+            }])
 
             class Hass:
                 data = {"fbm": {"entry": {
