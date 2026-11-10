@@ -803,7 +803,7 @@ class FBMCard extends HTMLElement {
               const person = this._element("div", "", "fbm-player-identity");
               const personRow = this._element("div", "", "fbm-player-person");
               const photo = player.foto || (opened && opened.foto) || "";
-              if (typeof photo === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(photo)) {
+              if (typeof photo === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(photo) || /^https:\/\/appaficionfbm\.gesdeportiva\.es\/imagenes\.ashx\?tipo=jugador&id=[0-9a-fA-F]{16,4096}$/.test(photo))) {
                 const img = document.createElement("img");
                 img.className = "fbm-player-photo"; img.src = photo;
                 img.alt = "Fotografía de " + player.nombre; img.loading = "lazy";
