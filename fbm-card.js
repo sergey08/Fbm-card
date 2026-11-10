@@ -1296,6 +1296,175 @@ class FBMCard extends HTMLElement {
     this.shadowRoot.replaceChildren(style, card);
   }
 }
+// Independent league card: the HA sensor is the read-only source for group results.
+// Individual player rosters are fetched only on explicit team selection, from
+// an admin-only local SQLite archive endpoint, never from the remote FBM API.
+class FBMCompetitionCard extends HTMLElement {
+  setConfig(config) {
+    if (!config || typeof config !== "object") throw new Error("Configuración inválida");
+    this._config = { title: "Competición FBM", entity: "sensor.competiciones",
+      group_index: 0, ...config };
+    if (typeof this._config.entity !== "string" ||
+        !this._config.entity.startsWith("sensor."))
+      throw new Error("Selecciona un sensor de competiciones FBM");
+    if (!Number.isInteger(this._config.group_index) ||
+        this._config.group_index < 0 || this._config.group_index > 49)
+      throw new Error("Índice de competición inválido");
+    this._groupIndex = this._config.group_index;
+    this._teamId = null; this._roster = null; this._error = "";
+    this._render();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+  getCardSize() { return 5; }
+  static getStubConfig() {
+    return { type: "custom:fbm-competition-card", entity: "sensor.competiciones" };
+  }
+  _el(tag, value, className) {
+    const el = document.createElement(tag);
+    if (value !== undefined) el.textContent = String(value);
+    if (className) el.className = className;
+    return el;
+  }
+  _group() {
+    const sensor = this._hass?.states?.[this._config?.entity];
+    const groups = Array.isArray(sensor?.attributes?.groups) ? sensor.attributes.groups : [];
+    return { groups, group: groups[this._groupIndex] || null };
+  }
+  async _openTeam(team) {
+    if (!team || typeof team.id !== "string" || !team.id ||
+        typeof team.equipo !== "string") return;
+    this._teamId = team.id; this._roster = null; this._error = "";
+    this._render();
+    const { group } = this._group();
+    if (!group || !this._hass?.callWS) return;
+    const teamId = team.id, groupIndex = this._groupIndex;
+    try {
+      const entries = await this._hass.callWS({type:"fbm/client/entries"});
+      if (!Array.isArray(entries?.entries) || entries.entries.length !== 1)
+        throw new Error("No se ha encontrado una integración FBM única");
+      const data = await this._hass.callWS({
+        type:"fbm/competition/team_roster", entry_id:entries.entries[0],
+        season_id:group.season_id, phase_id:group.phase_id,
+        group_id:group.group_id, equipo:teamId
+      });
+      if (this._teamId !== teamId || this._groupIndex !== groupIndex) return;
+      if (!Array.isArray(data?.jugadores)) throw new Error("Plantilla no disponible");
+      this._roster = data.jugadores;
+    } catch (_) {
+      if (this._teamId === teamId && this._groupIndex === groupIndex)
+        this._error = "No se ha podido leer la plantilla archivada; no se hará una descarga adicional.";
+    }
+    this._render();
+  }
+  _render() {
+    if (!this._config || typeof document === "undefined") return;
+    if (!this.shadowRoot) this.attachShadow({mode:"open"});
+    const style = this._el("style");
+    style.textContent = `
+      ha-card{padding:16px;line-height:1.45}
+      h2{margin:0 0 12px;font-size:1.25rem}
+      h3{margin:14px 0 10px}
+      table{width:100%;border-collapse:collapse;font-size:.9rem}
+      th,td{padding:9px 5px;border-bottom:1px solid var(--divider-color,#ddd);text-align:left}
+      th.num,td.num{text-align:right}
+      button{font:inherit;cursor:pointer;border:0;background:transparent;color:var(--primary-color,#1976d2);text-align:left}
+      button:focus-visible{outline:2px solid var(--primary-color,#1976d2);outline-offset:3px}
+      .team{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+      .crest{width:24px;height:24px;object-fit:contain}
+      .muted{color:var(--secondary-text-color,#777);font-size:.82rem}
+      .back{margin-bottom:12px;padding:5px}
+      .players{list-style:none;padding:0;display:grid;gap:6px}
+      .players li{border-bottom:1px solid var(--divider-color,#ddd);padding:6px}
+      select{width:100%;padding:8px;margin-bottom:12px}
+    `;
+    const card = this._el("ha-card");
+    card.append(this._el("h2", this._config.title));
+    const {groups,group} = this._group();
+    if (!group) {
+      card.append(this._el("p", "No hay competiciones archivadas disponibles.", "muted"));
+      this.shadowRoot.replaceChildren(style,card);
+      return;
+    }
+    if (groups.length > 1) {
+      const select = this._el("select");
+      for (let i=0;i<groups.length;i++) {
+        const option = this._el("option", "Temporada "+(groups[i].season_id||"FBM")+" · Grupo "+(i+1));
+        option.value = String(i); select.append(option);
+      }
+      select.value = String(this._groupIndex);
+      select.addEventListener("change", event => {
+        this._groupIndex = Number(event.target.value);
+        this._teamId = null; this._roster = null; this._error = "";
+        this._render();
+      });
+      card.append(select);
+    }
+    const ranking = Array.isArray(group.ranking) ? group.ranking : [];
+    const team = ranking.find(item => item.id === this._teamId);
+    if (this._teamId && team) {
+      const back = this._el("button", "‹ Volver a clasificación", "back");
+      back.addEventListener("click", () => {
+        this._teamId = null; this._roster = null; this._error = "";
+        this._render();
+      });
+      card.append(back, this._el("h3", team.equipo));
+      card.append(this._el("p", "Posición "+team.posicion+" · "+team.puntos+" puntos · "+team.jugados+" partidos", "muted"));
+      card.append(this._el("h3", "Jugadores"));
+      if (this._error) card.append(this._el("p", this._error, "muted"));
+      else if (!this._roster) card.append(this._el("p", "Consultando el archivo local…", "muted"));
+      else if (!this._roster.length) card.append(this._el("p", "No hay plantilla archivada para este equipo.", "muted"));
+      else {
+        const ul = this._el("ul", undefined, "players");
+        for (const player of this._roster) {
+          if (typeof player?.nombre === "string")
+            ul.append(this._el("li", player.nombre));
+        }
+        card.append(ul);
+      }
+    } else {
+      this._teamId = null;
+      card.append(this._el("p", "Temporada "+(group.season_id||"FBM")+" · "+ranking.length+" equipos · "+(group.matches??"—")+" partidos", "muted"));
+      const table = this._el("table"), head = this._el("tr");
+      for (const [name,numeric] of [["Pos.",true],["Equipo",false],["PJ",true],["Pts",true]]) {
+        const th = this._el("th",name,numeric?"num":"");head.append(th);
+      }
+      const thead = this._el("thead");thead.append(head);table.append(thead);
+      const tbody = this._el("tbody");
+      for (const t of ranking) {
+        const tr = this._el("tr");
+        tr.append(this._el("td",t.posicion??"—","num"));
+        const td = this._el("td");
+        const btn = this._el("button",undefined,"team");
+        const crest = typeof t.escudo === "string" && /^https:\/\/(?:[\w-]+\.)*fbm\.es\//.test(t.escudo)
+          ? t.escudo : null;
+        if (crest) {
+          const img = this._el("img");img.src=crest;img.alt="Escudo de "+t.equipo;img.className="crest";btn.append(img);
+        } else btn.append(this._el("span","🏀"));
+        btn.append(this._el("span",t.equipo||"Equipo"));
+        btn.disabled = !t.id;
+        btn.addEventListener("click",()=>{void this._openTeam(t);});
+        td.append(btn);tr.append(td);
+        tr.append(this._el("td",t.jugados??"—","num"),this._el("td",t.puntos??"—","num"));
+        tbody.append(tr);
+      }
+      table.append(tbody);card.append(table);
+      if (group.standings_at) card.append(this._el("p","Clasificación archivada: "+group.standings_at,"muted"));
+    }
+    this.shadowRoot.replaceChildren(style,card);
+  }
+}
+if (!customElements.get("fbm-competition-card"))
+  customElements.define("fbm-competition-card", FBMCompetitionCard);
+window.customCards = window.customCards || [];
+if (!window.customCards.some(card => card.type === "fbm-competition-card"))
+  window.customCards.push({
+    type:"fbm-competition-card",name:"FBM Competition Card",
+    description:"Clasificación y plantillas archivadas de una competición FBM"
+  });
+
 if (!customElements.get("fbm-card")) customElements.define("fbm-card", FBMCard);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === "fbm-card")) {
