@@ -106,10 +106,10 @@ class CompetitionArchive:
                         WHERE season=? AND phase=? AND group_id=?""", key).fetchone()
             if not active or active[0] != 1:
                 return False
-            latest = db.execute("""SELECT observed_at FROM snapshots WHERE
+            latest = db.execute("""SELECT observed_at, payload FROM snapshots WHERE
                 season=? AND phase=? AND group_id=? AND source=? AND subject=?
                 ORDER BY observed_at DESC LIMIT 1""", (*key, source, subject)).fetchone()
-            if latest and timestamp <= latest[0]:
+            if latest and (timestamp <= latest[0] or encoded == latest[1]):
                 return False
             db.execute("INSERT INTO snapshots VALUES (?,?,?,?,?,?,?)",
                        (*key, source, subject, timestamp, encoded))
