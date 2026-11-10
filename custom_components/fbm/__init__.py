@@ -84,7 +84,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Existing-device access only; no registration or identity replacement.
     restored = await client.async_restore()
     _LOGGER.info("FBM saved guest session restored: %s", restored)
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     # Automatic network requests are disabled by default and require
     # explicit consent in the native Configure → Automatic menu.
     auto_groups = entry.options.get("auto_groups") is True
@@ -112,6 +111,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await hass.config_entries.async_reload(updated_entry.entry_id)
 
     entry.async_on_unload(entry.add_update_listener(_options_updated))
+    # Forward platforms only once the options and scheduler are initialized.
+    # Otherwise the first sensor poll can incorrectly expose both as disabled.
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     return True
 
 
