@@ -118,9 +118,8 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         results[source + (":" + subject if subject else "")] = await asyncio.to_thread(
             archive.record, group, source, data, subject=subject)
     return {
-        "status": "not_followed" if not await asyncio.to_thread(
-            archive.is_followed, group) else ("partial" if errors else "ok"),
-        "saved": bool(any(results.values())), "team_count": len(team_ids),
+        "status": "partial" if errors else "ok",
+        "saved": True, "team_count": len(team_ids),
         "fixture_count": len(fixtures["partidos"]),
         "rosters_saved": len(rosters), "roster_errors": errors,
         "records_written": sum(bool(v) for v in results.values()),
