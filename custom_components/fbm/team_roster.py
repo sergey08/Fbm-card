@@ -15,9 +15,14 @@ class PlayerRosterError(ValueError):
 def normalize_team_roster(response: object) -> dict:
     if not isinstance(response, dict) or response.get("error") != "":
         raise PlayerRosterError("Respuesta de plantilla no validada")
-    roster = response.get("misJugadores")
+    # Live official response also uses the lower-case wire spelling.
+    # Do not combine arrays or silently accept two conflicting variants.
+    keys = [key for key in ("misJugadores", "misjugadores") if key in response]
+    if len(keys) != 1:
+        raise PlayerRosterError("Lista de jugadores ausente o ambigua")
+    roster = response[keys[0]]
     if not isinstance(roster, list):
-        raise PlayerRosterError("Falta misJugadores")
+        raise PlayerRosterError("La lista de jugadores no es una lista")
 
     players = []
     seen = set()
