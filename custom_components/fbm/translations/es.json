@@ -9,5 +9,53 @@
     "abort": {
       "already_configured": "La integración FBM ya está configurada."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gestor de competiciones FBM",
+        "menu_options": {
+          "search": "Buscar equipo para seguir competición",
+          "manage": "Dejar de seguir una competición"
+        }
+      },
+      "search": {
+        "title": "Buscar un equipo FBM",
+        "data": {
+          "texto": "Nombre del equipo"
+        }
+      },
+      "select": {
+        "title": "Seleccionar equipo",
+        "data": {
+          "equipo": "Equipo"
+        }
+      },
+      "confirm": {
+        "title": "Seguir competición completa",
+        "description": "Equipo: {team}. Grupo oficial: {group}. La selección no descarga automáticamente plantillas.",
+        "data": {
+          "confirmar": "Confirmo que deseo seguir esta competición"
+        }
+      },
+      "manage": {
+        "title": "Dejar de seguir competición",
+        "description": "La competición dejará de actualizarse. Se conservarán sus históricos.",
+        "data": {
+          "competicion": "Competición"
+        }
+      }
+    },
+    "error": {
+      "invalid_search": "Introduce al menos tres caracteres",
+      "no_teams": "No se encontraron equipos",
+      "cannot_connect": "No se pudo consultar FBM",
+      "invalid_selection": "Selección no válida",
+      "cannot_verify": "No se pudo verificar la competición",
+      "season_unverified": "Temporada todavía no verificada; no se guardan datos"
+    },
+    "abort": {
+      "none_followed": "No hay competiciones seguidas"
+    }
   }
 }
