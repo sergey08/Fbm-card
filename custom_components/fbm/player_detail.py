@@ -13,6 +13,8 @@ import urllib.request
 
 from .device_protocol import open_request
 from .player_protocol import player_detail_fields
+from .image_references import image_data_uri
+
 
 PLAYER_URL = "https://appaficionfbm.gesdeportiva.es/v2/jugador.ashx"
 
@@ -120,4 +122,7 @@ def normalize_player_detail(response: object, requested_player_id: str) -> dict:
             elif target == "partidos_jugados" and type(value) is not int:
                 raise PlayerDetailError("Partidos jugados no es entero")
         result[target] = value
+    photo = image_data_uri(raw.get("Foto" if mapping is variants[1] else "foto"))
+    if photo:
+        result["foto"] = photo
     return {"jugador": result, "fuente": "FBM"}
