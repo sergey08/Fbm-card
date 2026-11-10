@@ -1,6 +1,6 @@
 # FBM Card — Madrid Basketball Federation
 
-Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current candidate: 0.2.0b12 (beta).** It is not an official FBM product.
+Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current candidate: 0.2.0b13 (beta).** It is not an official FBM product.
 
 ## Features
 - Search FBM teams and save multiple favorites.
@@ -39,7 +39,8 @@ equipo_fijo:
 ```
 Replace the sample fields using the configuration copied by the search card. Teams saved only in browser storage may not sync between devices.
 
-## 0.2.0b12 changes
+## 0.2.0b13 changes
+- Extends the player-photo diagnostic to classify hexadecimal UTF-16LE text as URL, embedded URL, relative path, inline image, encoded reference or opaque text. Shows only permitted metadata and a boolean for the official FBM host. No raw photos or identifiers.
 - Adds an explicit **Diagnosticar fotos** action in the Players tab to inspect safe, allowlisted photo-format metadata from the official backend; no photo, URL, identifier or secret is displayed.
 - Accept **hex-encoded image bytes** in the same strict PNG/JPEG/WebP validator already used for Base64 images; reject encoded URLs and opaque identifiers.
 - Add regression tests for valid image signatures and invalid references.
@@ -53,7 +54,7 @@ Photos and account/device secrets must not be posted in issues or diagnostics. T
 
 # FBM Card — Federación de Baloncesto de Madrid
 
-Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión candidata actual: 0.2.0b12 (beta).** No es un producto oficial de la Federación.
+Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión candidata actual: 0.2.0b13 (beta).** No es un producto oficial de la Federación.
 
 ## Funciones
 - Búsqueda de equipos FBM y varios favoritos.
@@ -92,7 +93,8 @@ equipo_fijo:
 ```
 Sustituye los valores del ejemplo con la configuración copiada desde el buscador. Las selecciones guardadas solo en el navegador pueden no sincronizarse entre dispositivos.
 
-## Cambios 0.2.0b12
+## Cambios 0.2.0b13
+- Amplía el diagnóstico de fotos para clasificar el texto hexadecimal UTF-16LE como URL, URL incrustada, ruta, imagen inline, referencia codificada u otro texto. Solo muestra metadatos permitidos y un indicador del dominio oficial FBM. Nunca devuelve fotos ni identificadores.
 - Nueva acción **Diagnosticar fotos** en la pestaña Jugadores: muestra únicamente metadatos seguros y autorizados del formato de imagen recibido de FBM, nunca fotos, URLs, identificadores ni secretos.
 - Se admiten **bytes de imagen codificados en hexadecimal** usando el mismo validador estricto PNG/JPEG/WebP que ya admitía Base64. Se rechazan URLs e identificadores opacos codificados.
 - Nuevas pruebas de regresión con cabeceras de imagen válidas y referencias inválidas.

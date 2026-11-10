@@ -78,6 +78,22 @@ class SafeDiagnosticsTests(unittest.TestCase):
         other = ("opaque-photo-identifier".encode("utf-8")).hex()
         self.assertEqual(mod._image_reference_shape(other)["hex_decoded_kind"], "utf8_text")
 
+    def test_utf16_hex_photo_reference_classifies_without_leaking(self):
+        cases = (
+            ("prefix:https://appaficionfbm.gesdeportiva.es/imagenes.ashx?key=PRIVATE", "embedded_url", True),
+            ("https://appaficionfbm.gesdeportiva.es/image?token=PRIVATE", "absolute_url", True),
+            ("/imagenes.ashx?private=SECRET", "relative_path", False),
+            ("opaque private reference with SECRET", "opaque_text", False),
+        )
+        for original, expected, official in cases:
+            with self.subTest(expected=expected):
+                shape = mod._image_reference_shape(original.encode("utf-16le").hex())
+                self.assertEqual(shape["utf16le_reference_form"], expected)
+                self.assertEqual(shape["official_fbm_host_present"], official)
+                self.assertNotIn("PRIVATE", str(shape))
+                self.assertNotIn("SECRET", str(shape))
+                self.assertNotIn("imagenes.ashx", str(shape))
+
     def test_photo_format_probe_reports_structure_not_photo_contents(self):
         import base64
         opaque = base64.b64encode(b"<svg xmlns='http://www.w3.org/2000/svg'></svg>").decode()
