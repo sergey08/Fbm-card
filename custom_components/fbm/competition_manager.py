@@ -26,8 +26,9 @@ async def identify_competition(client, team_id: str) -> dict:
         ids.append(team)
     if team_id not in ids:
         raise ValueError("El equipo no pertenece al grupo")
-    evidence = (identity if identity.get("season_verified") is True
-                else await client.async_verify_group_season(ids))
+    # Group metadata alone is not sufficient: always corroborate the
+    # season through two distinct official player/team detail bindings.
+    evidence = await client.async_verify_group_season(ids)
     season = evidence.get("season_id")
     if evidence.get("season_verified") is not True or type(season) is not str or not season:
         return {"status": "season_unverified", "team_count": len(ids),
