@@ -233,6 +233,15 @@ class IndependentClient:
             ttl=120,
         )
 
+    async def async_player_statistics_diagnostic(self, player_id: str, team_id: str) -> dict:
+        """Explicit stats diagnostic, no raw records stored or returned."""
+        self._validate_team_id(player_id)
+        self._validate_team_id(team_id)
+        async with self._lock:
+            if self._adapter is None or not self._adapter.session_is_usable():
+                return {"ok": False, "stage": "session", "category": "not_connected"}
+            return await self._adapter.player_statistics_diagnostic(player_id, team_id)
+
     async def async_team_standings(self, team_id: str) -> dict:
         self._validate_team_id(team_id)
         return await self._cached_query(("clasificacion", team_id), lambda adapter: adapter.team_standings(team_id), ttl=120)
