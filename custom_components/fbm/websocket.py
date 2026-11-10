@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 from .competition_sync import sync_group, preview_group
+from .competition_analysis import competition_analysis
 import probatio
 from homeassistant.components import websocket_api
 
@@ -410,8 +411,58 @@ async def ws_competition_latest(hass, connection, msg):
     connection.send_result(msg["id"], {"snapshot": item})
 
 
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/analysis",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_analysis(hass, connection, msg):
+    """Offline analysis of already stored FBM records, no network calls."""
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        identity = {
+            "season_verified": True, "season_id": msg["season_id"],
+            "phase_id": msg["phase_id"], "group_id": msg["group_id"],
+        }
+        standing = await hass.async_add_executor_job(archive.latest, identity, "standings")
+        fixtures = await hass.async_add_executor_job(archive.latest, identity, "fixtures")
+        if standing is None or fixtures is None:
+            raise ValueError("Sin clasificación o calendario archivado")
+        rows = standing["payload"].get("clasificacion", [])
+        if len(rows) > 100:
+            raise ValueError("Demasiados equipos")
+        rosters = {}
+        for row in rows:
+            tid = row.get("id")
+            if type(tid) is not str or not tid or len(tid) > 512:
+                raise ValueError("Equipo no identificado")
+            result = await hass.async_add_executor_job(
+                archive.latest, identity, "roster", tid)
+            if result is not None:
+                rosters[tid] = result["payload"]
+        report = await hass.async_add_executor_job(
+            competition_analysis, standing["payload"], fixtures["payload"], rosters)
+        report["observed_at"] = {
+            "standings": standing["observed_at"],
+            "fixtures": fixtures["observed_at"],
+        }
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudo analizar la competición archivada.")
+        return
+    connection.send_result(msg["id"], report)
+
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_latest, ws_competition_preview):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_latest, ws_competition_preview, ws_competition_analysis):
         websocket_api.async_register_command(hass, command)
 
 
