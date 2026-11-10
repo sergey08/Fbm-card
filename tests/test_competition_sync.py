@@ -4,6 +4,7 @@ from datetime import date
 import importlib.util
 from pathlib import Path
 import tempfile
+import sqlite3
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "custom_components/fbm"
@@ -135,6 +136,39 @@ class CompetitionTests(unittest.TestCase):
         self.assertFalse(any(action in ("roster", "schedule")
                              for action, _ in client.calls))
         self.assertEqual(self.store.followed(), [])
+
+    def test_anchor_is_persisted_and_deduplicated(self):
+        selection = identity()
+        self.store.follow(selection, "team-A")
+        self.store.follow(selection, "team-B")
+        self.assertEqual(len(self.store.followed()), 1)
+        self.assertEqual(
+            self.store.followed_with_anchor()[0]["anchor_team_id"], "team-B"
+        )
+        self.store.follow(selection)
+        self.assertEqual(
+            self.store.followed_with_anchor()[0]["anchor_team_id"], "team-B"
+        )
+        self.store.unfollow(selection)
+        self.assertFalse(self.store.is_followed(selection))
+        self.assertEqual(self.store.followed_with_anchor(), [])
+
+    def test_legacy_competition_schema_is_migrated_without_losing_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dbpath = str(Path(tmp) / "old.db")
+            with sqlite3.connect(dbpath) as db:
+                db.execute("""CREATE TABLE competitions(
+                    season TEXT NOT NULL, phase TEXT NOT NULL,
+                    group_id TEXT NOT NULL, followed INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY (season,phase,group_id))""")
+                db.execute("INSERT INTO competitions VALUES ('old','phase','group',1)")
+            archived = Archive(dbpath)
+            self.assertEqual(archived.followed_with_anchor(), [
+                {"season_id": "old", "phase_id": "phase",
+                 "group_id": "group", "anchor_team_id": ""}
+            ])
+            with sqlite3.connect(dbpath) as db:
+                self.assertEqual(db.execute("SELECT followed FROM competitions").fetchone()[0], 1)
 
     def test_images_and_unknown_fields_never_enter_archive(self):
         self.store.follow(identity())
