@@ -56,11 +56,45 @@ def _read_competition_summary(path: str) -> dict:
                            if standings else None)
             count_matches = (len(json.loads(fixtures[1])["partidos"])
                              if fixtures else None)
+            # Compact, public sporting information for HA/MCP state reads.
+            # No rosters, player IDs, photos or raw FBM response fields.
+            ranking = []
+            if standings:
+                for item in json.loads(standings[1])["clasificacion"][:20]:
+                    if type(item) is not dict:
+                        continue
+                    ranking.append({
+                        key: item[key] for key in (
+                            "equipo", "posicion", "jugados",
+                            "ganados", "perdidos", "puntos"
+                        ) if key in item and type(item[key]) in (str, int)
+                    })
+            recent_results = []
+            if fixtures:
+                for item in json.loads(fixtures[1])["partidos"]:
+                    if (type(item) is not dict
+                            or item.get("estado") != "finished"
+                            or type(item.get("marcador")) is not dict):
+                        continue
+                    score = item["marcador"]
+                    if (type(score.get("local")) is not int
+                            or type(score.get("visitante")) is not int):
+                        continue
+                    recent_results.append({
+                        "local": item.get("local"),
+                        "visitante": item.get("visitante"),
+                        "fecha": item.get("fecha"),
+                        "marcador": {"local": score["local"],
+                                    "visitante": score["visitante"]},
+                    })
+                recent_results = recent_results[-5:]
             result.append({
                 "season_id": season, "phase_id": phase, "group_id": group_id,
                 "teams": count_teams, "matches": count_matches,
                 "standings_at": standings[0] if standings else None,
                 "fixtures_at": fixtures[0] if fixtures else None,
+                "ranking": ranking,
+                "recent_results": recent_results,
             })
     return {"count": len(groups), "groups": result}
 
