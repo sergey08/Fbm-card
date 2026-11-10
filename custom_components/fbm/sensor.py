@@ -130,4 +130,15 @@ class FBMCompetitionsSensor(SensorEntity):
         self._attr_native_value = summary["count"]
         # Keep the exposed state deliberately bounded. The actual roster,
         # fixtures and full analysis remain in the archive.
-        self._attr_extra_state_attributes = {"groups": summary["groups"]}
+        auto_groups, auto_players = entry.get("auto_sync_flags", (False, False))
+        updater = entry.get("auto_updater")
+        health = updater.health if updater is not None else {}
+        self._attr_extra_state_attributes = {
+            "groups": summary["groups"],
+            "automatic_refresh": {
+                "groups_enabled": auto_groups,
+                "players_enabled": auto_players,
+                "groups": dict(health.get("groups", {})),
+                "players": dict(health.get("players", {})),
+            },
+        }
