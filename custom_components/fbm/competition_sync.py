@@ -46,6 +46,13 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         team_ids.append(tid)
     if team_id not in team_ids:
         raise ValueError("El equipo no figura en la clasificación del grupo")
+    # If an explicit refresh targets the saved competition, a moved phase
+    # or group is a transition, not an unselected group.
+    if expected_competition is not None and (
+            type(expected_competition) is not dict
+            or identity["phase_id"] != expected_competition.get("phase_id")
+            or identity["group_id"] != expected_competition.get("group_id")):
+        return {"status": "competition_changed", "saved": False}
     # The official search season label is stored when the user follows a
     # competition. Refreshes reuse that consented identity; FBM's group
     # endpoint does not provide another season ID. Never infer an ID from
