@@ -147,6 +147,23 @@ async def run():
                     "phase_id": "phase", "group_id": "group"}
         assert Archive(str(db)).latest(identity, "fixtures") is not None
 
+        # The summary entity must use actual HA SensorEntity and expose
+        # only public team standings/results, not player/roster data.
+        sensor_spec = importlib.util.spec_from_file_location(
+            f"{PACKAGE}.sensor", ROOT / "sensor.py")
+        sensor_module = importlib.util.module_from_spec(sensor_spec)
+        sys.modules[sensor_spec.name] = sensor_module
+        sensor_spec.loader.exec_module(sensor_module)
+        from homeassistant.components.sensor import SensorEntity
+        assert issubclass(sensor_module.FBMCompetitionsSensor, SensorEntity)
+        summary = sensor_module._read_competition_summary(str(db))
+        assert summary["count"] == 1
+        assert len(summary["groups"][0]["ranking"]) == 2
+        assert summary["groups"][0]["recent_results"][0]["marcador"] == {
+            "local": 35, "visitante": 31}
+        assert "jugadores" not in str(summary)
+        assert "roster" not in str(summary)
+
         listed = await flow.async_step_manage()
         assert listed["step_id"] == "manage", listed
         to_unfollow = await flow.async_step_manage({"competicion": "0"})
