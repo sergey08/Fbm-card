@@ -48,6 +48,21 @@ class RosterTests(unittest.TestCase):
         ]})
         self.assertNotIn("foto", invalid["jugadores"][0])
 
+    def test_hex_encoded_image_is_accepted_only_with_real_image_signature(self):
+        import base64
+        png_bytes = bytes([137, 80, 78, 71, 13, 10, 26, 10]) + b"synthetic-image"
+        response = {"error": "", "misjugadores": [
+            {"Id": "p1", "Nombre": "Ejemplo", "Foto": png_bytes.hex()}
+        ]}
+        player = mod.normalize_team_roster(response)["jugadores"][0]
+        self.assertEqual(player["foto"], "data:image/png;base64," + base64.b64encode(png_bytes).decode())
+        for invalid in ("https://example.org/private.png".encode().hex(),
+                        b"opaque-identifier".hex(), "abcd", "0" * 1026):
+            player = mod.normalize_team_roster({"error": "", "misjugadores": [
+                {"Id": "p2", "Nombre": "Ejemplo", "Foto": invalid}
+            ]})["jugadores"][0]
+            self.assertNotIn("foto", player)
+
     def test_live_lowercase_roster_spelling(self):
         result = mod.normalize_team_roster({"error": "", "misjugadores": [
             {"id": "p1", "nombre": "Ejemplo"}

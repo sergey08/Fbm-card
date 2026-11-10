@@ -13,19 +13,26 @@ _ALLOWED_PREFIX = re.compile(r"^data:image/(png|jpeg|jpg|webp);base64,", re.IGNO
 
 
 def image_data_uri(value: object, *, max_bytes: int = 131072) -> str | None:
-    if type(value) is not str or not value or len(value) > 4 * max_bytes // 3 + 128:
+    if type(value) is not str or not value or len(value) > 2 * max_bytes + 128:
         return None
     text = value.strip()
     prefix = _ALLOWED_PREFIX.match(text)
     if prefix:
         text = text[prefix.end():]
-    # This helper does not turn opaque identifiers or URLs into image URLs.
-    if not text or len(text) % 4 != 0 or not _BASE64.fullmatch(text):
-        return None
-    try:
-        raw = base64.b64decode(text, validate=True)
-    except (ValueError, binascii.Error):
-        return None
+    # FBM image references can be encoded. Accept hex only if it decodes
+    # directly to a recognized image; never decode URLs or opaque IDs.
+    if text and len(text) % 2 == 0 and re.fullmatch(r"[0-9a-fA-F]+", text):
+        try:
+            raw = bytes.fromhex(text)
+        except ValueError:
+            return None
+    else:
+        if not text or len(text) % 4 != 0 or not _BASE64.fullmatch(text):
+            return None
+        try:
+            raw = base64.b64decode(text, validate=True)
+        except (ValueError, binascii.Error):
+            return None
     if not raw or len(raw) > max_bytes:
         return None
     mime = None
