@@ -13,6 +13,12 @@ The primary unit is one verified `season_id + phase_id + group_id`. Following tw
 - Image URLs, image payloads and raw FBM DTO responses are not persisted.
 - Snapshot timestamps use timezone-aware UTC; stale results cannot overwrite the most recent good observation.
 
+### Native competition manager (DEV)
+
+The integration's **Configure** button opens a native Home Assistant options flow. The first implemented selection path is **Find team → Select team → Verify entire current competition → Confirm follow**. Searching uses the existing authenticated `async_search_teams` endpoint; the confirmation checks official phase/group, group standings membership and the same verified season across player details from two separate teams. If verification fails, nothing is followed or stored. The flow does not automatically download any rosters. **Manage → Select competition → Confirm unfollow** turns off following but preserves historical snapshots. It reuses the same SQLite archive as the WebSocket endpoints and summary sensor; duplicates are prevented by the season/phase/group composite key.
+
+Direct **search by competition name without any team** is reserved for a later step because its official discovery endpoint has not yet been established; no fake competition lookup was added. UI labels are translated in English and Spanish. This is code-only DEV and has not been verified in Home Assistant.
+
 ### Current DEV commands (Home Assistant WebSocket, administrator only)
 
 - `fbm/competition/preview`: `entry_id`, `equipo`, `desde`, `hasta`. Fetches official group membership and fixtures without saving or requesting player rosters, even when season is unverified.
@@ -57,6 +63,12 @@ La unidad de sincronización es `season_id + phase_id + group_id`, todos verific
 - `snapshots`: clasificación, calendario y plantilla normalizada de cada rival, con fecha de observación
 - No se guardan fotografías, URLs de fotos ni respuestas FBM originales.
 - Se conservan las instantáneas válidas anteriores cuando una petición falla.
+
+### Gestor de competiciones nativo (DEV)
+
+Desde **Configurar** de la integración FBM se abre un flujo de opciones de Home Assistant. La primera vía implementada es **Buscar equipo → Seleccionar equipo → Verificar competición completa → Confirmar seguimiento**. Usa la búsqueda ya validada de equipos; antes de seguir comprueba fase/grupo oficial, pertenencia a la clasificación y temporada concordante en dos fichas oficiales de jugadores de equipos distintos. Si falla la verificación no guarda datos ni activa seguimiento. Seleccionar una competición no descarga automáticamente las plantillas.
+
+**Gestionar → Seleccionar competición → Confirmar dejar de seguir** detiene su seguimiento sin borrar históricos. El almacén compartido evita duplicados mediante temporada/fase/grupo. La búsqueda **directa por nombre de competición**, sin seleccionar equipo, queda pendiente de verificar su consulta real en la API FBM; no se ha inventado un servicio. Textos de la interfaz en español e inglés. Todo sigue en DEV, sin probarse todavía en Home Assistant.
 
 ### Comandos de desarrollo
 
