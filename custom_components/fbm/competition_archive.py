@@ -26,6 +26,9 @@ class CompetitionArchive:
                     group_id TEXT NOT NULL,
                     followed INTEGER NOT NULL DEFAULT 1,
                     anchor_team_id TEXT NOT NULL DEFAULT '',
+                    team_name TEXT NOT NULL DEFAULT '',
+                    phase_name TEXT NOT NULL DEFAULT '',
+                    group_name TEXT NOT NULL DEFAULT '',
                     PRIMARY KEY (season, phase, group_id)
                 );
                 CREATE TABLE IF NOT EXISTS snapshots (
@@ -51,6 +54,11 @@ class CompetitionArchive:
                 db.execute(
                     "ALTER TABLE competitions ADD COLUMN anchor_team_id TEXT NOT NULL DEFAULT ''"
                 )
+            for label in ("team_name", "phase_name", "group_name"):
+                if label not in columns:
+                    db.execute(
+                        f"ALTER TABLE competitions ADD COLUMN {label} TEXT NOT NULL DEFAULT ''"
+                    )
 
     def _db(self):
         db = sqlite3.connect(self.path)
@@ -66,39 +74,53 @@ class CompetitionArchive:
             raise ValueError("Identidad oficial incompleta")
         return tuple(v.strip() for v in fields)
 
-    def follow(self, identity: dict, anchor_team_id: str = ""):
-        """Opt in to verified competition, retaining a verified source team."""
+    def follow(self, identity: dict, anchor_team_id: str = "",
+               display: dict | None = None):
+        """Opt in and keep short public labels separate from opaque API keys."""
         key = self._identity(identity)
         if (type(anchor_team_id) is not str or len(anchor_team_id) > 512
                 or (anchor_team_id and not anchor_team_id.strip())):
             raise ValueError("Equipo de referencia inválido")
+        labels = []
+        for field in ("team_name", "phase_name", "group_name"):
+            label = (display or {}).get(field, "")
+            if type(label) is not str or len(label) > 120:
+                raise ValueError("Nombre visible inválido")
+            labels.append(label.strip())
         with self._db() as db:
             db.execute(
                 """INSERT INTO competitions
-                   (season, phase, group_id, followed, anchor_team_id)
-                   VALUES (?, ?, ?, 1, ?)
+                   (season, phase, group_id, followed, anchor_team_id,
+                    team_name, phase_name, group_name)
+                   VALUES (?, ?, ?, 1, ?, ?, ?, ?)
                    ON CONFLICT(season,phase,group_id) DO UPDATE SET
                       followed=1,
-                      anchor_team_id=CASE
-                        WHEN excluded.anchor_team_id <> '' THEN excluded.anchor_team_id
-                        ELSE competitions.anchor_team_id
-                      END""",
-                (*key, anchor_team_id),
+                      anchor_team_id=CASE WHEN excluded.anchor_team_id <> ''
+                        THEN excluded.anchor_team_id ELSE competitions.anchor_team_id END,
+                      team_name=CASE WHEN excluded.team_name <> ''
+                        THEN excluded.team_name ELSE competitions.team_name END,
+                      phase_name=CASE WHEN excluded.phase_name <> ''
+                        THEN excluded.phase_name ELSE competitions.phase_name END,
+                      group_name=CASE WHEN excluded.group_name <> ''
+                        THEN excluded.group_name ELSE competitions.group_name END""",
+                (*key, anchor_team_id, *labels),
             )
         return key
 
     def followed_with_anchor(self):
-        """Only for admin management; do not put source IDs into sensor attrs."""
+        """Admin manager metadata; internal IDs are not displayed in the UI."""
         with self._db() as db:
             rows = db.execute(
-                """SELECT season,phase,group_id,anchor_team_id
+                """SELECT season,phase,group_id,anchor_team_id,
+                          team_name,phase_name,group_name
                    FROM competitions WHERE followed=1
                    ORDER BY season,phase,group_id"""
             ).fetchall()
         return [
             {"season_id": season, "phase_id": phase, "group_id": group,
-             "anchor_team_id": anchor}
-            for season,phase,group,anchor in rows
+             "anchor_team_id": anchor, "team_name": team,
+             "phase_name": phase_label, "group_name": group_label}
+            for season,phase,group,anchor,team,phase_label,group_label in rows
         ]
 
     def selected_for_team(self, team_id: str, phase_id: str, group_id: str):
