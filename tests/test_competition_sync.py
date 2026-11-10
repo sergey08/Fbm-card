@@ -16,6 +16,7 @@ def module(name):
 
 Archive = module("competition_archive").CompetitionArchive
 sync_group = module("competition_sync").sync_group
+preview_group = module("competition_sync").preview_group
 
 
 def identity(verified=True):
@@ -61,6 +62,19 @@ class CompetitionTests(unittest.TestCase):
                                        date(2026, 10, 1), date(2026, 11, 1)))
         self.assertEqual(result["status"], "season_unverified")
         self.assertEqual(client.calls, [("identity", "a")])
+        self.assertEqual(self.store.followed(), [])
+
+    def test_preview_reads_group_without_players_or_storage(self):
+        client = FakeClient(verified=False)
+        result = asyncio.run(preview_group(client, "a",
+                                           date(2026, 10, 1), date(2026, 11, 1)))
+        self.assertEqual(result["status"], "preview")
+        self.assertFalse(result["persisted"])
+        self.assertFalse(result["season_verified"])
+        self.assertEqual(result["team_count"], 2)
+        self.assertEqual(result["match_count"], 1)
+        self.assertEqual(len(client.calls), 3)
+        self.assertFalse(any(kind == "roster" for kind, _ in client.calls))
         self.assertEqual(self.store.followed(), [])
 
     def test_full_group_deduped_and_photos_removed(self):
