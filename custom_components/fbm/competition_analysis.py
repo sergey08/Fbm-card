@@ -4,6 +4,8 @@ No requests to FBM, inferred player statistics or photo data.
 """
 from __future__ import annotations
 
+import unicodedata
+
 
 def competition_analysis(standings: dict, fixtures: dict,
                          rosters: dict[str, dict] | None = None) -> dict:
@@ -32,12 +34,22 @@ def competition_analysis(standings: dict, fixtures: dict,
             "jugados": row.get("jugados"), "ganados": row.get("ganados"),
             "perdidos": row.get("perdidos"), "puntos": row.get("puntos"),
         })
-    # Do not attribute result to a specific team when fixtures only provide
-    # display names; exact name matching is accepted only when unambiguous.
+    # Official FBM standings and fixture labels sometimes differ only by
+    # accents/case/spacing (e.g. AMORÓS vs AMOROS). Normalize conservatively:
+    # never match two teams that collapse to the same canonical label.
+    def canonical_name(value):
+        if type(value) is not str:
+            return None
+        decomposed = unicodedata.normalize("NFKD", value)
+        folded = "".join(char for char in decomposed
+                         if not unicodedata.combining(char)).casefold()
+        return " ".join(folded.split())
+
     by_name = {}
     for team in teams:
-        by_name.setdefault(team["nombre"], []).append(team)
-    unique = {name: rows[0] for name, rows in by_name.items() if len(rows) == 1}
+        by_name.setdefault(canonical_name(team["nombre"]), []).append(team)
+    unique = {name: rows[0] for name, rows in by_name.items()
+              if name is not None and len(rows) == 1}
     stats = {team["id"]: {"finalizados_con_marcador": 0,
                           "puntos_favor": 0, "puntos_contra": 0}
              for team in teams}
@@ -54,11 +66,12 @@ def competition_analysis(standings: dict, fixtures: dict,
         a, b = score.get("local"), score.get("visitante")
         if (type(a) is not int or type(b) is not int or a < 0 or b < 0
                 or a > 500 or b > 500 or local == visitor
-                or local not in unique or visitor not in unique):
+                or canonical_name(local) not in unique
+                or canonical_name(visitor) not in unique):
             continue
         finished_ids.add(match_id)
         for name, pf, pc in ((local, a, b), (visitor, b, a)):
-            rec = stats[unique[name]["id"]]
+            rec = stats[unique[canonical_name(name)]["id"]]
             rec["finalizados_con_marcador"] += 1
             rec["puntos_favor"] += pf
             rec["puntos_contra"] += pc
