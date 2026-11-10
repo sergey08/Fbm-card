@@ -87,12 +87,26 @@ class CompetitionArchive:
             raise ValueError("El sujeto solo se usa para plantillas")
         if source == "roster" and (type(subject) is not str or not subject or len(subject) > 512):
             raise ValueError("ID de equipo no válido")
-        # Never persist photo URLs or base64 images of minors.
-        if source == "roster":
-            payload = {"jugadores": [
-                {k: v for k, v in player.items() if k != "foto"}
-                for player in payload["jugadores"] if type(player) is dict
-            ]}
+        # Persist explicit normalized sporting fields only. This excludes
+        # photographs, image URLs, original DTO extras and future unknown fields.
+        approved = {
+            "standings": {"id", "equipo", "posicion", "jugados", "ganados",
+                          "perdidos", "puntos"},
+            "fixtures": {"id", "local", "visitante", "fecha", "hora",
+                         "fecha_hora_utc", "campo", "direccion", "estado",
+                         "estado_oficial", "jornada", "marcador"},
+            "roster": {"id", "nombre", "equipo", "temporada",
+                       "partidos_jugados", "puntos_totales", "media_puntos",
+                       "puntos_por_partido", "minutos_por_partido"},
+        }[source]
+        output_key = {"standings": "clasificacion", "fixtures": "partidos",
+                      "roster": "jugadores"}[source]
+        clean = []
+        for row in payload[output_key]:
+            if type(row) is not dict:
+                raise ValueError("Registro deportivo inválido")
+            clean.append({k: v for k, v in row.items() if k in approved})
+        payload = {output_key: clean}
         encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
         if len(encoded.encode("utf-8")) > self.MAX_JSON_BYTES:
             raise ValueError("Instantánea demasiado grande")
