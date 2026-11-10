@@ -143,12 +143,18 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             Archive(str(self.path)).followed_with_anchor()[0]["anchor_team_id"],
             "team-A")
+        saved = Archive(str(self.path)).followed_with_anchor()[0]
+        self.assertEqual(saved["team_name"], "Pinto Basket")
+        self.assertEqual(saved["phase_name"], "")
+        self.assertEqual(saved["group_name"], "")
         selection = {"season_id": "26/27", "phase_id": "phase",
                      "group_id": "group", "season_verified": True}
         Archive(str(self.path)).record(
             selection, "standings", {"clasificacion": [{"id": "team-A"}]})
         result = await self.flow.async_step_manage()
         self.assertEqual(result["step_id"], "manage")
+        self.assertIn("Pinto Basket", result["data_schema"]["competicion"]["0"])
+        self.assertNotIn("group", result["data_schema"]["competicion"]["0"])
         result = await self.flow.async_step_manage({"competicion": "0"})
         self.assertEqual(result["step_id"], "unfollow")
         self.assertEqual(len(Archive(str(self.path)).followed()), 1)
@@ -219,6 +225,20 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
             "phase_id": "phase", "group_id": "group"})
         self.assertEqual(
             (await self.flow.async_step_refresh())["reason"], "no_refreshable_groups")
+
+    async def test_manage_legacy_archive_uses_safe_label_instead_of_api_ids(self):
+        Archive(str(self.path)).follow({
+            "season_verified": True, "season_id": "26/27",
+            "phase_id": "opaque-very-long-phase", "group_id": "opaque-very-long-group",
+        }, "team-A")
+        result = await self.flow.async_step_manage()
+        text = result["data_schema"]["competicion"]["0"]
+        self.assertIn("26/27", text)
+        self.assertIn("Competición 1", text)
+        self.assertNotIn("opaque", text)
+        result = await self.flow.async_step_refresh()
+        text = result["data_schema"]["competicion"]["0"]
+        self.assertNotIn("opaque", text)
 
     async def test_invalid_season_never_writes_competition(self):
         await self.flow.async_step_search({"texto": "pinto"})
