@@ -50,6 +50,7 @@ class IdentitySetupTests(unittest.TestCase):
     def test_entry_creates_manager_without_loading_or_saving_identity(self):
         hass = MagicMock()
         hass.data = {}
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
         entry = types.SimpleNamespace(entry_id='example')
         store = MagicMock()
         with patch.object(fbm, 'Store', return_value=store) as factory:
