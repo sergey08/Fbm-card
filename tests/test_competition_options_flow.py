@@ -145,8 +145,8 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
             "team-A")
         saved = Archive(str(self.path)).followed_with_anchor()[0]
         self.assertEqual(saved["team_name"], "Pinto Basket")
-        self.assertEqual(saved["phase_name"], "")
-        self.assertEqual(saved["group_name"], "")
+        self.assertEqual(saved["phase_name"], "Fase")
+        self.assertEqual(saved["group_name"], "Grupo")
         selection = {"season_id": "26/27", "phase_id": "phase",
                      "group_id": "group", "season_verified": True}
         Archive(str(self.path)).record(
