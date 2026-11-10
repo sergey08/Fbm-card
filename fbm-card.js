@@ -1438,7 +1438,7 @@ class FBMCompetitionCard extends HTMLElement {
     if (groups.length > 1) {
       const select = this._el("select");
       for (let i=0;i<groups.length;i++) {
-        const option = this._el("option", "Temporada "+(groups[i].season_id||"FBM")+" · Grupo "+(i+1));
+        const option = this._el("option", "Temporada "+(groups[i].season_id||"FBM")+" · "+(groups[i].phase_name||"Fase")+" · "+(groups[i].group_name||"Grupo "+(i+1)));
         option.value = String(i); select.append(option);
       }
       select.value = String(this._groupIndex);
@@ -1562,7 +1562,7 @@ class FBMCompetitionCard extends HTMLElement {
       }
     } else {
       this._teamId = null;
-      card.append(this._el("p", "Temporada "+(group.season_id||"FBM")+" · "+ranking.length+" equipos · "+(group.matches??"—")+" partidos", "muted"));
+      card.append(this._el("p", "Temporada "+(group.season_id||"FBM")+" · "+[group.phase_name,group.group_name].filter(Boolean).join(" · ")+" · "+ranking.length+" equipos · "+(group.matches??"—")+" partidos", "muted"));
       const table = this._el("table"), head = this._el("tr");
       for (const [name,numeric] of [["Pos.",true],["Equipo",false],["PJ",true],["Pts",true]]) {
         const th = this._el("th",name,numeric?"num":"");head.append(th);
