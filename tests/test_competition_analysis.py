@@ -52,6 +52,24 @@ class AnalysisTests(unittest.TestCase):
         self.assertIsNone(result["equipos"][0]["media_favor"])
         self.assertEqual(result["anotadores"], [])
 
+    def test_accent_normalization_without_ambiguous_team_matching(self):
+        ranking = {"clasificacion": [
+            {"id": "a", "equipo": "MARIANISTAS AMORÓS"},
+            {"id": "b", "equipo": "PINTOBASKET NEGRO"},
+        ]}
+        fixtures = {"partidos": [
+            {"id": "m1", "local": "MARIANISTAS AMOROS",
+             "visitante": "pintobasket  negro",
+             "estado": "finished", "marcador": {"local": 32, "visitante": 57}},
+        ]}
+        result = mod.competition_analysis(ranking, fixtures)
+        self.assertEqual(result["partidos_con_marcador"], 1)
+        self.assertEqual(result["equipos"][0]["media_favor"], 32)
+        ambiguous = {"clasificacion": ranking["clasificacion"] + [
+            {"id": "c", "equipo": "MARIANISTAS AMOROS"}]}
+        result = mod.competition_analysis(ambiguous, fixtures)
+        self.assertEqual(result["partidos_con_marcador"], 0)
+
     def test_duplicate_team_ids_rejected(self):
         standings = {"clasificacion": [
             {"id": "a", "equipo": "Pinto"}, {"id": "a", "equipo": "Other"}]}
