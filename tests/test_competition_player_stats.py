@@ -69,6 +69,36 @@ class StatsTests(unittest.TestCase):
         self.assertIsNone(result["next_offset"])
         self.assertEqual(self.run_batch()["saved"],0)
 
+    def test_already_archived_appearances_skip_unnecessary_network(self):
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": str(i), "nombre": f"Jugador {i}",
+             "partidos_jugados": 1} for i in range(9)
+        ]}, subject="team-A")
+        first = self.run_batch()
+        self.assertEqual(first["saved"], 5)
+        self.assertEqual(len(self.client.calls), 5)
+        second = self.run_batch()
+        self.assertEqual(second["skipped_unchanged"], 5)
+        self.assertEqual(second["saved"], 0)
+        self.assertEqual(len(self.client.calls), 5)
+
+    def test_new_appearance_refreshes_only_player_with_change(self):
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": str(i), "nombre": f"Jugador {i}",
+             "partidos_jugados": 1} for i in range(9)
+        ]}, subject="team-A")
+        self.run_batch()
+        # A single player gets an additional recorded appearance.
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": str(i), "nombre": f"Jugador {i}",
+             "partidos_jugados": 2 if i == 3 else 1}
+            for i in range(9)
+        ]}, subject="team-A")
+        second = self.run_batch()
+        self.assertEqual(second["skipped_unchanged"], 4)
+        self.assertEqual(self.client.calls.count("3"), 2)
+        self.assertEqual(len(self.client.calls), 6)
+
     def test_no_roster_for_unselected_team(self):
         result=asyncio.run(sync(self.client,self.archive,IDENTITY,"another"))
         self.assertEqual(result["status"],"no_roster")

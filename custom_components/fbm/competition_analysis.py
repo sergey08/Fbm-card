@@ -55,6 +55,7 @@ def competition_analysis(standings: dict, fixtures: dict,
                           "puntos_favor": 0, "puntos_contra": 0}
              for team in teams}
     finished_ids = set()
+    team_game_ids = {team["id"]: set() for team in teams}
     for match in matches:
         if type(match) is not dict or match.get("estado") != "finished":
             continue
@@ -74,6 +75,7 @@ def competition_analysis(standings: dict, fixtures: dict,
         for name, pf, pc in ((local, a, b), (visitor, b, a)):
             rec = stats[unique[canonical_name(name)]["id"]]
             rec["finalizados_con_marcador"] += 1
+            team_game_ids[unique[canonical_name(name)]["id"]].add(match_id)
             rec["puntos_favor"] += pf
             rec["puntos_contra"] += pc
 
@@ -134,6 +136,54 @@ def competition_analysis(standings: dict, fixtures: dict,
                 "partidos_con_puntos": len(explicit),
                 "origen": "suma_de_partidos_disponibles",
             })
+    # Validate scorer coverage against the actual finished fixture IDs.
+    # A successful download is NOT proof that every team point is attributed.
+    # Do not expose private player data in team-level coverage diagnostics.
+    for team in teams:
+        members = (rosters.get(team["id"]) or {}).get("jugadores")
+        team["cobertura_anotacion"] = {
+            "jugadoras_plantilla": len(members) if type(members) is list else None,
+            "jugadoras_con_partidos_puntuados": 0,
+            "puntos_atribuidos": None,
+            "puntos_marcador": stats[team["id"]]["puntos_favor"]
+                               if stats[team["id"]]["finalizados_con_marcador"] else None,
+            "puntos_sin_atribuir": None,
+            "cobertura_completa": None,
+        }
+        if type(members) is not list or not team_game_ids[team["id"]]:
+            continue
+        attributed = 0
+        with_points = 0
+        for member in members:
+            if type(member) is not dict or type(member.get("id")) is not str:
+                continue
+            record = individual_stats.get(member["id"])
+            game_rows = record.get("partidos") if type(record) is dict else None
+            if type(game_rows) is not list:
+                continue
+            used = set()
+            found = False
+            for row in game_rows:
+                if type(row) is not dict:
+                    continue
+                game_id = row.get("id_partido")
+                pts = row.get("puntos")
+                if (type(game_id) is str and game_id in team_game_ids[team["id"]]
+                        and game_id not in used and type(pts) is int
+                        and 0 <= pts <= 500):
+                    used.add(game_id)
+                    attributed += pts
+                    found = True
+            if found:
+                with_points += 1
+        if not with_points:
+            continue
+        match_points = stats[team["id"]]["puntos_favor"]
+        item = team["cobertura_anotacion"]
+        item["jugadoras_con_partidos_puntuados"] = with_points
+        item["puntos_atribuidos"] = attributed
+        item["puntos_sin_atribuir"] = match_points - attributed
+        item["cobertura_completa"] = (attributed == match_points)
     leaders.sort(key=lambda item: (-item["puntos_totales"], item["jugador_id"]))
     return {
         "equipos": teams, "numero_equipos": len(teams),
