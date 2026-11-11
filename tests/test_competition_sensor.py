@@ -1,4 +1,5 @@
 """Offline tests for the minimal FBM competition HA sensor."""
+from datetime import date
 from pathlib import Path
 import importlib.util
 import sys
@@ -43,6 +44,23 @@ Archive = sys.modules[pkg_name + ".competition_archive"].CompetitionArchive
 
 
 class SensorTests(unittest.IsolatedAsyncioTestCase):
+    def test_round_status_ignores_postponements_and_calendar_gaps(self):
+        fixtures = [
+            {"jornada": 1, "fecha": "2026-11-01", "estado": "finished"},
+            {"jornada": 2, "fecha": "07/11/2026", "estado": "finished"},
+            {"jornada": 2, "fecha": "2026-11-27", "estado": "postponed"},
+            {"jornada": 3, "fecha": "14/11/2026", "estado": "scheduled"},
+            {"jornada": 3, "fecha": "2026-11-15", "estado": "scheduled"},
+            {"jornada": 4, "fecha": "fecha pendiente", "estado": "scheduled"},
+        ]
+        self.assertEqual(Sensor._round_status(fixtures, date(2026, 11, 11)), {
+            "current": None, "last_completed": 1, "next": 3,
+        })
+        self.assertEqual(Sensor._round_status(fixtures, date(2026, 11, 15)), {
+            "current": 3, "last_completed": 1, "next": None,
+        })
+        self.assertIsNone(Sensor._round_status(fixtures, date(2026, 11, 27))["current"])
+
     async def test_refresh_signal_schedules_entity_update(self):
         sensor = Sensor.FBMCompetitionsSensor(
             types.SimpleNamespace(), types.SimpleNamespace(entry_id="entry"))
