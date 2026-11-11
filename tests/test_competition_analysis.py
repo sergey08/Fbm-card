@@ -87,6 +87,46 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(result["anotadores"][0]["partidos_con_puntos"], 2)
         self.assertEqual(result["anotadores"][0]["origen"], "suma_de_partidos_disponibles")
 
+    def test_explicit_coverage_reconciles_and_flags_missing_points(self):
+        fixtures = {"partidos": [
+            {"id": "m1", "local": "Pinto", "visitante": "Rival",
+             "estado": "finished", "marcador": {"local": 19, "visitante": 37}},
+            {"id": "m2", "local": "Rival", "visitante": "Pinto",
+             "estado": "finished", "marcador": {"local": 55, "visitante": 7}},
+        ]}
+        rosters = {"a": {"jugadores": [{"id": "p1", "nombre": "P1"}]},
+                   "b": {"jugadores": [{"id": "p2", "nombre": "P2"}]}}
+        individual = {
+            "p1": {"partidos": [
+                {"id_partido": "m1", "puntos": 19},
+                {"id_partido": "m2", "puntos": 7}]},
+            "p2": {"partidos": [
+                {"id_partido": "m1", "puntos": 10},
+                {"id_partido": "m2", "puntos": 20},
+                {"id_partido": "m2", "puntos": 20},
+                {"id_partido": "other", "puntos": 1000},
+            ]}}
+        result = mod.competition_analysis(self.standings, fixtures, rosters, individual)
+        a, b = [row["cobertura_anotacion"] for row in result["equipos"]]
+        self.assertEqual(a["puntos_atribuidos"], 26)
+        self.assertEqual(a["puntos_sin_atribuir"], 0)
+        self.assertTrue(a["cobertura_completa"])
+        self.assertEqual(b["puntos_atribuidos"], 30)
+        self.assertEqual(b["puntos_marcador"], 92)
+        self.assertEqual(b["puntos_sin_atribuir"], 62)
+        self.assertFalse(b["cobertura_completa"])
+
+    def test_missing_player_stats_not_reported_as_zero(self):
+        fixtures = {"partidos": [
+            {"id": "m1", "local": "Pinto", "visitante": "Rival",
+             "estado": "finished", "marcador": {"local": 12, "visitante": 8}}]}
+        rosters = {"a": {"jugadores": [{"id": "p1", "nombre": "P1"}]}}
+        result = mod.competition_analysis(self.standings, fixtures, rosters, {})
+        cov = result["equipos"][0]["cobertura_anotacion"]
+        self.assertIsNone(cov["puntos_atribuidos"])
+        self.assertIsNone(cov["cobertura_completa"])
+        self.assertIsNone(cov["puntos_sin_atribuir"])
+
     def test_duplicate_team_ids_rejected(self):
         standings = {"clasificacion": [
             {"id": "a", "equipo": "Pinto"}, {"id": "a", "equipo": "Other"}]}
