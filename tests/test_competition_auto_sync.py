@@ -33,6 +33,13 @@ def track(hass, callback, interval):
     return cancel
 event_mod.async_track_time_interval=track
 
+dispatcher_name="homeassistant.helpers.dispatcher"
+dispatcher_mod=sys.modules.setdefault(dispatcher_name,types.ModuleType(dispatcher_name))
+dispatched=[]
+def send(hass, signal):
+    dispatched.append(signal)
+dispatcher_mod.async_dispatcher_send=send
+
 store_name="homeassistant.helpers.storage"
 store_mod=sys.modules.setdefault(store_name,types.ModuleType(store_name))
 stored={}
@@ -83,6 +90,12 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.hass=Hass()
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
+
+    async def test_mark_notifies_competition_sensor(self):
+        self.updater._mark("groups", "ok")
+        self.assertEqual(dispatched[-1], "fbm_competitions_refresh_test")
+        self.assertEqual(self.updater.health["groups"]["status"], "ok")
+        self.assertIsNotNone(self.updater.health["groups"]["last_run"])
 
     async def test_repeated_identical_standings_do_not_duplicate_snapshots(self):
         archive=Archive(self.path)
