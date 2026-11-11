@@ -163,8 +163,8 @@ async def run():
         scheduler = importlib.util.module_from_spec(scheduler_spec)
         sys.modules[scheduler_spec.name] = scheduler
         scheduler_spec.loader.exec_module(scheduler)
-        assert scheduler.GROUP_INTERVAL.total_seconds() == 4 * 3600
-        assert scheduler.PLAYER_INTERVAL.total_seconds() == 2 * 3600
+        assert scheduler.GROUP_INTERVAL.total_seconds() == 1 * 3600
+        assert scheduler.PLAYER_INTERVAL.total_seconds() == 30 * 60
         assert scheduler.PLAYER_CYCLE_DELAY.total_seconds() == 24 * 3600
 
         client.calls.clear()

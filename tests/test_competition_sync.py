@@ -114,6 +114,33 @@ class GroupTests(unittest.TestCase):
         self.assertNotIn("roster",self.client.calls)
         self.assertEqual(self.run_sync(fetch_rosters=False)["records_written"],0)
 
+    def test_incremental_rosters_backfill_then_skip_unchanged(self):
+        self.select()
+        first = self.run_sync(fetch_rosters="on_change")
+        self.assertEqual(first["rosters_saved"], 2)
+        self.assertEqual(self.client.calls.count("roster"), 2)
+        second = self.run_sync(fetch_rosters="on_change")
+        self.assertEqual(second["rosters_saved"], 0)
+        self.assertEqual(self.client.calls.count("roster"), 2)
+        self.assertFalse(second["fixture_results_changed"])
+
+    def test_incremental_rosters_refresh_on_new_completed_result(self):
+        self.select()
+        self.run_sync(fetch_rosters="on_change")
+        async def completed(team, start, end):
+            self.client.calls.append("schedule")
+            return {"partidos": [{"id": "m1", "local": "A", "visitante": "B",
+                                  "estado": "finished",
+                                  "marcador": {"local": 19, "visitante": 13}}]}
+        self.client.async_team_schedule = completed
+        changed = self.run_sync(fetch_rosters="on_change")
+        self.assertTrue(changed["fixture_results_changed"])
+        self.assertEqual(changed["rosters_saved"], 2)
+        self.assertEqual(self.client.calls.count("roster"), 4)
+        final = self.run_sync(fetch_rosters="on_change")
+        self.assertFalse(final["fixture_results_changed"])
+        self.assertEqual(final["rosters_saved"], 0)
+
     def test_changed_phase_aborts_before_schedule(self):
         self.select()
         self.client.phase="another"

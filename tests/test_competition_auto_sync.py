@@ -110,6 +110,29 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(listeners), 2)
         await restarted.async_stop()
 
+    async def test_each_followed_group_restores_last_checked(self):
+        from datetime import datetime, timedelta, timezone
+        self.assertEqual(self.updater.group_checked_at, {})
+        archive = Archive(self.path)
+        archive.record(IDENT, "fixtures", {"partidos": [
+            {"id": "future", "fecha": "31/12/2040",
+             "estado": "scheduled", "local": "A", "visitante": "B"}
+        ]})
+        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok"}
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 1)
+            self.assertIn("group", self.updater.group_checked_at)
+            # The quiet-week policy must not query the same group again.
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 1)
+        restarted = mod.CompetitionAutoUpdater(
+            self.hass, "test", FakeClient(), self.path, Archive)
+        await restarted.async_start(True, True)
+        self.assertEqual(restarted.group_checked_at,
+                         self.updater.group_checked_at)
+        await restarted.async_stop()
+
     async def test_group_and_player_health_merge_without_erasing_cursors(self):
         await self.updater._save_state({"players": {"offset": 5},
                                         "group_index": 1})
@@ -219,9 +242,15 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
             await self.updater._run_group()
         sync.assert_awaited_once()
-        self.assertFalse(sync.await_args.kwargs["fetch_rosters"])
+        self.assertEqual(sync.await_args.kwargs["fetch_rosters"], "on_change")
         self.assertEqual(sync.await_args.kwargs["expected_competition"]["season_id"],"26/27")
         self.assertEqual(stored[self.updater.storage.key]["group_index"],0)
+
+    async def test_incremental_player_poll_keeps_five_player_cap(self):
+        await self.updater.async_start(True, True)
+        self.assertEqual(len(listeners), 2)
+        self.assertEqual(listeners[1]["interval"], mod.timedelta(minutes=30))
+        await self.updater.async_stop()
 
     async def test_stats_cursor_moves_and_survives_new_coordinator(self):
         with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:

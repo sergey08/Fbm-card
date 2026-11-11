@@ -25,7 +25,7 @@ async def sync_player_stats_batch(client, archive, competition: dict,
     if type(players) is not list or len(players) > 100:
         raise ValueError("Plantilla inválida")
     subset = players[offset:offset + limit]
-    saved, errors, missing = 0, 0, 0
+    saved, errors, missing, skipped = 0, 0, 0, 0
     for player in subset:
         if not await asyncio.to_thread(archive.is_followed, competition):
             return {"status": "not_followed", "saved": saved,
@@ -35,6 +35,24 @@ async def sync_player_stats_batch(client, archive, competition: dict,
             errors += 1
             continue
         try:
+            # Only query newly played fixtures: the official roster already
+            # includes how many appearances the player has made.  An existing
+            # complete snapshot with that many unique matches needs no new
+            # remote request. An explicit admin refresh remains available.
+            existing = await asyncio.to_thread(
+                archive.latest, competition, "player_stats", player_id)
+            cached_games = (existing or {}).get("payload", {}).get("partidos")
+            appearances = player.get("partidos_jugados")
+            if (type(appearances) is int and 0 <= appearances <= 200
+                    and type(cached_games) is list
+                    and len({m.get("id_partido") for m in cached_games
+                             if type(m) is dict and type(m.get("id_partido")) is str})
+                        >= appearances
+                    and all(type(m) is dict and type(m.get("puntos")) is int
+                            for m in cached_games)
+                    and appearances > 0):
+                skipped += 1
+                continue
             stats = await client.async_player_statistics(player_id, team_id)
             if (type(stats) is not dict or stats.get("jugador") != player_id
                     or stats.get("equipo") != team_id):
@@ -55,7 +73,8 @@ async def sync_player_stats_batch(client, archive, competition: dict,
             errors += 1
         await asyncio.sleep(0.5)
     return {"status": "partial" if errors else "ok",
-            "processed": len(subset), "saved": saved, "errors": errors,
+            "processed": len(subset), "saved": saved, "skipped_unchanged": skipped,
+            "errors": errors,
             "players_without_match_data": missing,
             "next_offset": offset + len(subset) if offset + len(subset) < len(players) else None,
             "roster_size": len(players)}
