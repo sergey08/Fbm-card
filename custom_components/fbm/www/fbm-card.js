@@ -504,6 +504,42 @@ class FBMCard extends HTMLElement {
     return true;
   }
 
+  _fixedCrestCandidates(state, team) {
+    const standing = state.standings?.find(row => row.id === team.id);
+    const normalize = value => String(value || "").trim().toUpperCase();
+    const teamName = normalize(team.nombre);
+    const fixtures = state.schedule?.partidos || [];
+    const sources = [this._config.logo_equipo, team.escudo, standing?.escudo,
+      state.schedule?.escudos?.[team.nombre], state.recoveredCrest];
+    for (const match of fixtures) {
+      if (normalize(match.local) === teamName) sources.push(match.img_local, match.escudo_local);
+      if (normalize(match.visitante) === teamName) sources.push(match.img_visitante, match.escudo_visitante);
+    }
+    return [...new Set(sources.map(value => {
+      if (typeof value !== "string" || !value) return "";
+      if (/^data:image\/(png|jpeg|webp);base64,/.test(value)) return value;
+      return this._officialLogoUrl(value) || (/^[a-z][a-z0-9+.-]*:/i.test(value) ? "" : this._apkCrestUrl(value));
+    }).filter(Boolean))];
+  }
+
+  async _recoverFixedCrest(state, team) {
+    if (state.crestLookup || !state.status?.sesion_vigente || !state.entry) return false;
+    state.crestLookup = true;
+    const entryId = state.entry;
+    try {
+      const response = await this._hass.callWS({
+        type: "fbm/team/search", entry_id: entryId, texto: team.nombre, skip: 0
+      });
+      if (this._experimental !== state || state.entry !== entryId || state.selected !== team.id) return false;
+      const found = response?.equipos?.find(row => row.id === team.id);
+      if (typeof found?.escudo !== "string" || !found.escudo || found.escudo === state.recoveredCrest) return false;
+      state.recoveredCrest = found.escudo;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async _initializeFixed() {
     if (this._fixedInit || !this._hass?.callWS || this._config?.tipo_tarjeta !== "equipo") return;
     this._fixedInit = true;
@@ -522,6 +558,8 @@ class FBMCard extends HTMLElement {
         if (!archived && state.status.sesion_vigente) {
           await this._loadStandings(state);
         }
+        if (!this._fixedCrestCandidates(state, saved).length)
+          await this._recoverFixedCrest(state, saved);
       }
     } catch (_) {
       state.message = "No se pudo actualizar la clasificación. Comprueba la conexión.";
@@ -536,7 +574,8 @@ class FBMCard extends HTMLElement {
       "modo_experimental: true", "tipo_tarjeta: equipo",
       "id_tarjeta: " + quote("fbm-fijo-" + team.id + "-" + Math.random().toString(36).slice(2, 10)),
       "equipo_fijo:",
-      ...["id", "nombre", "club", "categoria", "temporada"].map(field => "  " + field + ": " + quote(team[field]))
+      ...["id", "nombre", "club", "categoria", "temporada", ...(team.escudo ? ["escudo"] : [])]
+        .map(field => "  " + field + ": " + quote(team[field]))
     ].join("\n");
   }
 
@@ -716,6 +755,8 @@ class FBMCard extends HTMLElement {
             remoteAttempted = true;
             await this._loadStandings(state);
           }
+          if (!this._fixedCrestCandidates(state, selected).length)
+            await this._recoverFixedCrest(state, selected);
         } else if (action === "phases") {
           if (!state.selected) throw new Error("Elige un equipo.");
           remoteAttempted = true;
@@ -835,6 +876,7 @@ class FBMCard extends HTMLElement {
   _resetTeamData(state) {
     Object.assign(state, {
       archivedData: false, lastArchiveCheck: 0, schedule: null, standings: null,
+      recoveredCrest: "", crestLookup: false,
       players: null, playerDetail: null, playerStats: null, photoDiagnostic: null,
       lastStandingsUpdate: 0, lastPlayersUpdate: 0, lastScheduleUpdate: 0,
       rounds: null, round: "", phaseName: "", matchRound: "all", showGroup: false,
@@ -895,14 +937,19 @@ class FBMCard extends HTMLElement {
       }
       if (showDetails) {
         const header = this._element("div", "", "team-header");
-        const configuredLogo = this._officialLogoUrl(this._config.logo_equipo);
-        const standing = Array.isArray(state.standings) ? state.standings.find(item => item.id === pinned.id) : null;
-        const logo = configuredLogo || this._apkCrestUrl(pinned.escudo || standing?.escudo);
-        if (logo) {
+        const logos = this._fixedCrestCandidates(state, pinned);
+        if (logos.length) {
           const img = document.createElement("img");
-          img.src = logo; img.alt = "Escudo oficial de " + pinned.nombre;
+          img.src = logos.shift(); img.alt = "Escudo oficial de " + pinned.nombre;
           img.className = "team-logo"; img.loading = "lazy";
-          img.addEventListener("error", () => img.replaceWith(this._element("span", "🏀", "team-logo-placeholder")), { once: true });
+          img.addEventListener("error", async () => {
+            if (logos.length) {
+              img.src = logos.shift();
+              return;
+            }
+            img.replaceWith(this._element("span", "🏀", "team-logo-placeholder"));
+            if (await this._recoverFixedCrest(state, pinned)) this._render();
+          });
           header.append(img);
         } else header.append(this._element("span", "🏀", "team-logo-placeholder"));
         header.append(this._element("h3", pinned.nombre));
