@@ -8,13 +8,20 @@ import asyncio
 from datetime import date
 import importlib.util
 from pathlib import Path
+import sys
 import tempfile
+import types
 import unittest
 
 BASE=Path(__file__).resolve().parents[1]/"custom_components"/"fbm"
 
+PACKAGE = "fbm_roundtrip_test_pkg"
+package = types.ModuleType(PACKAGE)
+package.__path__ = [str(BASE)]
+sys.modules[PACKAGE] = package
+
 def load(name):
-    spec=importlib.util.spec_from_file_location("fbm_roundtrip_"+name,BASE/(name+".py"))
+    spec=importlib.util.spec_from_file_location(PACKAGE + "." + name,BASE/(name+".py"))
     module=importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
