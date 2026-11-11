@@ -1290,7 +1290,7 @@ class FBMCard extends HTMLElement {
         tbody.append(tr);
       }
       table.append(tbody);
-      card.append(table);
+      const scroll=this._el("div",undefined,"fbm-table-scroll");scroll.append(table);card.append(scroll);
       if (result.data.actualizado) card.append(this._element("p", "Actualizado: " + result.data.actualizado, "muted"));
     }
     this.shadowRoot.replaceChildren(style, card);
@@ -1424,28 +1424,44 @@ class FBMCompetitionCard extends HTMLElement {
     if (!this.shadowRoot) this.attachShadow({mode:"open"});
     const style = this._el("style");
     style.textContent = `
-      ha-card{padding:16px;line-height:1.45}
-      h2{margin:0 0 12px;font-size:1.25rem}
-      h3{margin:14px 0 10px}
-      table{width:100%;border-collapse:collapse;font-size:.9rem}
-      th,td{padding:9px 5px;border-bottom:1px solid var(--divider-color,#ddd);text-align:left}
-      th.num,td.num{text-align:right}
-      button{font:inherit;cursor:pointer;border:0;background:transparent;color:var(--primary-color,#1976d2);text-align:left}
-      button:focus-visible{outline:2px solid var(--primary-color,#1976d2);outline-offset:3px}
-      .team{display:inline-flex;align-items:center;gap:8px;font-weight:600}
-      .crest{width:24px;height:24px;object-fit:contain}
-      .muted{color:var(--secondary-text-color,#777);font-size:.82rem}
-      .back{margin-bottom:12px;padding:5px}
-      .players{list-style:none;padding:0;display:grid;gap:6px}
-      .players li{border-bottom:1px solid var(--divider-color,#ddd);padding:6px}
-      .player-stats{padding:8px;background:var(--secondary-background-color,#f3f3f3);border-radius:8px}
-      .fixture{padding:8px 0;border-bottom:1px solid var(--divider-color,#ddd)}
+      :host{display:block;min-width:0}
+      ha-card{padding:16px;line-height:1.5;box-sizing:border-box;min-width:0;overflow:hidden}
+      h2{font-size:1.15rem;margin:0 0 4px;font-weight:700}
+      h3{font-size:1rem;margin:16px 0 8px}
+      h4{font-size:.9rem;margin:12px 0 6px}
+      .muted{color:var(--secondary-text-color,#777);font-size:.87rem;margin:8px 0 12px}
+      .back{display:inline-flex;align-items:center;margin:12px 0;padding:8px 12px;border:1px solid var(--divider-color,#ddd);border-radius:9px;background:var(--secondary-background-color,#eee);color:var(--primary-text-color,#222);font-weight:600}
+      button{font:inherit;cursor:pointer;border:0;background:transparent;color:var(--primary-text-color,#222);text-align:left}
+      button:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#1976d2);outline-offset:2px}
+      button:disabled{opacity:.55;cursor:default}
+      table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:340px}
+      th,td{padding:9px 8px;border-bottom:1px solid var(--divider-color,#ddd);text-align:left}
+      th{font-size:.74rem;text-transform:uppercase;letter-spacing:.025em;color:var(--secondary-text-color,#666);background:var(--secondary-background-color,#f6f6f6)}
+      th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+      tbody tr:nth-child(even){background:var(--secondary-background-color,transparent)}
+      td:first-child{font-weight:700;color:var(--primary-color,#1976d2)}
+      .fbm-table-scroll{width:100%;max-width:100%;overflow-x:auto;border:1px solid var(--divider-color,#ddd);border-radius:12px;margin:10px 0}
+      .team{display:inline-flex;align-items:center;gap:8px;min-width:0;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+      .team:hover{color:var(--primary-color,#1976d2)}
+      .crest{width:30px;height:30px;flex:0 0 30px;object-fit:contain;border-radius:8px}
+      .team-header{display:flex;align-items:center;gap:12px;margin:10px 0}
+      .team-header h3{margin:0}
+      .team-logo,.team-logo-placeholder{width:52px;height:52px;flex:0 0 52px;object-fit:contain;border-radius:12px;background:var(--secondary-background-color,#eee)}
+      .team-logo-placeholder{display:flex;align-items:center;justify-content:center;font-size:1.65rem}
+      .players{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px}
+      .players li{border:1px solid var(--divider-color,#ddd);border-radius:10px;padding:9px 10px;min-width:0}
+      .players li>button{font-weight:600;width:100%;padding:4px 0}
+      .players li>button:hover{color:var(--primary-color,#1976d2)}
+      .player-stats{padding:10px;background:var(--secondary-background-color,#f3f3f3);border-radius:9px;margin-top:8px}
+      .player-stats p{margin:5px 0}
+      .fixture{padding:10px 8px;border-bottom:1px solid var(--divider-color,#ddd);font-size:.88rem}
+      .fixture:nth-of-type(even){background:var(--secondary-background-color,transparent)}
       .fixture-group{margin-top:12px}
-      .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
-      .tabs button{border:1px solid var(--divider-color,#ddd);border-radius:8px;padding:6px 12px}
-      .tabs button[aria-pressed="true"]{background:var(--primary-color,#1976d2);color:white}
+      .tabs{display:flex;gap:4px;overflow-x:auto;margin:12px 0;max-width:100%}
+      .tabs button{flex:1 0 auto;padding:8px 10px;border:0;border-radius:9px;background:var(--secondary-background-color,#eee);color:var(--primary-text-color,#222)}
+      .tabs button[aria-pressed="true"]{background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);font-weight:700}
       .player-game{font-size:.85rem;border-bottom:1px solid var(--divider-color,#ddd);padding:7px 0}
-      select{width:100%;padding:8px;margin-bottom:12px}
+      select{width:100%;min-width:0;box-sizing:border-box;min-height:42px;padding:8px 10px;margin:10px 0 12px;border:1px solid var(--divider-color,#bbb);border-radius:9px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);font:inherit}
     `;
     const card = this._el("ha-card");
     card.append(this._el("h2", this._config.title));
@@ -1478,7 +1494,16 @@ class FBMCompetitionCard extends HTMLElement {
         this._teamId = null; this._roster = null; this._error = "";
         this._render();
       });
-      card.append(back, this._el("h3", team.equipo));
+      const header=this._el("div",undefined,"team-header");
+      const crest=this._verifiedCrest(team.escudo);
+      if (crest) {
+        const img=this._el("img");img.src=crest;img.alt="Escudo de "+team.equipo;
+        img.className="team-logo";img.loading="lazy";
+        img.addEventListener("error",()=>img.replaceWith(this._el("span","🏀","team-logo-placeholder")),{once:true});
+        header.append(img);
+      } else header.append(this._el("span","🏀","team-logo-placeholder"));
+      header.append(this._el("h3",team.equipo));
+      card.append(back,header);
       card.append(this._el("p", "Posición "+team.posicion+" · "+team.puntos+" puntos · "+team.jugados+" partidos", "muted"));
       card.append(this._el("h3", "Partidos"));
       if (!this._matches) card.append(this._el("p", "Consultando el calendario archivado…", "muted"));
