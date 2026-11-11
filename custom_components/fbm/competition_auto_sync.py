@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .competition_sync import sync_group
@@ -43,6 +44,7 @@ class CompetitionAutoUpdater:
         # Safe, in-memory diagnostics: never expose players or API payloads.
         self.health[kind] = {"status": status,
                              "last_run": datetime.now(timezone.utc).isoformat()}
+        async_dispatcher_send(self.hass, f"fbm_competitions_refresh_{self.entry_id}")
 
     async def async_start(self, groups: bool, players: bool):
         if groups:
