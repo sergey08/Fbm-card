@@ -1915,13 +1915,14 @@ class FBMCardEditor extends HTMLElement {
       this._field(form, "Tipo de tarjeta", mode, value => {
         const patch = { modo_experimental: value !== "entidades" };
         if (value !== "entidades") patch.tipo_tarjeta = value;
+        if (value !== mode) this._search = null;
         if (value === "equipo" && !config.id_tarjeta && !config.equipo_fijo) {
           const suffix = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
           patch.id_tarjeta = "fbm-equipo-" + suffix;
         }
         this._update(patch, true);
-      }, { options: [["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"],
-        ["entidades", "Equipos de entidades de Home Assistant"]] });
+      }, { options: [...(mode === "entidades" ? [["entidades", "Selecciona un tipo"]] : []),
+        ["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"]] });
 
       if (mode === "equipo") {
         const hint = document.createElement("p");
@@ -1930,23 +1931,12 @@ class FBMCardEditor extends HTMLElement {
           : "Después de guardar, elige el equipo desde la tarjeta.";
         form.append(hint);
         this._teamSearch(form);
-        edit(form, "URL del escudo", "logo_equipo", { placeholder: "https://…" });
-      }
-      if (mode === "entidades") {
-        edit(form, "Nombre del equipo", "equipo");
-        edit(form, "Entidad de datos", "entidad_datos");
-        edit(form, "Detectar entidades de FBM", "descubrir_entidades", { type: "checkbox" });
-        this._editTeams(form, config.equipos);
-        edit(form, "URL de la competición", "url_oficial", { placeholder: "https://…" });
       }
       const advanced = document.createElement("details");
       advanced.open = !!advancedOpen;
       const summary = document.createElement("summary");
       summary.textContent = "Opciones avanzadas";
       advanced.append(summary);
-      edit(advanced, "Identificador de la tarjeta", "id_tarjeta", {
-        required: mode === "equipo" && !config.equipo_fijo
-      });
       if (mode === "busqueda") edit(advanced, "Mostrar consulta de horarios", "mostrar_horarios", { type: "checkbox" });
       if (mode === "equipo") {
         edit(advanced, "Mostrar diagnóstico de fotos", "mostrar_diagnostico", { type: "checkbox" });
@@ -1965,44 +1955,50 @@ class FBMCardEditor extends HTMLElement {
   }
 
   _teamSearch(form) {
+    const state = this._search ||= { query: "", teams: [], message: "", busy: false };
     const label = document.createElement("label");
-    label.textContent = "Buscar equipo en FBM";
+    label.textContent = "Nombre del equipo";
     const input = document.createElement("input");
     input.type = "search";
     input.maxLength = 100;
+    input.placeholder = "Por ejemplo, Pintobasket";
+    input.value = state.query;
+    input.addEventListener("input", () => { state.query = input.value; });
     label.append(input);
     const search = document.createElement("button");
     search.type = "button";
-    search.textContent = "Buscar equipo";
+    search.textContent = "Buscar en FBM";
+    search.disabled = state.busy;
     const results = document.createElement("div");
     results.setAttribute("aria-live", "polite");
+    results.textContent = state.message;
     search.addEventListener("click", async () => {
       const texto = input.value.trim();
-      if (!texto || search.disabled) return;
-      search.disabled = true;
-      results.textContent = "Buscando…";
+      if (state.busy) return;
+      if (!texto) {
+        results.textContent = "Escribe el nombre de un equipo para buscar.";
+        input.focus?.();
+        return;
+      }
+      state.query = texto;
+      state.busy = true;
+      state.teams = [];
+      state.message = "Buscando equipos…";
+      this._render();
       try {
-        const entry = await this._hass.callWS({ type: "fbm/client/entries" });
+        const entry = await this._hass?.callWS?.({ type: "fbm/client/entries" });
         if (entry?.entries?.length !== 1) throw new Error("FBM entry unavailable");
         const response = await this._hass.callWS({
           type: "fbm/team/search", entry_id: entry.entries[0], texto, skip: 0
         });
-        const teams = Array.isArray(response?.equipos)
+        state.teams = Array.isArray(response?.equipos)
           ? response.equipos.filter(team => FBMCard.prototype._experimentalTeamIsValid(team)) : [];
-        results.textContent = teams.length ? "" : "No se han encontrado equipos.";
-        if (!teams.length) return;
-        this._field(results, "Equipo, categoría y temporada", "", index => {
-          if (index === "") return;
-          const { id, nombre, club, categoria, temporada, escudo } = teams[Number(index)];
-          const equipo_fijo = { id, nombre, club, categoria, temporada };
-          if (typeof escudo === "string") equipo_fijo.escudo = escudo;
-          this._update({ equipo_fijo }, true);
-        }, { options: [["", "Selecciona un equipo"], ...teams.map((team, index) =>
-          [String(index), [team.nombre, team.categoria, team.temporada].join(" · ")])] });
+        state.message = state.teams.length ? "" : "No se han encontrado equipos.";
       } catch (_) {
-        results.textContent = "No se pudo buscar. Comprueba la conexión a FBM.";
+        state.message = "No se pudo buscar. Comprueba que FBM está conectado.";
       } finally {
-        search.disabled = false;
+        state.busy = false;
+        if (this._search === state) this._render();
       }
     });
     input.addEventListener("keydown", event => {
@@ -2011,38 +2007,19 @@ class FBMCardEditor extends HTMLElement {
         search.click();
       }
     });
+    if (state.teams.length) {
+      this._field(results, "Equipo, categoría y temporada", "", index => {
+        const team = index === "" ? null : state.teams[Number(index)];
+        if (!team) return;
+        const { id, nombre, club, categoria, temporada, escudo } = team;
+        const equipo_fijo = { id, nombre, club, categoria, temporada };
+        if (typeof escudo === "string") equipo_fijo.escudo = escudo;
+        this._search = null;
+        this._update({ equipo_fijo }, true);
+      }, { options: [["", "Selecciona un equipo"], ...state.teams.map((team, index) =>
+        [String(index), [team.nombre, team.categoria, team.temporada].join(" · ")])] });
+    }
     form.append(label, search, results);
-  }
-
-  _editTeams(form, entries) {
-    const teams = Array.isArray(entries) ? entries : [];
-    const button = (parent, label, action) => {
-      const element = document.createElement("button");
-      element.type = "button";
-      element.textContent = label;
-      element.addEventListener("click", action);
-      parent.append(element);
-    };
-    teams.forEach((team, index) => {
-      const group = document.createElement("fieldset");
-      const title = document.createElement("legend");
-      title.textContent = "Equipo " + (index + 1);
-      group.append(title);
-      for (const [key, label] of [["nombre", "Nombre"], ["entidad_datos", "Entidad de datos"]]) {
-        this._field(group, label, team?.[key], value => {
-          const updated = this._config.equipos.map((entry, position) =>
-            position === index ? { ...entry, [key]: value } : entry);
-          this._update({ equipos: updated });
-        });
-      }
-      button(group, "Quitar equipo", () => this._update({
-        equipos: this._config.equipos.filter((_, position) => position !== index)
-      }, true));
-      form.append(group);
-    });
-    button(form, "Añadir equipo", () => this._update({
-      equipos: [...(this._config.equipos || []), { nombre: "", entidad_datos: "" }]
-    }, true));
   }
 }
 
