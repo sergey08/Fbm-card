@@ -1,0 +1,68 @@
+name: Publish isolated FBM 0.2.2b13 prerelease
+on:
+  push:
+    branches:
+      - beta/0.2.2b13
+    paths:
+      - ".github/workflows/publish-0.2.2b13.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate-and-release:
+    if: github.ref == 'refs/heads/beta/0.2.2b13'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify beta version and bundled cards
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest=json.loads(Path("custom_components/fbm/manifest.json").read_text())
+          assert manifest["domain"]=="fbm"
+          assert manifest["version"]=="0.2.2b13"
+          print("Beta version:",manifest["version"])
+          PY
+          python - <<'PY'
+          from pathlib import Path
+          source=Path("custom_components/fbm/competition_auto_sync.py").read_text()
+          assert "from homeassistant.core import callback" in source
+          assert "@callback\n    def _group_tick" in source
+          assert "@callback\n    def _player_tick" in source
+          PY
+          cmp fbm-card.js custom_components/fbm/www/fbm-card.js
+          grep -Fq 'customElements.define("fbm-competition-card", FBMCompetitionCard)' fbm-card.js
+          grep -Fq 'customElements.define("fbm-card", FBMCard)' fbm-card.js
+      - name: Test all Python and JavaScript integrations
+        run: |
+          python -m compileall -q custom_components/fbm
+          python -m unittest discover -s tests -p 'test_*.py'
+          node --check fbm-card.js
+          node --test tests/*.test.cjs
+      - name: Install real Home Assistant Core 2026.11
+        run: python -m pip install --disable-pip-version-check 'homeassistant==2026.11.0'
+      - name: Test actual Home Assistant OptionsFlow, sensor and disposable SQLite
+        run: python tests/ha_real_api_smoke.py
+      - name: Publish prerelease only after every validation succeeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.2.2b13 >/dev/null 2>&1; then
+            echo "Release v0.2.2b13 already exists; refusing to overwrite"
+            exit 1
+          fi
+          gh release create v0.2.2b13 \
+            --target "$GITHUB_SHA" \
+            --title "FBM Card 0.2.2b13 (Beta)" \
+            --prerelease \
+            --notes-file BETA_0.2.2b13_NOTES.md
