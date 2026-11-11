@@ -141,7 +141,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["type"], "create_entry")
         self.assertEqual(len(Archive(str(self.path)).followed()), 1)
         self.assertIn("schedule", self.client.calls)
-        self.assertNotIn("roster", self.client.calls)
+        self.assertEqual(self.client.calls.count("roster"), 2)
         self.assertEqual(
             Archive(str(self.path)).followed_with_anchor()[0]["anchor_team_id"],
             "team-A")
@@ -165,7 +165,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         archive = Archive(str(self.path))
         self.assertEqual(archive.followed(), [])
         self.assertIsNotNone(archive.latest(selection, "standings"))
-        self.assertNotIn("roster", self.client.calls)
+        self.assertEqual(self.client.calls.count("roster"), 2)
 
     async def test_manual_refresh_requires_confirmation_and_no_rosters_by_default(self):
         await self.flow.async_step_search({"texto": "pinto"})
@@ -185,12 +185,13 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
                     "phase_id": "phase", "group_id": "group"}
         archive = Archive(str(self.path))
         self.assertEqual(len(archive.latest(identity, "fixtures")["payload"]["partidos"]), 1)
-        self.assertIsNone(archive.latest(identity, "roster", "team-A"))
+        self.assertIsNotNone(archive.latest(identity, "roster", "team-A"))
 
     async def test_manual_refresh_explicit_roster_opt_in(self):
         await self.flow.async_step_search({"texto": "pinto"})
         await self.flow.async_step_select({"equipo": "team-A"})
         await self.flow.async_step_confirm({"confirmar": True})
+        self.client.calls.clear()
         await self.flow.async_step_refresh({"competicion": "0"})
         result = await self.flow.async_step_refresh_confirm(
             {"confirmar": True, "incluir_plantillas": True})
