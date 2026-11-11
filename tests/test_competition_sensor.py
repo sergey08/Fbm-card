@@ -91,7 +91,8 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             archive = Archive(path)
             identity = {"season_verified": True, "season_id": "season",
                         "phase_id": "phase", "group_id": "group"}
-            archive.follow(identity)
+            archive.follow(identity, display={"team_name": "Team", "competition_name": "Alevín Plata"})
+            crest = "data:image/png;base64,iVBORw0KGgo="
             archive.record(identity, "standings", {"clasificacion": [
                 {"id": "team1", "equipo": "Team", "posicion": 1,
                  "ganados": 4, "perdidos": 0, "escudo": "PRIVATE_IMAGE"}]})
@@ -99,7 +100,7 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
                 {"id": "game1", "local": "Team", "visitante": "Other",
                  "estado": "finished", "fecha": "2026-11-01",
                  "marcador": {"local": 45, "visitante": 38},
-                 "direccion": "PRIVATE_VENUE"},
+                 "direccion": "PRIVATE_VENUE", "img_local": crest, "img_visitante": "PRIVATE_IMAGE"},
             ]})
             archive.record(identity, "roster", {"jugadores": [
                 {"id": "player", "nombre": "PRIVATE_CHILD", "foto": "PRIVATE_IMAGE"}]},
@@ -108,6 +109,9 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(summary["count"], 1)
             self.assertEqual(summary["groups"][0]["teams"], 1)
             self.assertEqual(summary["groups"][0]["matches"], 1)
+            self.assertEqual(summary["groups"][0]["competition_name"], "Alevín Plata")
+            self.assertEqual(archive.latest(identity, "fixtures")["payload"]["escudos"], {"Team": crest})
+            self.assertNotIn(crest, str(summary))
             self.assertNotIn("PRIVATE_CHILD", str(summary))
             self.assertNotIn("PRIVATE_IMAGE", str(summary))
             self.assertNotIn("PRIVATE_VENUE", str(summary))
