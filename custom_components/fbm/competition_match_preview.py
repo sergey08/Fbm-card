@@ -38,6 +38,10 @@ def match_preview(standings, fixtures, team_name):
         raise ValueError("Invalid archive data")
     lookup = {row["equipo"]: row for row in rows
               if isinstance(row, dict) and isinstance(row.get("equipo"), str)}
+    names = [row.get("equipo") for row in rows
+             if isinstance(row, dict) and isinstance(row.get("equipo"), str)]
+    if len(names) != len(rows) or len(set(names)) != len(names):
+        raise ValueError("Ambiguous standings")
     if team_name not in lookup:
         raise ValueError("Team not in standings")
     scheduled = [game for game in games if isinstance(game, dict)
@@ -60,7 +64,7 @@ def match_preview(standings, fixtures, team_name):
                  "marcador": game.get("marcador")} for game in matches[:4]]
     prior = [game for game in games if isinstance(game, dict)
              and rival and {game.get("local"), game.get("visitante")} == {team_name, rival}
-             and _finished(game)]
+             and _finished(game) and _date(game) is not None]
     return {
         "equipo": team_name,
         "rival": rival,
