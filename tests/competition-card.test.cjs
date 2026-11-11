@@ -35,16 +35,19 @@ test("competition card shows standings and loads roster on team click",async()=>
     season_id:"26/27",phase_id:"phase",group_id:"group",matches:30,
     round_status:{current:3,last_completed:2,next:4},
     ranking:[{id:"team1",equipo:"Equipo A",posicion:1,jugados:4,puntos:8,
-      escudo:"https://fbm.es/equipo-a.png"}]
+      escudo:""}]
   }]}}},callWS:async request=>{
     calls.push(request.type);
     if(request.type==="fbm/client/entries")return {entries:["entry"]};
     if(request.type==="fbm/competition/team_roster")
       return {jugadores:[{id:"p1",nombre:"Jugador de prueba"}],
         partidos:[{local:"Equipo A",visitante:"Equipo B",fecha:"12/11/2026",jornada:3,marcador:{local:44,visitante:39}},
-          {local:"Equipo B",visitante:"Equipo A",fecha:"19/11/2026",jornada:4}]};
-    if(request.type==="fbm/team/schedule")
-      return {partidos:[{local:"Equipo A",visitante:"Equipo B",escudo_visitante:"ABC123"}]};
+          {local:"Equipo B",visitante:"Equipo A",fecha:"19/04/2027",jornada:4}]};
+    if(request.type==="fbm/team/schedule") {
+      assert.equal(request.desde, "2026-11-12");
+      assert.equal(request.hasta, "2027-03-17");
+      return {partidos:[{local:"Equipo A",visitante:"equipo b ",img_local:"https://fbm.es/equipo-a.png",escudo_visitante:"ABC+/="}]};
+    }
     if(request.type==="fbm/team/players")
       return {jugadores:[{id:"p1",nombre:"Jugador de prueba",foto:"data:image/png;base64,iVBORw0KGgo="}]};
     if(request.type==="fbm/competition/team_player_stats")
@@ -61,7 +64,8 @@ test("competition card shows standings and loads roster on team click",async()=>
   await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(calls,["fbm/client/entries","fbm/competition/team_roster","fbm/team/schedule"]);
   assert.equal(c._roster.length,1);
-  assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-fixture-logo" && x.src.endsWith("id=ABC123")).length);
+  assert.ok(walk(c.shadowRoot,x=>x.className==="team-logo" && x.src==="https://fbm.es/equipo-a.png").length);
+  assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-fixture-logo" && x.src.endsWith("id=ABC%2B%2F%3D")).length);
   assert.ok(walk(c.shadowRoot,x=>x.textContent==="44 – 39").length);
   assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-fixture-logo" && x.src==="https://fbm.es/equipo-a.png").length);
   assert.ok(walk(c.shadowRoot,x=>x.tagName==="option" && x.textContent==="Jornada 3").length);
