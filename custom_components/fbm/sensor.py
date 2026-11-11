@@ -6,7 +6,8 @@ No FBM network access and no database creation during startup.
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import quote
 import json
@@ -27,11 +28,58 @@ async def async_setup_entry(
     async_add_entities([FBMCompetitionsSensor(hass, entry)], True)
 
 
+def _round_status(fixtures: list[dict], today: date) -> dict:
+    """Summarize the calendar without treating an isolated makeup as a round."""
+    rounds: dict[int, list[tuple[date | None, str | None]]] = {}
+    for fixture in fixtures:
+        if not isinstance(fixture, dict):
+            continue
+        number = fixture.get("jornada")
+        if isinstance(number, str) and number.isdecimal() and len(number) < 5:
+            number = int(number)
+        if type(number) is not int or number < 1:
+            continue
+        value = fixture.get("fecha")
+        played_on = None
+        if isinstance(value, str):
+            try:
+                played_on = (datetime.strptime(value, "%d/%m/%Y").date()
+                             if "/" in value else date.fromisoformat(value))
+            except ValueError:
+                pass
+        rounds.setdefault(number, []).append((played_on, fixture.get("estado")))
+
+    active, completed, upcoming = [], [], []
+    for number, games in rounds.items():
+        dates = sorted(day for day, state in games if day and state not in
+                       ("postponed", "cancelled", "canceled"))
+        if not dates:
+            continue
+        # Pick the date with most games, breaking ties towards the earlier date.
+        # A split weekend counts as one round; isolated dates elsewhere do not.
+        peak = min(set(dates), key=lambda day: (-dates.count(day), day))
+        window = [day for day in dates if abs((day - peak).days) <= 2]
+        if min(window) <= today <= max(window):
+            active.append((abs((today - peak).days), -number, number))
+        if max(dates) <= today and all(
+            state in ("finished", "cancelled", "canceled") for _, state in games
+        ):
+            completed.append(number)
+        if min(window) > today:
+            upcoming.append((min(window), number))
+    return {
+        "current": min(active)[2] if active else None,
+        "last_completed": max(completed) if completed else None,
+        "next": min(upcoming)[1] if upcoming else None,
+    }
+
+
 def _read_competition_summary(path: str) -> dict:
     """Read existing SQLite in mode=ro; no migrations or file writes."""
     if not Path(path).is_file():
         return {"count": 0, "groups": []}
     uri = "file:" + quote(str(Path(path).resolve()), safe="/") + "?mode=ro"
+    today = datetime.now(ZoneInfo("Europe/Madrid")).date()
     with sqlite3.connect(uri, uri=True) as db:
         groups = db.execute(
             """SELECT season, phase, group_id, phase_name, group_name FROM competitions
@@ -54,8 +102,8 @@ def _read_competition_summary(path: str) -> dict:
             standings, fixtures = snapshots
             count_teams = (len(json.loads(standings[1])["clasificacion"])
                            if standings else None)
-            count_matches = (len(json.loads(fixtures[1])["partidos"])
-                             if fixtures else None)
+            matches = json.loads(fixtures[1])["partidos"] if fixtures else []
+            count_matches = len(matches) if fixtures else None
             # Compact, public sporting information for HA/MCP state reads.
             # No rosters, player IDs, photos or raw FBM response fields.
             ranking = []
@@ -71,7 +119,7 @@ def _read_competition_summary(path: str) -> dict:
                     })
             recent_results = []
             if fixtures:
-                for item in json.loads(fixtures[1])["partidos"]:
+                for item in matches:
                     if (type(item) is not dict
                             or item.get("estado") != "finished"
                             or type(item.get("marcador")) is not dict):
@@ -96,6 +144,7 @@ def _read_competition_summary(path: str) -> dict:
                 "fixtures_at": fixtures[0] if fixtures else None,
                 "ranking": ranking,
                 "recent_results": recent_results,
+                "round_status": _round_status(matches, today),
             })
     return {"count": len(groups), "groups": result}
 
