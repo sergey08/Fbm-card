@@ -92,10 +92,43 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             self.hass,"test",FakeClient(),self.path,Archive)
 
     async def test_mark_notifies_competition_sensor(self):
-        self.updater._mark("groups", "ok")
+        await self.updater._mark("groups", "ok")
         self.assertEqual(dispatched[-1], "fbm_competitions_refresh_test")
         self.assertEqual(self.updater.health["groups"]["status"], "ok")
         self.assertIsNotNone(self.updater.health["groups"]["last_run"])
+
+    async def test_health_survives_restart_without_replaying_tasks(self):
+        await self.updater._mark("players", "ok")
+        last = self.updater.health["players"]["last_run"]
+        restarted = mod.CompetitionAutoUpdater(
+            self.hass, "test", FakeClient(), self.path, Archive)
+        self.assertIsNone(restarted.health["players"]["last_run"])
+        await restarted.async_start(True, True)
+        self.assertEqual(restarted.health["players"],
+                         {"status": "ok", "last_run": last})
+        self.assertEqual(restarted.health["groups"]["status"], "pending")
+        self.assertEqual(len(listeners), 2)
+        await restarted.async_stop()
+
+    async def test_group_and_player_health_merge_without_erasing_cursors(self):
+        await self.updater._save_state({"players": {"offset": 5},
+                                        "group_index": 1})
+        await self.updater._mark("groups", "failed")
+        await self.updater._mark("players", "ok")
+        state = stored[self.updater.storage.key]
+        self.assertEqual(state["group_index"], 1)
+        self.assertEqual(state["players"]["offset"], 5)
+        self.assertEqual(state["health"]["groups"]["status"], "failed")
+        self.assertEqual(state["health"]["players"]["status"], "ok")
+
+    async def test_invalid_persisted_health_not_restored(self):
+        stored[self.updater.storage.key] = {"health": {
+            "groups": {"status": "ok", "last_run": "invalid"},
+            "players": {"status": "secret", "last_run": "2026-11-11T12:00:00+00:00"}}}
+        await self.updater.async_start(True, True)
+        self.assertEqual(self.updater.health["groups"]["status"], "pending")
+        self.assertEqual(self.updater.health["players"]["status"], "pending")
+        await self.updater.async_stop()
 
     async def test_repeated_identical_standings_do_not_duplicate_snapshots(self):
         archive=Archive(self.path)

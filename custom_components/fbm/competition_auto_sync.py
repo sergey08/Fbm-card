@@ -40,13 +40,41 @@ class CompetitionAutoUpdater:
         self.health = {"groups": {"status": "pending", "last_run": None},
                        "players": {"status": "pending", "last_run": None}}
 
-    def _mark(self, kind, status):
-        # Safe, in-memory diagnostics: never expose players or API payloads.
-        self.health[kind] = {"status": status,
-                             "last_run": datetime.now(timezone.utc).isoformat()}
+    async def _mark(self, kind, status):
+        # Persist only bounded status metadata, never player or FBM payloads.
+        record = {"status": status,
+                  "last_run": datetime.now(timezone.utc).isoformat()}
+        self.health[kind] = record
+        try:
+            await self._save_state({"health": {kind: record}})
+        except Exception:
+            # Storage failure must not suppress live HA diagnostics or
+            # interfere with already archived competition snapshots.
+            pass
         async_dispatcher_send(self.hass, f"fbm_competitions_refresh_{self.entry_id}")
 
     async def async_start(self, groups: bool, players: bool):
+        # Restore diagnostics independently of work cursors after a restart.
+        try:
+            saved = (await self._read_state()).get("health", {})
+            if type(saved) is dict:
+                for kind in ("groups", "players"):
+                    record = saved.get(kind)
+                    if (type(record) is dict
+                            and record.get("status") in
+                            ("ok", "partial", "failed", "no_followed_groups", "no_standings", "no_roster")
+                            and type(record.get("last_run")) is str
+                            and len(record["last_run"]) < 64):
+                        try:
+                            stamp = datetime.fromisoformat(record["last_run"])
+                        except ValueError:
+                            continue
+                        if stamp.tzinfo is not None:
+                            self.health[kind] = {"status": record["status"],
+                                                 "last_run": record["last_run"]}
+        except Exception:
+            # A broken state store should not prevent the scheduler starting.
+            pass
         if groups:
             self._cancel.append(async_track_time_interval(
                 self.hass, self._group_tick, GROUP_INTERVAL))
@@ -88,6 +116,13 @@ class CompetitionAutoUpdater:
         # overwrite one another's state in Home Assistant's Store.
         async with self._store_lock:
             current = await self._read_state()
+            # Preserve both workstream health records when their timers overlap.
+            if "health" in state:
+                previous = current.get("health", {})
+                if type(previous) is not dict:
+                    previous = {}
+                current["health"] = {**previous, **state["health"]}
+                state = {key: val for key, val in state.items() if key != "health"}
             current.update(state)
             await self.storage.async_save(current)
 
@@ -113,14 +148,14 @@ class CompetitionAutoUpdater:
             except Exception:
                 # Include archive/store errors, not just remote API failures.
                 # Do not expose private FBM data in Home Assistant state.
-                self._mark("groups", "failed")
+                await self._mark("groups", "failed")
 
     async def _run_group_impl(self):
         if self._stopped:
             return
         archive, groups = await self._archive_and_groups()
         if not groups:
-            self._mark("groups", "no_followed_groups")
+            await self._mark("groups", "no_followed_groups")
             return
         state = await self._read_state()
         index = int(state.get("group_index", 0)) % len(groups)
@@ -139,11 +174,11 @@ class CompetitionAutoUpdater:
                 expected_competition={k: group[k] for k in
                                       ("season_id", "phase_id", "group_id")})
             status = response.get("status") if isinstance(response, dict) else None
-            self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
+            await self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
         except Exception:
             # Never leak service errors, IDs or player details into HA state.
             # The archive retains the last successful snapshot.
-            self._mark("groups", "failed")
+            await self._mark("groups", "failed")
             return
 
     async def _run_players(self):
@@ -154,12 +189,12 @@ class CompetitionAutoUpdater:
                 await self._run_players_impl()
             except Exception:
                 # FBM failures are contained and never disclose player data.
-                self._mark("players", "failed")
+                await self._mark("players", "failed")
 
     async def _run_players_impl(self):
         archive, groups = await self._archive_and_groups()
         if not groups:
-            self._mark("players", "no_followed_groups")
+            await self._mark("players", "no_followed_groups")
             return
         state = await self._read_state()
         cursor = state.get("players", {})
@@ -185,7 +220,7 @@ class CompetitionAutoUpdater:
         team_ids = [row.get("id") for row in rows if type(row) is dict
                     and type(row.get("id")) is str][:20]
         if not team_ids:
-            self._mark("players", "no_standings")
+            await self._mark("players", "no_standings")
             return
         team_index = int(cursor.get("team_index", 0)) % len(team_ids)
         offset = max(0, int(cursor.get("offset", 0)))
@@ -195,7 +230,7 @@ class CompetitionAutoUpdater:
             self.client, archive, identity, team_ids[team_index],
             offset=offset, limit=5)
         if response.get("status") not in ("ok", "partial", "no_roster"):
-            self._mark("players", "failed")
+            await self._mark("players", "failed")
             return
         if response.get("next_offset") is not None:
             cursor = {"group_index": group_index,
@@ -211,4 +246,4 @@ class CompetitionAutoUpdater:
             cursor = {"group_index": 0, "team_index": 0, "offset": 0,
                       "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
         await self._save_state({"players": cursor})
-        self._mark("players", response["status"])
+        await self._mark("players", response["status"])
