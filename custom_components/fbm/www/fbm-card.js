@@ -1376,6 +1376,7 @@ class FBMCompetitionCard extends HTMLElement {
       throw new Error("Índice de competición inválido");
     this._groupIndex = this._config.group_index;
     this._selectedGroup = null;
+    this._pickerFocused = this._pickerRefreshPending = false;
     this._teamRequest = this._playerRequest = null;
     this._teamId = null; this._roster = null; this._matches = null;
     this._matchView = "jornadas"; this._matchRound = "all";
@@ -1384,8 +1385,13 @@ class FBMCompetitionCard extends HTMLElement {
     this._render();
   }
   set hass(hass) {
+    const entity = this._config?.entity;
+    const before = this._hass?.states?.[entity]?.attributes?.groups;
     this._hass = hass;
-    this._render();
+    const after = hass?.states?.[entity]?.attributes?.groups;
+    if (before === after || JSON.stringify(before) === JSON.stringify(after)) return;
+    if (this._pickerFocused) this._pickerRefreshPending = true;
+    else this._render();
   }
   getCardSize() { return 5; }
   static getStubConfig() {
@@ -1399,7 +1405,11 @@ class FBMCompetitionCard extends HTMLElement {
   }
   _element(tag, value, className) { return this._el(tag, value, className); }
   _officialLogoUrl(value) { return this._verifiedCrest(value); }
-  _apkCrestUrl(value) { return this._verifiedCrest(value); }
+  _apkCrestUrl(value) {
+    return this._verifiedCrest(value) ||
+      (typeof value === "string" && /^[a-z0-9]{1,256}$/i.test(value)
+        ? "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=" + value : "");
+  }
   _verifiedCrest(value) {
     if (typeof value !== "string" || value.length > 1024) return "";
     try {
@@ -1475,6 +1485,8 @@ class FBMCompetitionCard extends HTMLElement {
         typeof team.equipo !== "string") return;
     if (this._teamId === team.id) return;
     this._playerRequest = null;
+    this._photoRequest = null;
+    this._fixtureCrests = null;
     this._detailTab = "partidos";
     this._teamId = team.id; this._roster = null; this._matches = null;
     this._matchView = "jornadas"; this._matchRound = "all";
@@ -1500,12 +1512,62 @@ class FBMCompetitionCard extends HTMLElement {
       this._roster = data.jugadores;
       this._matches = Array.isArray(data.partidos) ? data.partidos : [];
       this._fixtureCrests = data.escudos;
+      if (this._detailTab === "jugadores") void this._loadPlayerPhotos();
+      void this._loadFixtureCrests(request, group);
     } catch (_) {
       if (this._teamRequest === request)
         this._error = "No se ha podido leer la plantilla archivada; no se hará una descarga adicional.";
     }
     this._render();
   }
+  async _loadFixtureCrests(request, group) {
+    const ranking = Array.isArray(group.ranking) ? group.ranking : [];
+    const known = new Map(ranking.map(team => [team.equipo, this._verifiedCrest(team.escudo)]));
+    const names = new Set(this._matches.flatMap(match => [match.local, match.visitante]).filter(Boolean));
+    if (![...names].some(name => !known.get(name) && !Object.hasOwn(this._fixtureCrests || {}, name))) return;
+    const dates = this._matches.map(match => fbmFixtureDateKey(match.fecha))
+      .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
+    if (!dates.length) return;
+    const desde = dates[0], hasta = dates[dates.length - 1];
+    if (!(Date.parse(hasta) - Date.parse(desde) <= 125 * 86400000)) return;
+    try {
+      const data = await this._hass.callWS({
+        type: "fbm/team/schedule", entry_id: this._entryId, equipo: this._teamId, desde, hasta
+      });
+      if (this._teamRequest !== request || !Array.isArray(data?.partidos)) return;
+      const crests = Object.assign(Object.create(null), this._fixtureCrests);
+      for (const match of data.partidos) {
+        for (const side of ["local", "visitante"]) {
+          const name = match[side];
+          if (!names.has(name) || Object.hasOwn(crests, name)) continue;
+          const image = match["img_" + side] || this._apkCrestUrl(match["escudo_" + side]);
+          if (image) crests[name] = image;
+        }
+      }
+      this._fixtureCrests = crests;
+      this._render();
+    } catch (_) { /* Archived matches remain available when FBM is offline. */ }
+  }
+
+  async _loadPlayerPhotos() {
+    if (!this._roster || !this._entryId || !this._teamId || this._photoRequest) return;
+    const request = this._photoRequest = this._teamRequest;
+    try {
+      const data = await this._hass.callWS({
+        type: "fbm/team/players", entry_id: this._entryId, equipo: this._teamId
+      });
+      if (this._teamRequest !== request || !Array.isArray(data?.jugadores)) return;
+      const live = new Map(data.jugadores.map(player => [player.id, player]));
+      this._roster = this._roster.length ? this._roster.map(player => {
+        const photo = live.get(player.id)?.foto;
+        return photo ? { ...player, foto: photo } : player;
+      }) : data.jugadores;
+      this._render();
+    } catch (_) {
+      if (this._teamRequest === request) this._photoRequest = null;
+    }
+  }
+
   async _openPlayer(player) {
     if (!player || typeof player.id !== "string" || !player.id ||
         !Array.isArray(this._roster) || !this._roster.some(p => p.id === player.id))
@@ -1534,6 +1596,10 @@ class FBMCompetitionCard extends HTMLElement {
     this._render();
   }
   _render() {
+    if (this._pickerFocused) {
+      this._pickerRefreshPending = true;
+      return;
+    }
     if (!this._config || typeof document === "undefined") return;
     if (!this.shadowRoot) this.attachShadow({mode:"open"});
     const style = this._el("style");
@@ -1580,12 +1646,21 @@ class FBMCompetitionCard extends HTMLElement {
     if (groups.length > 1) {
       const select = this._el("select");
       select.setAttribute("aria-label", "Cambiar competición");
+      select.addEventListener("focus", () => { this._pickerFocused = true; });
+      select.addEventListener("blur", () => {
+        this._pickerFocused = false;
+        if (this._pickerRefreshPending) {
+          this._pickerRefreshPending = false;
+          this._render();
+        }
+      });
       for (let i=0;i<groups.length;i++) {
         const option = this._el("option", [...new Set([this._groupLabel(groups[i]), groups[i].group_name, groups[i].season_id].filter(Boolean))].join(" · "));
         option.value = String(i); select.append(option);
       }
       select.value = String(index);
       select.addEventListener("change", event => {
+        this._pickerFocused = this._pickerRefreshPending = false;
         this._groupIndex = Number(event.target.value);
         this._selectedGroup = this._groupKey(groups[this._groupIndex]);
         this._teamRequest = this._playerRequest = null;
@@ -1620,7 +1695,10 @@ class FBMCompetitionCard extends HTMLElement {
         const button = this._el("button", label);
         button.type = "button";
         button.setAttribute("aria-pressed", String(this._detailTab === name));
-        button.addEventListener("click", () => { this._detailTab = name; this._render(); });
+        button.addEventListener("click", () => {
+          this._detailTab = name; this._render();
+          if (name === "jugadores") void this._loadPlayerPhotos();
+        });
         tabs.append(button);
       }
       card.append(tabs);
