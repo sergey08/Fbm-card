@@ -38,6 +38,7 @@ class CompetitionAutoUpdater:
         self._group_lock = asyncio.Lock()
         self._player_lock = asyncio.Lock()
         self._store_lock = asyncio.Lock()
+        self.group_checked_at = {}
         self.health = {"groups": {"status": "pending", "last_run": None},
                        "players": {"status": "pending", "last_run": None}}
 
@@ -57,7 +58,13 @@ class CompetitionAutoUpdater:
     async def async_start(self, groups: bool, players: bool):
         # Restore diagnostics independently of work cursors after a restart.
         try:
-            saved = (await self._read_state()).get("health", {})
+            snapshot = await self._read_state()
+            saved = snapshot.get("health", {})
+            checks = snapshot.get("group_checked_at", {})
+            if type(checks) is dict:
+                self.group_checked_at = {k: v for k, v in checks.items()
+                    if type(k) is str and 0 < len(k) <= 512
+                    and type(v) is str and len(v) < 64}
             if type(saved) is dict:
                 for kind in ("groups", "players"):
                     record = saved.get(kind)
@@ -200,6 +207,7 @@ class CompetitionAutoUpdater:
                           if key in {item["group_id"] for item in groups}}
                 checks[group_id] = datetime.now(timezone.utc).isoformat()
                 await self._save_state({"group_checked_at": checks})
+                self.group_checked_at = checks
             await self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
         except Exception:
             # Never leak service errors, IDs or player details into HA state.
