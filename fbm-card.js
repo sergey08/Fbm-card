@@ -1,3 +1,192 @@
+const FBM_TEAM_CONTENT_STYLES = `
+      .fbm-player-person{display:flex;align-items:center;gap:8px;min-width:0}
+      .fbm-player-photo{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover;background:var(--secondary-background-color,#eee)}
+      .fbm-fixture-side{display:flex;align-items:center;gap:7px;min-width:0}
+      .fbm-fixture-side.fbm-fixture-away{justify-content:flex-end}
+      .fbm-fixture-side.fbm-fixture-away img{order:2}
+      .fbm-fixture-logo{width:25px;height:25px;flex:0 0 25px;object-fit:contain}
+      .fbm-fixture-side span{font-size:.82rem;font-weight:600;overflow-wrap:anywhere}
+      .fbm-fixture-side.fbm-fixture-away span{text-align:right}
+      .fbm-fixture-list{display:grid;gap:9px;margin-top:10px}
+      .fbm-fixture{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:11px;background:var(--card-background-color,#fff)}
+      .fbm-fixture-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:9px}
+      .fbm-fixture-teams span{min-width:0;overflow-wrap:anywhere;font-weight:600;font-size:.83rem}
+      .fbm-fixture-teams span:last-child{text-align:right}
+      .fbm-fixture-score{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--primary-color,#1976d2);font-size:1rem}
+      .fbm-roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px;margin:12px 0}
+      .fbm-player{min-width:0;border:1px solid var(--divider-color,#ddd);border-radius:14px;padding:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.04)}
+      .fbm-player-open{grid-column:1/-1;border-color:var(--primary-color,#1976d2)}
+      .fbm-player-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+      .fbm-player-identity{min-width:0;display:flex;flex-direction:column;gap:3px}
+      .fbm-player-name{font-size:.93rem;line-height:1.35;overflow-wrap:anywhere}
+      .fbm-player-caption{color:var(--secondary-text-color,#737373);font-size:.79rem;line-height:1.4}
+      ha-card .fbm-action{flex-shrink:0;border:1px solid var(--divider-color,#ddd);border-radius:10px;padding:8px 12px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color,#222);font-weight:600;font-size:.82rem;cursor:pointer}
+      ha-card .fbm-action:hover{border-color:var(--primary-color,#1976d2)}
+      ha-card .fbm-action-primary{margin:10px 0;background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);border-color:transparent}
+      ha-card .fbm-action:disabled{opacity:.5;cursor:wait}
+      .fbm-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px}
+      .fbm-stat{min-width:0;display:flex;flex-direction:column;gap:4px;padding:9px;border-radius:10px;background:var(--secondary-background-color,#f5f5f5)}
+      .fbm-stat-primary{background:color-mix(in srgb,var(--primary-color,#1976d2) 10%,var(--card-background-color,#fff))}
+      .fbm-stat-label{color:var(--secondary-text-color,#666);font-size:.73rem;line-height:1.2}
+      .fbm-stat-value{font-size:1.08rem;line-height:1.2;font-variant-numeric:tabular-nums}
+      .fbm-player-detail{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color,#ddd)}
+      .fbm-subheading{font-size:.92rem;margin:14px 0 10px}
+      .fbm-match{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px;margin:10px 0}
+      .fbm-match-header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 10px;margin-bottom:10px}
+      .fbm-match-header strong{font-size:.85rem;overflow-wrap:anywhere}
+      .fbm-match-grid{grid-template-columns:repeat(auto-fit,minmax(80px,1fr))}
+      @media(max-width:420px){.fbm-roster{grid-template-columns:minmax(0,1fr)}.fbm-player{padding:11px}.fbm-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.fbm-match-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fbm-player-header{gap:8px}.fbm-player-name{font-size:.86rem}}
+`;
+
+function fbmFixtureDateKey(value) {
+  if (typeof value !== "string") return "";
+  const parts = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : value;
+}
+
+function renderFBMFixtures(view, card, matches, resolveTeam) {
+  const games = view._element("div", "", "fbm-fixture-list");
+  const sorted = [...matches].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
+    fbmFixtureDateKey(a.fecha).localeCompare(fbmFixtureDateKey(b.fecha)) ||
+    String(a.hora || "").localeCompare(String(b.hora || "")));
+  for (const match of sorted) {
+    const box = view._element("article", "", "fbm-fixture");
+    const top = view._element("div", "", "fbm-match-header");
+    top.append(view._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
+    top.append(view._element("span", [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente", "fbm-player-caption"));
+    box.append(top);
+    const teams = view._element("div", "", "fbm-fixture-teams");
+    const teamLabel = (name, image, side) => {
+      const team = resolveTeam?.(name);
+      const box = view._element(team?.id ? "button" : "div", "", "fbm-fixture-side fbm-fixture-" + side);
+      if (team?.id) {
+        box.type = "button";
+        box.addEventListener("click", () => view._openTeam(team));
+      }
+      image ||= team?.escudo;
+      if (typeof image === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(image) || view._officialLogoUrl(image))) {
+        const img = document.createElement("img"); img.src = image;
+        img.className = "fbm-fixture-logo"; img.alt = "Escudo de " + name;
+        img.loading = "lazy"; img.addEventListener("error", () => img.remove(), { once: true });
+        box.append(img);
+      }
+      box.append(view._element("span", name));
+      return box;
+    };
+    teams.append(teamLabel(match.local || "Local sin indicar", match.img_local || view._apkCrestUrl(match.escudo_local), "local"));
+    const score = match.marcador &&
+      Number.isInteger(match.marcador.local) && Number.isInteger(match.marcador.visitante)
+      ? match.marcador.local + " – " + match.marcador.visitante : "vs";
+    teams.append(view._element("strong", score, "fbm-fixture-score"));
+    teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante || view._apkCrestUrl(match.escudo_visitante), "away"));
+    box.append(teams);
+    if (match.campo) box.append(view._element("p", match.campo, "fbm-player-caption"));
+    games.append(box);
+  }
+  card.append(games);
+}
+
+function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadStats) {
+  card.append(view._element("div", roster.length + " jugadores · Datos oficiales FBM", "fbm-section-subtitle"));
+  const collection = view._element("div", "", "fbm-roster");
+  const numeric = value => typeof value === "number" && Number.isFinite(value);
+  const format = value => String(value);
+  const chip = (label, value, emphasize = false) => {
+    const el = view._element("div", "", emphasize ? "fbm-stat fbm-stat-primary" : "fbm-stat");
+    el.append(view._element("span", label, "fbm-stat-label"));
+    el.append(view._element("strong", format(value), "fbm-stat-value"));
+    return el;
+  };
+  const matchColumns = [
+    ["puntos", "Puntos"], ["asistencias", "Asist."],
+    ["faltas_cometidas", "Faltas"], ["faltas_recibidas", "F. recib."],
+    ["rebotes", "Rebotes"], ["rebotes_defensivos", "Reb. def."],
+    ["rebotes_ofensivos", "Reb. of."], ["recuperaciones", "Recup."],
+    ["perdidas", "Pérdidas"], ["valoracion", "Valoración"]
+  ];
+  for (const player of roster) {
+    if (!player || typeof player.id !== "string" || typeof player.nombre !== "string") continue;
+    const opened = state.playerDetailTeamId === pinned?.id &&
+      state.playerDetailPlayerId === player.id ? state.playerDetail : null;
+    const item = view._element("section", "", opened ? "fbm-player fbm-player-open" : "fbm-player");
+    const header = view._element("div", "", "fbm-player-header");
+    const person = view._element("div", "", "fbm-player-identity");
+    const personRow = view._element("div", "", "fbm-player-person");
+    const photo = player.foto || (opened && opened.foto) || "";
+    if (typeof photo === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(photo) || /^https:\/\/appaficionfbm\.gesdeportiva\.es\/imagenes\.ashx\?tipo=jugador&id=[0-9a-fA-F]{16,4096}$/.test(photo))) {
+      const img = document.createElement("img");
+      img.className = "fbm-player-photo"; img.src = photo;
+      img.alt = "Fotografía de " + player.nombre; img.loading = "lazy";
+      img.addEventListener("error", () => img.remove(), { once: true });
+      personRow.append(img);
+    }
+    personRow.append(view._element("strong", player.nombre, "fbm-player-name"));
+    person.append(personRow);
+    person.append(view._element("span", "Temporada " + (player.temporada || pinned.temporada || "FBM"), "fbm-player-caption"));
+    const detailButton = view._element("button", opened ? "Cerrar ficha" : "Ver ficha", "fbm-action");
+    detailButton.type = "button";
+    detailButton.disabled = state.busy;
+    detailButton.setAttribute("aria-expanded", String(!!opened));
+    detailButton.addEventListener("click", () => toggleDetail(player.id));
+    header.append(person, detailButton);
+    item.append(header);
+    const overview = view._element("div", "", "fbm-stat-grid");
+    if (numeric(player.partidos_jugados)) overview.append(chip("Partidos", player.partidos_jugados));
+    if (numeric(player.puntos_por_partido ?? player.media_puntos)) overview.append(chip("Puntos/partido", player.puntos_por_partido ?? player.media_puntos, true));
+    if (numeric(player.minutos_por_partido)) overview.append(chip("Min/partido", player.minutos_por_partido));
+    if (numeric(player.puntos_totales)) overview.append(chip("Puntos totales", player.puntos_totales));
+    if ([player.partidos_jugados, player.puntos_por_partido ?? player.media_puntos, player.minutos_por_partido, player.puntos_totales].some(numeric)) item.append(overview);
+    if (opened) {
+      const details = view._element("div", "", "fbm-player-detail");
+      const meta = [opened.equipo, opened.temporada, opened.categoria].filter(Boolean);
+      if (meta.length) details.append(view._element("p", meta.join(" · "), "fbm-player-caption"));
+      const statsButton = view._element("button", "Consultar estadísticas por partido", "fbm-action fbm-action-primary");
+      statsButton.type = "button";
+      statsButton.disabled = state.busy;
+      statsButton.addEventListener("click", () => loadStats(player.id));
+      details.append(statsButton);
+      const stats = state.playerStatsTeamId === pinned?.id &&
+        state.playerStatsEntryId === state.entry &&
+        state.playerStatsPlayerId === player.id ? state.playerStats : null;
+      if (stats) {
+        const globals = stats.globales?.estadisticas || stats.globales || {};
+        const available = [
+          ["puntos_totales", "Puntos totales"], ["media_puntos", "Media puntos"],
+          ["asistencias", "Asistencias"], ["faltas_cometidas", "Faltas"],
+          ["faltas_recibidas", "F. recibidas"], ["rebotes", "Rebotes"],
+          ["recuperaciones", "Recuperaciones"], ["perdidas", "Pérdidas"],
+          ["valoracion", "Valoración"]
+        ].filter(([key]) => numeric(globals[key]));
+        if (available.length) {
+          details.append(view._element("h4", "Estadísticas globales", "fbm-subheading"));
+          const globalGrid = view._element("div", "", "fbm-stat-grid");
+          for (const [key, label] of available) globalGrid.append(chip(label, globals[key]));
+          details.append(globalGrid);
+        }
+        const games = Array.isArray(stats.partidos) ? stats.partidos : stats.partidos?.partidos || [];
+        details.append(view._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
+        if (!games.length) details.append(view._element("p", "No hay partidos con estadísticas disponibles.", "fbm-player-caption"));
+        for (const game of games) {
+          const match = view._element("article", "", "fbm-match");
+          const matchHeader = view._element("div", "", "fbm-match-header");
+          matchHeader.append(view._element("strong", game.rival || "Rival sin indicar"));
+          matchHeader.append(view._element("span", game.fecha || "Fecha pendiente", "fbm-player-caption"));
+          match.append(matchHeader);
+          const matchGrid = view._element("div", "", "fbm-stat-grid fbm-match-grid");
+          for (const [key, label] of matchColumns) {
+            if (numeric(game[key])) matchGrid.append(chip(label, game[key], key === "puntos"));
+          }
+          if (matchColumns.some(([key]) => numeric(game[key]))) match.append(matchGrid);
+          details.append(match);
+        }
+      }
+      item.append(details);
+    }
+    collection.append(item);
+  }
+  card.append(collection);
+}
+
 /* FBM Card DEV — presentación de datos; fuente oficial pendiente de validar. */
 class FBMCard extends HTMLElement {
   setConfig(config) {
@@ -385,16 +574,10 @@ class FBMCard extends HTMLElement {
     this._render();
   }
 
-  _fixtureDateKey(value) {
-    if (typeof value !== "string") return "";
-    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
-    return match ? match[3] + "-" + match[2] + "-" + match[1] : value;
-  }
-
   _roundDateLabel(matches) {
     const dates = [...new Set(matches.map(game => game?.fecha)
       .filter(value => typeof value === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(value)))];
-    dates.sort((a, b) => this._fixtureDateKey(a).localeCompare(this._fixtureDateKey(b)));
+    dates.sort((a, b) => fbmFixtureDateKey(a).localeCompare(fbmFixtureDateKey(b)));
     if (!dates.length) return "";
     if (dates.length === 1) return dates[0];
     return dates[0] + " – " + dates[dates.length - 1];
@@ -825,39 +1008,7 @@ class FBMCard extends HTMLElement {
               card.append(this._element("p", filtered.length + (state.showGroup ?
                 " enfrentamientos del grupo" : " partidos de tu equipo"), "fbm-section-subtitle"));
               if (!filtered.length) card.append(this._element("p", "FBM no devuelve partidos en esta jornada.", "fbm-player-caption"));
-              const games = this._element("div", "", "fbm-fixture-list");
-              const sorted = [...filtered].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
-                this._fixtureDateKey(a.fecha).localeCompare(this._fixtureDateKey(b.fecha)) ||
-                String(a.hora || "").localeCompare(String(b.hora || "")));
-              for (const match of sorted) {
-                const box = this._element("article", "", "fbm-fixture");
-                const top = this._element("div", "", "fbm-match-header");
-                top.append(this._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
-                top.append(this._element("span", [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente", "fbm-player-caption"));
-                box.append(top);
-                const teams = this._element("div", "", "fbm-fixture-teams");
-                const teamLabel = (name, image, side) => {
-                  const box = this._element("div", "", "fbm-fixture-side fbm-fixture-" + side);
-                  if (typeof image === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(image) || this._officialLogoUrl(image))) {
-                    const img = document.createElement("img"); img.src = image;
-                    img.className = "fbm-fixture-logo"; img.alt = "Escudo de " + name;
-                    img.loading = "lazy"; img.addEventListener("error", () => img.remove(), { once: true });
-                    box.append(img);
-                  }
-                  box.append(this._element("span", name));
-                  return box;
-                };
-                teams.append(teamLabel(match.local || "Local sin indicar", match.img_local || this._apkCrestUrl(match.escudo_local), "local"));
-                const score = match.marcador &&
-                  Number.isInteger(match.marcador.local) && Number.isInteger(match.marcador.visitante)
-                  ? match.marcador.local + " – " + match.marcador.visitante : "vs";
-                teams.append(this._element("strong", score, "fbm-fixture-score"));
-                teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante || this._apkCrestUrl(match.escudo_visitante), "away"));
-                box.append(teams);
-                if (match.campo) box.append(this._element("p", match.campo, "fbm-player-caption"));
-                games.append(box);
-              }
-              card.append(games);
+              renderFBMFixtures(this, card, filtered);
             }
           }
         }
@@ -877,104 +1028,8 @@ class FBMCard extends HTMLElement {
           } else if (!roster.length) {
             card.append(this._element("p", "FBM no ha devuelto jugadores para este equipo.", "muted"));
           } else {
-            card.append(this._element("div", roster.length + " jugadores · Datos oficiales FBM", "fbm-section-subtitle"));
-            const collection = this._element("div", "", "fbm-roster");
-            const numeric = value => typeof value === "number" && Number.isFinite(value);
-            const format = value => String(value);
-            const chip = (label, value, emphasize = false) => {
-              const el = this._element("div", "", emphasize ? "fbm-stat fbm-stat-primary" : "fbm-stat");
-              el.append(this._element("span", label, "fbm-stat-label"));
-              el.append(this._element("strong", format(value), "fbm-stat-value"));
-              return el;
-            };
-            const matchColumns = [
-              ["puntos", "Puntos"], ["asistencias", "Asist."],
-              ["faltas_cometidas", "Faltas"], ["faltas_recibidas", "F. recib."],
-              ["rebotes", "Rebotes"], ["rebotes_defensivos", "Reb. def."],
-              ["rebotes_ofensivos", "Reb. of."], ["recuperaciones", "Recup."],
-              ["perdidas", "Pérdidas"], ["valoracion", "Valoración"]
-            ];
-            for (const player of roster) {
-              if (!player || typeof player.id !== "string" || typeof player.nombre !== "string") continue;
-              const opened = state.playerDetailTeamId === pinned?.id &&
-                state.playerDetailPlayerId === player.id ? state.playerDetail : null;
-              const item = this._element("section", "", opened ? "fbm-player fbm-player-open" : "fbm-player");
-              const header = this._element("div", "", "fbm-player-header");
-              const person = this._element("div", "", "fbm-player-identity");
-              const personRow = this._element("div", "", "fbm-player-person");
-              const photo = player.foto || (opened && opened.foto) || "";
-              if (typeof photo === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(photo) || /^https:\/\/appaficionfbm\.gesdeportiva\.es\/imagenes\.ashx\?tipo=jugador&id=[0-9a-fA-F]{16,4096}$/.test(photo))) {
-                const img = document.createElement("img");
-                img.className = "fbm-player-photo"; img.src = photo;
-                img.alt = "Fotografía de " + player.nombre; img.loading = "lazy";
-                img.addEventListener("error", () => img.remove(), { once: true });
-                personRow.append(img);
-              }
-              personRow.append(this._element("strong", player.nombre, "fbm-player-name"));
-              person.append(personRow);
-              person.append(this._element("span", "Temporada " + (player.temporada || pinned.temporada || "FBM"), "fbm-player-caption"));
-              const detailButton = this._element("button", opened ? "Cerrar ficha" : "Ver ficha", "fbm-action");
-              detailButton.type = "button";
-              detailButton.disabled = state.busy;
-              detailButton.setAttribute("aria-expanded", String(!!opened));
-              detailButton.addEventListener("click", () => this._experimentalPlayerDetail(player.id));
-              header.append(person, detailButton);
-              item.append(header);
-              const overview = this._element("div", "", "fbm-stat-grid");
-              if (numeric(player.partidos_jugados)) overview.append(chip("Partidos", player.partidos_jugados));
-              if (numeric(player.puntos_por_partido)) overview.append(chip("Puntos/partido", player.puntos_por_partido, true));
-              if (numeric(player.minutos_por_partido)) overview.append(chip("Min/partido", player.minutos_por_partido));
-              if (numeric(player.puntos_totales)) overview.append(chip("Puntos totales", player.puntos_totales));
-              if ([player.partidos_jugados, player.puntos_por_partido, player.minutos_por_partido, player.puntos_totales].some(numeric)) item.append(overview);
-              if (opened) {
-                const details = this._element("div", "", "fbm-player-detail");
-                const meta = [opened.equipo, opened.temporada, opened.categoria].filter(Boolean);
-                if (meta.length) details.append(this._element("p", meta.join(" · "), "fbm-player-caption"));
-                const statsButton = this._element("button", "Consultar estadísticas por partido", "fbm-action fbm-action-primary");
-                statsButton.type = "button";
-                statsButton.disabled = state.busy;
-                statsButton.addEventListener("click", () => this._experimentalPlayerStats(player.id));
-                details.append(statsButton);
-                const stats = state.playerStatsTeamId === pinned?.id &&
-                  state.playerStatsEntryId === state.entry &&
-                  state.playerStatsPlayerId === player.id ? state.playerStats : null;
-                if (stats) {
-                  const globals = stats.globales?.estadisticas || {};
-                  const available = [
-                    ["puntos_totales", "Puntos totales"], ["media_puntos", "Media puntos"],
-                    ["asistencias", "Asistencias"], ["faltas_cometidas", "Faltas"],
-                    ["faltas_recibidas", "F. recibidas"], ["rebotes", "Rebotes"],
-                    ["recuperaciones", "Recuperaciones"], ["perdidas", "Pérdidas"],
-                    ["valoracion", "Valoración"]
-                  ].filter(([key]) => numeric(globals[key]));
-                  if (available.length) {
-                    details.append(this._element("h4", "Estadísticas globales", "fbm-subheading"));
-                    const globalGrid = this._element("div", "", "fbm-stat-grid");
-                    for (const [key, label] of available) globalGrid.append(chip(label, globals[key]));
-                    details.append(globalGrid);
-                  }
-                  const games = Array.isArray(stats.partidos?.partidos) ? stats.partidos.partidos : [];
-                  details.append(this._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
-                  if (!games.length) details.append(this._element("p", "No hay partidos con estadísticas disponibles.", "fbm-player-caption"));
-                  for (const game of games) {
-                    const match = this._element("article", "", "fbm-match");
-                    const matchHeader = this._element("div", "", "fbm-match-header");
-                    matchHeader.append(this._element("strong", game.rival || "Rival sin indicar"));
-                    matchHeader.append(this._element("span", game.fecha || "Fecha pendiente", "fbm-player-caption"));
-                    match.append(matchHeader);
-                    const matchGrid = this._element("div", "", "fbm-stat-grid fbm-match-grid");
-                    for (const [key, label] of matchColumns) {
-                      if (numeric(game[key])) matchGrid.append(chip(label, game[key], key === "puntos"));
-                    }
-                    if (matchColumns.some(([key]) => numeric(game[key]))) match.append(matchGrid);
-                    details.append(match);
-                  }
-                }
-                item.append(details);
-              }
-              collection.append(item);
-            }
-            card.append(collection);
+            renderFBMRoster(this, card, roster, pinned, state,
+              id => this._experimentalPlayerDetail(id), id => this._experimentalPlayerStats(id));
           }
         }
       } else {
@@ -1198,47 +1253,11 @@ class FBMCard extends HTMLElement {
       .fbm-table-scroll .standings td:first-child{font-weight:700;color:var(--primary-color,#1976d2)}
       .fbm-standing-name{font-weight:600;line-height:1.35;min-width:145px;overflow-wrap:anywhere}
       .fbm-table-scroll .fbm-current-team{background:color-mix(in srgb,var(--primary-color,#1976d2) 11%,var(--card-background-color,#fff));box-shadow:inset 3px 0 var(--primary-color,#1976d2)}
-      .fbm-player-person{display:flex;align-items:center;gap:8px;min-width:0}
-      .fbm-player-photo{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover;background:var(--secondary-background-color,#eee)}
-      .fbm-fixture-side{display:flex;align-items:center;gap:7px;min-width:0}
-      .fbm-fixture-side.fbm-fixture-away{justify-content:flex-end}
-      .fbm-fixture-side.fbm-fixture-away img{order:2}
-      .fbm-fixture-logo{width:25px;height:25px;flex:0 0 25px;object-fit:contain}
-      .fbm-fixture-side span{font-size:.82rem;font-weight:600;overflow-wrap:anywhere}
-      .fbm-fixture-side.fbm-fixture-away span{text-align:right}
+      ${FBM_TEAM_CONTENT_STYLES}
       .fbm-match-controls{display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin:10px 0}
       .fbm-match-controls label{display:flex;flex:1 1 125px;flex-direction:column;gap:4px;font-size:.75rem;color:var(--secondary-text-color,#666)}
       .fbm-match-controls input{width:100%;box-sizing:border-box;min-height:36px;border:1px solid var(--divider-color,#ddd);border-radius:8px;padding:5px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222)}
       .fbm-match-controls button{align-self:end}
-      .fbm-fixture-list{display:grid;gap:9px;margin-top:10px}
-      .fbm-fixture{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:11px;background:var(--card-background-color,#fff)}
-      .fbm-fixture-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:9px}
-      .fbm-fixture-teams span{min-width:0;overflow-wrap:anywhere;font-weight:600;font-size:.83rem}
-      .fbm-fixture-teams span:last-child{text-align:right}
-      .fbm-fixture-score{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--primary-color,#1976d2);font-size:1rem}
-      .fbm-roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px;margin:12px 0}
-      .fbm-player{min-width:0;border:1px solid var(--divider-color,#ddd);border-radius:14px;padding:14px;background:var(--card-background-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.04)}
-      .fbm-player-open{grid-column:1/-1;border-color:var(--primary-color,#1976d2)}
-      .fbm-player-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-      .fbm-player-identity{min-width:0;display:flex;flex-direction:column;gap:3px}
-      .fbm-player-name{font-size:.93rem;line-height:1.35;overflow-wrap:anywhere}
-      .fbm-player-caption{color:var(--secondary-text-color,#737373);font-size:.79rem;line-height:1.4}
-      ha-card .fbm-action{flex-shrink:0;border:1px solid var(--divider-color,#ddd);border-radius:10px;padding:8px 12px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color,#222);font-weight:600;font-size:.82rem;cursor:pointer}
-      ha-card .fbm-action:hover{border-color:var(--primary-color,#1976d2)}
-      ha-card .fbm-action-primary{margin:10px 0;background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);border-color:transparent}
-      ha-card .fbm-action:disabled{opacity:.5;cursor:wait}
-      .fbm-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px}
-      .fbm-stat{min-width:0;display:flex;flex-direction:column;gap:4px;padding:9px;border-radius:10px;background:var(--secondary-background-color,#f5f5f5)}
-      .fbm-stat-primary{background:color-mix(in srgb,var(--primary-color,#1976d2) 10%,var(--card-background-color,#fff))}
-      .fbm-stat-label{color:var(--secondary-text-color,#666);font-size:.73rem;line-height:1.2}
-      .fbm-stat-value{font-size:1.08rem;line-height:1.2;font-variant-numeric:tabular-nums}
-      .fbm-player-detail{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color,#ddd)}
-      .fbm-subheading{font-size:.92rem;margin:14px 0 10px}
-      .fbm-match{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:12px;margin:10px 0}
-      .fbm-match-header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 10px;margin-bottom:10px}
-      .fbm-match-header strong{font-size:.85rem;overflow-wrap:anywhere}
-      .fbm-match-grid{grid-template-columns:repeat(auto-fit,minmax(80px,1fr))}
-      @media(max-width:420px){.fbm-roster{grid-template-columns:minmax(0,1fr)}.fbm-player{padding:11px}.fbm-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.fbm-match-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fbm-player-header{gap:8px}.fbm-player-name{font-size:.86rem}}
 
     `;
     const card = document.createElement("ha-card");
@@ -1356,6 +1375,7 @@ class FBMCompetitionCard extends HTMLElement {
         this._config.group_index < 0 || this._config.group_index > 49)
       throw new Error("Índice de competición inválido");
     this._groupIndex = this._config.group_index;
+    this._selectedGroup = null;
     this._teamRequest = this._playerRequest = null;
     this._teamId = null; this._roster = null; this._matches = null;
     this._matchView = "jornadas"; this._matchRound = "all";
@@ -1377,6 +1397,9 @@ class FBMCompetitionCard extends HTMLElement {
     if (className) el.className = className;
     return el;
   }
+  _element(tag, value, className) { return this._el(tag, value, className); }
+  _officialLogoUrl(value) { return this._verifiedCrest(value); }
+  _apkCrestUrl(value) { return this._verifiedCrest(value); }
   _verifiedCrest(value) {
     if (typeof value !== "string" || value.length > 1024) return "";
     try {
@@ -1400,7 +1423,17 @@ class FBMCompetitionCard extends HTMLElement {
   _group() {
     const sensor = this._hass?.states?.[this._config?.entity];
     const groups = Array.isArray(sensor?.attributes?.groups) ? sensor.attributes.groups : [];
-    return { groups, group: groups[this._groupIndex] || null };
+    const selected = groups.findIndex(group => this._groupKey(group) === this._selectedGroup);
+    const index = selected >= 0 ? selected : (groups[this._groupIndex] ? this._groupIndex : 0);
+    return { groups, index, group: groups[index] || null };
+  }
+
+  _groupKey(group) {
+    return JSON.stringify([group.season_id, group.phase_id, group.group_id]);
+  }
+
+  _groupLabel(group) {
+    return group.competition_name || group.team_name || group.group_name || "Competición FBM";
   }
   _teamButton(team) {
     const button = this._el("button", undefined, "team");
@@ -1476,10 +1509,6 @@ class FBMCompetitionCard extends HTMLElement {
     if (!player || typeof player.id !== "string" || !player.id ||
         !Array.isArray(this._roster) || !this._roster.some(p => p.id === player.id))
       return;
-    if (this._playerId === player.id) {
-      this._playerId = null; this._playerStats = null; this._playerError = "";
-      this._render(); return;
-    }
     const {group} = this._group();
     if (!group || !this._teamId || !this._hass?.callWS) return;
     const teamId = this._teamId, playerId = player.id;
@@ -1532,24 +1561,16 @@ class FBMCompetitionCard extends HTMLElement {
       .team-header h3{margin:0}
       .team-logo,.team-logo-placeholder{width:52px;height:52px;flex:0 0 52px;object-fit:contain;border-radius:12px;background:var(--secondary-background-color,#eee)}
       .team-logo-placeholder{display:flex;align-items:center;justify-content:center;font-size:1.65rem}
-      .players{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px}
-      .players li{border:1px solid var(--divider-color,#ddd);border-radius:10px;padding:9px 10px;min-width:0}
-      .players li>button{font-weight:600;width:100%;padding:4px 0}
-      .players li>button:hover{color:var(--primary-color,#1976d2)}
-      .player-stats{padding:10px;background:var(--secondary-background-color,#f3f3f3);border-radius:9px;margin-top:8px}
-      .player-stats p{margin:5px 0}
-      .fixture{padding:10px 8px;border-bottom:1px solid var(--divider-color,#ddd);font-size:.88rem}
-      .fixture:nth-of-type(even){background:var(--secondary-background-color,transparent)}
       .fixture-group{margin-top:12px}
       .tabs{display:flex;gap:4px;overflow-x:auto;margin:12px 0;max-width:100%}
       .tabs button{flex:1 0 auto;padding:8px 10px;border:0;border-radius:9px;background:var(--secondary-background-color,#eee);color:var(--primary-text-color,#222)}
       .tabs button[aria-pressed="true"]{background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);font-weight:700}
-      .player-game{font-size:.85rem;border-bottom:1px solid var(--divider-color,#ddd);padding:7px 0}
+      ${FBM_TEAM_CONTENT_STYLES}
       select{width:100%;min-width:0;box-sizing:border-box;min-height:42px;padding:8px 10px;margin:10px 0 12px;border:1px solid var(--divider-color,#bbb);border-radius:9px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);font:inherit}
     `;
     const card = this._el("ha-card");
     card.append(this._el("h2", this._config.title));
-    const {groups,group} = this._group();
+    const {groups,group,index} = this._group();
     if (!group) {
       card.append(this._el("p", "No hay competiciones archivadas disponibles.", "muted"));
       this.shadowRoot.replaceChildren(style,card);
@@ -1557,13 +1578,15 @@ class FBMCompetitionCard extends HTMLElement {
     }
     if (groups.length > 1) {
       const select = this._el("select");
+      select.setAttribute("aria-label", "Cambiar competición");
       for (let i=0;i<groups.length;i++) {
-        const option = this._el("option", "Temporada "+(groups[i].season_id||"FBM")+" · "+(groups[i].phase_name||"Fase")+" · "+(groups[i].group_name||"Grupo "+(i+1)));
+        const option = this._el("option", [...new Set([this._groupLabel(groups[i]), groups[i].group_name, groups[i].season_id].filter(Boolean))].join(" · "));
         option.value = String(i); select.append(option);
       }
-      select.value = String(this._groupIndex);
+      select.value = String(index);
       select.addEventListener("change", event => {
         this._groupIndex = Number(event.target.value);
+        this._selectedGroup = this._groupKey(groups[this._groupIndex]);
         this._teamRequest = this._playerRequest = null;
         this._teamId = null; this._roster = null; this._matches = null;
         this._playerId = null; this._playerStats = null; this._error = "";
@@ -1571,6 +1594,7 @@ class FBMCompetitionCard extends HTMLElement {
       });
       card.append(select);
     }
+    card.append(this._el("h3", this._groupLabel(group)));
     const ranking = Array.isArray(group.ranking) ? group.ranking : [];
     const team = ranking.find(item => item.id === this._teamId);
     if (this._teamId && team) {
@@ -1635,91 +1659,47 @@ class FBMCompetitionCard extends HTMLElement {
           const matches=this._matchView==="jornadas" && this._matchRound!=="all"
             ? this._matches.filter(m=>String(m.jornada)===this._matchRound)
             : this._matches;
-          const ordered=[...matches].sort((x,y)=>{
-            const normalize=v=>typeof v==="string" && v.length===10 && v.charAt(2)==="/" && v.charAt(5)==="/"
-              ? v.slice(6)+v.slice(3,5)+v.slice(0,2) : String(v||"");
-            return normalize(x.fecha).localeCompare(normalize(y.fecha));
+          renderFBMFixtures(this, card, matches, name => {
+            if (typeof name !== "string") return null;
+            const candidates = ranking.filter(item =>
+              item.equipo?.trim().toLowerCase() === name.trim().toLowerCase());
+            return candidates.length === 1 ? candidates[0] : null;
           });
-          for (const match of ordered) {
-            const date=[match.fecha,match.hora].filter(v=>typeof v==="string" && v).join(" ");
-            const score=match.marcador && Number.isInteger(match.marcador.local) &&
-              Number.isInteger(match.marcador.visitante)
-              ? match.marcador.local+" – "+match.marcador.visitante : "vs";
-            const fixture = this._el("div", undefined, "fixture");
-          const context = [match.jornada != null ? "J" + match.jornada : "", date].filter(Boolean).join(" · ");
-          if (context) fixture.append(this._el("div", context, "muted"));
-          for (const [index, name] of [match.local, match.visitante].entries()) {
-            if (index) fixture.append(this._el("span", " " + score + " "));
-            const candidates = typeof name === "string" ? ranking.filter(item => item.equipo?.trim().toLowerCase() === name.trim().toLowerCase()) : [];
-            if (candidates.length === 1) fixture.append(this._teamButton(candidates[0]));
-            else if (typeof name === "string" && name) fixture.append(this._el("span", name));
-          }
-          card.append(fixture);
-          }
         }
       } else {
         if (this._error) card.append(this._el("p", this._error, "muted"));
         else if (!this._roster) card.append(this._el("p", "Consultando el archivo local…", "muted"));
         else if (!this._roster.length) card.append(this._el("p", "No hay plantilla archivada para este equipo.", "muted"));
         else {
-          const ul = this._el("ul", undefined, "players");
-          for (const player of this._roster) {
-            if (typeof player?.nombre !== "string") continue;
-            const li = this._el("li");
-            if (typeof player.id === "string" && player.id) {
-              const btn = this._el("button", player.nombre);
-              btn.addEventListener("click",()=>{void this._openPlayer(player);});
-              li.append(btn);
-            } else li.append(this._el("span",player.nombre));
-            const summary = [["partidos_jugados", "PJ"], ["puntos_totales", "Pts"], ["media_puntos", "Pts/partido"]]
-              .filter(([key]) => Number.isFinite(player[key]))
-              .map(([key, label]) => label + " " + player[key]);
-            if (summary.length) li.append(this._el("div", summary.join(" · "), "muted"));
-            if (this._playerId === player.id) {
-              if (this._playerError) li.append(this._el("p",this._playerError,"muted"));
-              else if (!this._playerStats) li.append(this._el("p","Consultando estadísticas archivadas…","muted"));
-              else {
-                const globals = this._playerStats.globales || {};
-                const details = [["puntos_totales","Puntos totales"],["media_puntos","Media puntos"],
-                  ["asistencias","Asistencias"],["rebotes","Rebotes"],["valoracion","Valoración"]];
-                const stats = this._el("div",undefined,"player-stats");
-                let shown = 0;
-                for (const [key,label] of details)
-                  if (typeof globals[key] === "number" && Number.isFinite(globals[key])) {
-                    stats.append(this._el("p",label+": "+globals[key]));shown++;
-                  }
-                if (!shown) stats.append(this._el("p","Sin estadísticas globales archivadas.","muted"));
-                const games=Array.isArray(this._playerStats.partidos) ? this._playerStats.partidos : [];
-                if (games.length) {
-                  stats.append(this._el("h4","Estadísticas por partido"));
-                  for (const game of games.slice(0,100)) {
-                    const fields=[["puntos","Pts"],["asistencias","Asist."],
-                      ["rebotes","Reb."],["faltas_cometidas","Faltas"],
-                      ["valoracion","Valoración"]];
-                    const values=fields.filter(([key])=>typeof game[key]==="number" &&
-                      Number.isFinite(game[key])).map(([key,label])=>label+": "+game[key]);
-                    const header=[game.fecha,game.rival].filter(v=>typeof v==="string" && v).join(" · ");
-                    stats.append(this._el("div",
-                      (header || "Partido archivado")+(values.length ? " · "+values.join(" · ") : ""),
-                      "player-game"));
-                  }
-                }
-                li.append(stats);
-              }
-            }
-            ul.append(li);
-          }
-          card.append(ul);
+          const active = this._roster.find(player => player.id === this._playerId);
+          const pinned = { id: team.id, temporada: group.season_id };
+          renderFBMRoster(this, card, this._roster, pinned, {
+            entry: this._entryId, playerDetailTeamId: team.id, playerDetailPlayerId: active?.id,
+            playerDetail: active, playerStatsTeamId: team.id, playerStatsPlayerId: active?.id,
+            playerStatsEntryId: this._entryId, playerStats: this._playerStats,
+            busy: !!this._playerRequest && !this._playerStats && !this._playerError
+          }, id => {
+            this._playerRequest = null;
+            this._playerId = this._playerId === id ? null : id;
+            this._playerStats = null;
+            this._playerError = "";
+            this._render();
+          }, id => this._openPlayer(this._roster.find(player => player.id === id)));
+          if (this._playerError) card.append(this._el("p", this._playerError, "muted"));
         }
       }
     } else {
       this._teamId = null;
-      card.append(this._el("p", "Temporada "+(group.season_id||"FBM")+" · "+[group.phase_name,group.group_name].filter(Boolean).join(" · ")+" · "+ranking.length+" equipos · "+(group.matches??"—")+" partidos", "muted"));
+      const summary = [group.season_id && "Temporada " + group.season_id, group.phase_name, group.group_name,
+        ranking.length ? ranking.length + " equipos" : null,
+        Number.isInteger(group.matches) ? group.matches + " partidos" : null];
+      card.append(this._el("p", summary.filter(Boolean).join(" · "), "muted"));
       for (const [key, label] of [["current", "Jornada actual"], ["last_completed", "Última jornada disputada"], ["next", "Próxima jornada"]]) {
         const round = group.round_status?.[key];
         if (round != null) card.append(this._el("p", label + ": " + round, "muted"));
       }
-      card.append(this._rankingTable(ranking));
+      if (ranking.length) card.append(this._rankingTable(ranking));
+      else card.append(this._el("p", "Clasificación pendiente de sincronizar.", "muted"));
       if (group.standings_at) card.append(this._el("p","Clasificación archivada: "+group.standings_at,"muted"));
     }
     this.shadowRoot.replaceChildren(style,card);
