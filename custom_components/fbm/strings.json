@@ -9,5 +9,92 @@
     "abort": {
       "already_configured": "La integración FBM ya está configurada."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "FBM competition manager",
+        "menu_options": {
+          "search": "Find team to follow competition",
+          "manage": "Unfollow competition",
+          "refresh": "Refresh a followed competition",
+          "automatic": "Automatic refresh"
+        }
+      },
+      "search": {
+        "title": "Search for an FBM team",
+        "data": {
+          "texto": "Team name"
+        }
+      },
+      "select": {
+        "title": "Select team",
+        "data": {
+          "equipo": "Team"
+        }
+      },
+      "confirm": {
+        "title": "Follow entire competition",
+        "description": "Team: {team}. Official group: {group}. Confirm to download standings, fixtures and every team roster.",
+        "data": {
+          "confirmar": "I confirm following this competition"
+        }
+      },
+      "manage": {
+        "title": "Unfollow a competition",
+        "description": "The competition will no longer be followed. Historic snapshots remain.",
+        "data": {
+          "competicion": "Competition"
+        }
+      },
+      "unfollow": {
+        "title": "Confirm unfollow",
+        "description": "Unfollow group {group}? Historic snapshots will be preserved.",
+        "data": {
+          "confirmar": "Confirm"
+        }
+      },
+      "refresh": {
+        "title": "Choose competition to refresh",
+        "description": "Only previously followed groups with a verified source team are shown.",
+        "data": {
+          "competicion": "Competition"
+        }
+      },
+      "refresh_confirm": {
+        "title": "Confirm competition refresh",
+        "description": "Group: {group}. Manually refresh standings and fixtures. Roster downloads are optional and off by default.",
+        "data": {
+          "confirmar": "Confirm refresh",
+          "incluir_plantillas": "Also download available rosters and statistics"
+        }
+      },
+      "automatic": {
+        "title": "Automatically refresh competitions",
+        "description": "Only explicitly followed competitions. Standings and fixtures every 4 hours (one group per tick); individual statistics in batches of five every 2 hours, with a 24-hour pause after a complete cycle. No new roster downloads. Both choices are off by default.",
+        "data": {
+          "auto_groups": "Auto-refresh results and standings",
+          "auto_players": "Also refresh already archived players' statistics"
+        }
+      }
+    },
+    "error": {
+      "invalid_search": "Enter at least three characters",
+      "no_teams": "No teams found",
+      "cannot_connect": "Could not query FBM",
+      "invalid_selection": "Invalid selection",
+      "cannot_verify": "Could not verify competition",
+      "season_unverified": "Season not yet verified; no data saved",
+      "not_followed": "Competition is no longer followed",
+      "competition_changed": "Season, phase or group changed. Select the new competition in search.",
+      "rosters_pending": "Standings, fixtures and available rosters were saved. Some rosters are pending. Confirm again to retry.",
+      "rosters_pending_named": "Standings, fixtures and available rosters were saved. Pending rosters: {pending_rosters}. Confirm again to retry.",
+      "cannot_refresh": "Could not refresh competition",
+      "auto_requires_groups": "Enable group updates before enabling player statistics."
+    },
+    "abort": {
+      "none_followed": "No followed competitions",
+      "no_refreshable_groups": "No followed competitions have a verified reference team; select them again"
+    }
   }
 }

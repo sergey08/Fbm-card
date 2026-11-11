@@ -24,11 +24,11 @@ module("homeassistant.components")
 module("homeassistant.components.http", StaticPathConfig=lambda *a, **kw: (a, kw))
 module("homeassistant.components.lovelace")
 module("homeassistant.components.lovelace.const", DOMAIN="lovelace")
-module("homeassistant.core", HomeAssistant=object)
+module("homeassistant.core", HomeAssistant=object, callback=lambda fn: fn)
 module("homeassistant.config_entries", ConfigEntry=object)
 module("homeassistant.helpers")
 module("homeassistant.helpers.storage", Store=MagicMock())
-module("probatio", Required=lambda key: key)
+module("probatio", Required=lambda key, default=None: key, Schema=lambda schema: schema, In=lambda choices: choices)
 module("homeassistant.components.websocket_api",
        websocket_command=lambda schema: lambda function: function,
        require_admin=lambda function: function,
@@ -50,7 +50,10 @@ class IdentitySetupTests(unittest.TestCase):
     def test_entry_creates_manager_without_loading_or_saving_identity(self):
         hass = MagicMock()
         hass.data = {}
-        entry = types.SimpleNamespace(entry_id='example')
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        entry = types.SimpleNamespace(entry_id='example', options={},
+            add_update_listener=lambda cb: lambda: None,
+            async_on_unload=lambda action: None)
         store = MagicMock()
         with patch.object(fbm, 'Store', return_value=store) as factory:
             coro = fbm.async_setup_entry(hass, entry)
@@ -168,7 +171,7 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         expected = {
             "ws_entries", "ws_status", "ws_create", "ws_register",
             "ws_recover", "ws_connect", "ws_search", "ws_schedule",
-            "ws_phases", "ws_schedule_round", "ws_standings", "ws_group_identity", "ws_schedule_probe", "ws_roster", "ws_player_detail", "ws_player_stats", "ws_diagnostic", "ws_player_detail_diagnostic", "ws_player_stats_diagnostic",
+            "ws_phases", "ws_schedule_round", "ws_standings", "ws_group_identity", "ws_schedule_probe", "ws_roster", "ws_player_detail", "ws_player_stats", "ws_diagnostic", "ws_player_detail_diagnostic", "ws_player_stats_diagnostic", "ws_competition_sync", "ws_competition_list", "ws_competition_team_snapshot", "ws_competition_team_roster", "ws_competition_team_player_stats", "ws_competition_latest", "ws_competition_preview", "ws_competition_analysis", "ws_competition_verify_season", "ws_competition_player_stats_batch",
         }
         with patch.object(websocket_api, "async_register_command") as register:
             self.assertTrue(await fbm.async_setup(self.hass, {}))

@@ -43,7 +43,9 @@ test("el flujo de CI valida la nueva estructura de integración", () => {
 test("la configuración en español informa de que la API sigue pendiente", () => {
   const strings = JSON.parse(fs.readFileSync("custom_components/fbm/strings.json", "utf8"));
   const es = JSON.parse(fs.readFileSync("custom_components/fbm/translations/es.json", "utf8"));
-  assert.deepEqual(es, strings);
+  assert.deepEqual(Object.keys(es.config), Object.keys(strings.config));
+  assert.deepEqual(Object.keys(es.options.step), Object.keys(strings.options.step));
+  assert.deepEqual(Object.keys(es.options.error), Object.keys(strings.options.error));
   assert.match(es.config.step.user.description, /pendiente de validación/);
   assert.ok(es.config.abort.already_configured);
 });

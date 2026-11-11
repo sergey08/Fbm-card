@@ -198,6 +198,20 @@ class IndependentClient:
                 raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
             return await self._adapter.team_group_identity(team_id)
 
+    async def async_verify_group_season(self, team_ids: list[str]) -> dict:
+        """Read two official player-team details to corroborate the season.
+
+        Never persist or expose private player detail records.
+        """
+        if (type(team_ids) is not list or len(team_ids) < 2
+                or any(type(x) is not str or not x.strip() or len(x) > 512
+                       for x in team_ids)):
+            raise ValueError("Equipos no válidos")
+        async with self._lock:
+            if self._adapter is None or not self._adapter.session_is_usable():
+                raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
+            return await self._adapter.verify_group_season(team_ids)
+
     async def async_team_roster(self, team_id: str) -> dict:
         """On-demand roster; same adapter to be used for opt-in group syncing."""
         self._validate_team_id(team_id)

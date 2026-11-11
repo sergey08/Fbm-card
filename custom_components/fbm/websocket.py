@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from datetime import date
+from .competition_sync import sync_group, preview_group
+from .competition_analysis import competition_analysis
+from .competition_player_stats import sync_player_stats_batch
+from .competition_manager import competition_season_diagnostic
 import probatio
 from homeassistant.components import websocket_api
 
@@ -306,8 +310,403 @@ async def ws_standings(hass, connection, msg):
     await _dispatch(hass, connection, msg, _standings)
 
 
+
+async def _preview_competition(hass, msg):
+    client = _client(hass, msg["entry_id"])
+    return await preview_group(
+        client, msg["equipo"],
+        date.fromisoformat(msg["desde"]), date.fromisoformat(msg["hasta"]))
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/preview",
+    probatio.Required("entry_id"): str,
+    probatio.Required("equipo"): str,
+    probatio.Required("desde"): str,
+    probatio.Required("hasta"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_preview(hass, connection, msg):
+    try:
+        result = await _preview_competition(hass, msg)
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudo consultar el grupo completo.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+async def _sync_competition(hass, msg):
+    entry_id = msg["entry_id"]
+    client = _client(hass, entry_id)
+    entry = hass.data[DOMAIN][entry_id]
+    archive = await hass.async_add_executor_job(
+        entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+    return await sync_group(
+        client, archive, msg["equipo"],
+        date.fromisoformat(msg["desde"]), date.fromisoformat(msg["hasta"]),
+        fetch_rosters=msg["incluir_plantillas"])
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/sync",
+    probatio.Required("entry_id"): str,
+    probatio.Required("equipo"): str,
+    probatio.Required("desde"): str,
+    probatio.Required("hasta"): str,
+    probatio.Required("incluir_plantillas"): bool,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_sync(hass, connection, msg):
+    try:
+        result = await _sync_competition(hass, msg)
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudo sincronizar la competición.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/list",
+    probatio.Required("entry_id"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_list(hass, connection, msg):
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        groups = await hass.async_add_executor_job(archive.followed)
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudieron leer las competiciones.")
+        return
+    connection.send_result(msg["id"], {"competitions": groups})
+
+
+def _offline_team_summary(archive_path, archive_factory, team_id):
+    """Return already archived public team competition data, never fetch FBM."""
+    from pathlib import Path
+    if not Path(archive_path).is_file():
+        return {"found": False}
+    archive = archive_factory(archive_path)
+    matches = []
+    for group in archive.followed_with_anchor()[:50]:
+        identity = {**{key: group[key] for key in
+                       ("season_id", "phase_id", "group_id")},
+                    "season_verified": True}
+        standings = archive.latest(identity, "standings")
+        if not standings or not any(
+                type(row) is dict and row.get("id") == team_id
+                for row in standings["payload"].get("clasificacion", [])):
+            continue
+        fixtures = archive.latest(identity, "fixtures")
+        matches.append((standings, fixtures))
+        if len(matches) > 1:
+            # Ambiguous team across seasons/phases: never choose silently.
+            return {"found": False}
+    if not matches:
+        return {"found": False}
+    standings, fixtures = matches[0]
+    return {
+        "found": True,
+        "standings": standings["payload"],
+        "fixtures": fixtures["payload"] if fixtures else None,
+        "observed_at": {
+            "standings": standings["observed_at"],
+            "fixtures": fixtures["observed_at"] if fixtures else None,
+        },
+    }
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/team_snapshot",
+    probatio.Required("entry_id"): str,
+    probatio.Required("equipo"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_team_snapshot(hass, connection, msg):
+    """Read public group results from SQLite without network or player data."""
+    try:
+        _client(hass, msg["entry_id"])
+        team = msg["equipo"]
+        if type(team) is not str or not team.strip() or len(team) > 512:
+            raise ValueError("Invalid team ID")
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        result = await hass.async_add_executor_job(
+            _offline_team_summary,
+            entry["competitions_sqlite_path"],
+            entry["competitions_archive_factory"], team)
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudieron leer los datos archivados del equipo.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/team_roster",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+    probatio.Required("equipo"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_team_roster(hass, connection, msg):
+    """Read an explicitly followed group's archived roster, without network."""
+    try:
+        _client(hass, msg["entry_id"])
+        team = msg["equipo"]
+        if type(team) is not str or not team.strip() or len(team) > 512:
+            raise ValueError("Invalid team")
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        identity = {"season_verified": True,
+                    "season_id": msg["season_id"],
+                    "phase_id": msg["phase_id"],
+                    "group_id": msg["group_id"]}
+        if not await hass.async_add_executor_job(archive.is_followed, identity):
+            raise ValueError("Competition is not followed")
+        standings = await hass.async_add_executor_job(
+            archive.latest, identity, "standings")
+        if not standings or not any(
+                type(row) is dict and row.get("id") == team
+                for row in standings["payload"].get("clasificacion", [])):
+            raise ValueError("Team not part of selected group")
+        team_row = next(row for row in standings["payload"]["clasificacion"]
+                        if type(row) is dict and row.get("id") == team)
+        team_name = team_row.get("equipo")
+        if type(team_name) is not str or not team_name:
+            raise ValueError("Invalid team name")
+        # Do not infer matching teams from partial names: ambiguity would
+        # expose another team's fixtures.
+        item = await hass.async_add_executor_job(
+            archive.latest, identity, "roster", team)
+        players = (item["payload"].get("jugadores", []) if item else [])
+        if type(players) is not list or len(players) > 100:
+            raise ValueError("Invalid roster")
+        fixtures = await hass.async_add_executor_job(
+            archive.latest, identity, "fixtures")
+        matches = []
+        if fixtures:
+            all_matches = fixtures["payload"].get("partidos", [])
+            if type(all_matches) is not list or len(all_matches) > 2000:
+                raise ValueError("Invalid fixtures")
+            matches = [match for match in all_matches
+                       if type(match) is dict and (
+                           match.get("local") == team_name or
+                           match.get("visitante") == team_name)]
+        crests = fixtures["payload"].get("escudos", {}) if fixtures else {}
+        result = {"jugadores": players, "partidos": matches[:200],
+                  "escudos": crests,
+                  "observed_at": item["observed_at"] if item else None,
+                  "fixtures_at": fixtures["observed_at"] if fixtures else None}
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudo leer la plantilla archivada.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/team_player_stats",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+    probatio.Required("equipo"): str,
+    probatio.Required("jugador"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_team_player_stats(hass, connection, msg):
+    """Read stored stats only for a player belonging to the requested team."""
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        identity = {"season_verified": True, "season_id": msg["season_id"],
+                    "phase_id": msg["phase_id"], "group_id": msg["group_id"]}
+        team, player = msg["equipo"], msg["jugador"]
+        if (type(team) is not str or not team or len(team) > 512 or
+                type(player) is not str or not player or len(player) > 512):
+            raise ValueError("Invalid identifiers")
+        if not await hass.async_add_executor_job(archive.is_followed, identity):
+            raise ValueError("Not followed")
+        standing = await hass.async_add_executor_job(
+            archive.latest, identity, "standings")
+        if not standing or not any(
+                type(row) is dict and row.get("id") == team
+                for row in standing["payload"].get("clasificacion", [])):
+            raise ValueError("Unknown team")
+        roster = await hass.async_add_executor_job(
+            archive.latest, identity, "roster", team)
+        if not roster or not any(
+                type(row) is dict and row.get("id") == player
+                for row in roster["payload"].get("jugadores", [])):
+            raise ValueError("Player outside roster")
+        item = await hass.async_add_executor_job(
+            archive.latest, identity, "player_stats", player)
+        result = {"estadisticas": item["payload"] if item else None,
+                  "observed_at": item["observed_at"] if item else None}
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudieron leer las estadísticas archivadas.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/latest",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+    probatio.Required("source"): str,
+    probatio.Required("subject"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_latest(hass, connection, msg):
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        identity = {"season_verified": True, "season_id": msg["season_id"],
+                    "phase_id": msg["phase_id"], "group_id": msg["group_id"]}
+        item = await hass.async_add_executor_job(
+            archive.latest, identity, msg["source"], msg["subject"])
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error", "No se pudieron leer los datos archivados.")
+        return
+    connection.send_result(msg["id"], {"snapshot": item})
+
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/analysis",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_analysis(hass, connection, msg):
+    """Offline analysis of already stored FBM records, no network calls."""
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        identity = {
+            "season_verified": True, "season_id": msg["season_id"],
+            "phase_id": msg["phase_id"], "group_id": msg["group_id"],
+        }
+        standing = await hass.async_add_executor_job(archive.latest, identity, "standings")
+        fixtures = await hass.async_add_executor_job(archive.latest, identity, "fixtures")
+        if standing is None or fixtures is None:
+            raise ValueError("Sin clasificación o calendario archivado")
+        rows = standing["payload"].get("clasificacion", [])
+        if len(rows) > 100:
+            raise ValueError("Demasiados equipos")
+        rosters = {}
+        for row in rows:
+            tid = row.get("id")
+            if type(tid) is not str or not tid or len(tid) > 512:
+                raise ValueError("Equipo no identificado")
+            result = await hass.async_add_executor_job(
+                archive.latest, identity, "roster", tid)
+            if result is not None:
+                rosters[tid] = result["payload"]
+        # Admin-only player stats stay outside ordinary HA sensor state.
+        individual = {}
+        for roster in rosters.values():
+            for person in roster.get("jugadores", []):
+                pid = person.get("id") if type(person) is dict else None
+                if type(pid) is not str:
+                    continue
+                result = await hass.async_add_executor_job(
+                    archive.latest, identity, "player_stats", pid)
+                if result is not None:
+                    individual[pid] = result["payload"]
+        report = await hass.async_add_executor_job(
+            competition_analysis, standing["payload"], fixtures["payload"],
+            rosters, individual)
+        report["observed_at"] = {
+            "standings": standing["observed_at"],
+            "fixtures": fixtures["observed_at"],
+        }
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudo analizar la competición archivada.")
+        return
+    connection.send_result(msg["id"], report)
+
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/player_stats_batch",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+    probatio.Required("equipo"): str,
+    probatio.Required("offset"): int,
+    probatio.Required("limit"): int,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_player_stats_batch(hass, connection, msg):
+    """Explicit admin-only bounded update; never returns player identities."""
+    try:
+        client = _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"],
+            entry["competitions_sqlite_path"])
+        key = {"season_verified": True,
+               "season_id": msg["season_id"],
+               "phase_id": msg["phase_id"],
+               "group_id": msg["group_id"]}
+        result = await sync_player_stats_batch(
+            client, archive, key, msg["equipo"],
+            offset=msg["offset"], limit=msg["limit"])
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudieron actualizar las estadísticas.")
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/verify_season",
+    probatio.Required("entry_id"): str,
+    probatio.Required("equipo"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_verify_season(hass, connection, msg):
+    """Report only whether 2 independent official team details agree on season."""
+    try:
+        client = _client(hass, msg["entry_id"])
+        result = await competition_season_diagnostic(client, msg["equipo"])
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudo verificar la temporada de la competición.")
+        return
+    connection.send_result(msg["id"], result)
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_verify_season, ws_competition_player_stats_batch):
         websocket_api.async_register_command(hass, command)
 
 
