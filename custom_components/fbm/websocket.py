@@ -502,7 +502,9 @@ async def ws_competition_team_roster(hass, connection, msg):
                        if type(match) is dict and (
                            match.get("local") == team_name or
                            match.get("visitante") == team_name)]
+        crests = fixtures["payload"].get("escudos", {}) if fixtures else {}
         result = {"jugadores": players, "partidos": matches[:200],
+                  "escudos": crests,
                   "observed_at": item["observed_at"] if item else None,
                   "fixtures_at": fixtures["observed_at"] if fixtures else None}
     except Exception:
