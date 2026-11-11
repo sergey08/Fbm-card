@@ -1,7 +1,13 @@
 """Regression tests for the offline MCP-facing FBM match preview."""
 import unittest
+import importlib.util
+from pathlib import Path
 
-from custom_components.fbm.competition_match_preview import match_preview
+p = Path(__file__).resolve().parents[1] / "custom_components/fbm/competition_match_preview.py"
+spec = importlib.util.spec_from_file_location("competition_match_preview", p)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+match_preview = mod.match_preview
 
 
 class MatchPreviewTests(unittest.TestCase):
