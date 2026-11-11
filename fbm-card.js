@@ -75,7 +75,12 @@ class FBMCard extends HTMLElement {
     }
   }
   getCardSize() { return 5; }
-  static getStubConfig() { return { title: "FBM Card", equipos: [] }; }
+  static getStubConfig() {
+    return {
+      type: "custom:fbm-card", title: "Buscar equipos FBM",
+      modo_experimental: true, tipo_tarjeta: "busqueda"
+    };
+  }
 
   _teams() {
     if (Array.isArray(this._config?.equipos) && this._config.equipos.length) return this._config.equipos.filter(x => x && typeof x.nombre === "string" && typeof x.entidad_datos === "string");
@@ -173,7 +178,10 @@ class FBMCard extends HTMLElement {
     if (typeof user !== "string" || !user || typeof entryId !== "string" || !entryId) return null;
     const cardId = this._config?.id_tarjeta;
     if (this._config?.tipo_tarjeta === "equipo" && (typeof cardId !== "string" || !cardId.trim())) return null;
-    return "fbm-card:experimental-equipo:v1:" + JSON.stringify([user, String(cardId || "predeterminada"), entryId]);
+    const key = [user, String(cardId || "predeterminada"), entryId];
+    if (this._config?.tipo_tarjeta === "equipo" && this._config.equipo_fijo?.id)
+      key.push(this._config.equipo_fijo.id);
+    return "fbm-card:experimental-equipo:v1:" + JSON.stringify(key);
   }
 
   _experimentalTeamIsValid(team) {
@@ -198,16 +206,16 @@ class FBMCard extends HTMLElement {
 
   _restoreExperimentalTeam(entryId) {
     const configured = this._config?.tipo_tarjeta === "equipo" ? this._config?.equipo_fijo : null;
-    if (configured && this._experimentalTeamIsValid(configured)) return configured;
+    const fallback = this._experimentalTeamIsValid(configured) ? configured : null;
     const key = this._experimentalPreferenceKey(entryId);
-    if (!key) return null;
+    if (!key) return fallback;
     try {
       const team = JSON.parse(window.localStorage?.getItem(key) || "null");
-      if (!this._experimentalTeamIsValid(team)) return null;
+      if (!this._experimentalTeamIsValid(team)) return fallback;
       const result = { id: team.id, nombre: team.nombre, club: team.club, categoria: team.categoria, temporada: team.temporada };
       if (typeof team.escudo === "string" && team.escudo.length <= 1024) result.escudo = team.escudo;
       return result;
-    } catch (_) { return null; }
+    } catch (_) { return fallback; }
   }
 
   _experimentalFavoritesKey(entryId) {
@@ -322,8 +330,7 @@ class FBMCard extends HTMLElement {
         state.teams = [saved]; state.selected = saved.id;
         const archived = await this._loadArchivedFixed();
         if (!archived && state.status.sesion_vigente) {
-          const data = await this._hass.callWS({ type: "fbm/team/standings", entry_id: state.entry, equipo: saved.id });
-          if (Array.isArray(data.clasificacion)) { state.standings = data.clasificacion; state.lastStandingsUpdate = Date.now(); }
+          await this._loadStandings(state);
         }
       }
     } catch (_) {
@@ -520,10 +527,10 @@ class FBMCard extends HTMLElement {
           this._saveExperimentalTeam(state.entry, selected);
           state.editFixed = false;
           state.message = "Equipo fijado en esta tarjeta.";
-          if (state.status?.sesion_vigente) {
+          this._resetTeamData(state);
+          if (!await this._loadArchivedFixed() && state.status?.sesion_vigente) {
             remoteAttempted = true;
-            const data = await this._hass.callWS({ type: "fbm/team/standings", ...common, equipo: selected.id });
-            if (Array.isArray(data.clasificacion)) state.standings = data.clasificacion;
+            await this._loadStandings(state);
           }
         } else if (action === "phases") {
           if (!state.selected) throw new Error("Elige un equipo.");
@@ -541,8 +548,7 @@ class FBMCard extends HTMLElement {
           remoteAttempted = true;
           state.schedule = await this._hass.callWS(request);
         } else if (action === "fixed_schedule" || action === "refresh_schedule") {
-          if (this._config?.tipo_tarjeta !== "equipo" || !state.selected ||
-              state.status?.sesion_vigente !== true) throw new Error("Equipo o sesión no disponible.");
+          if (!state.selected || state.status?.sesion_vigente !== true) throw new Error("Equipo o sesión no disponible.");
           const range = this._fixedScheduleDates(state);
           const first = new Date(range.desde + "T12:00:00");
           const last = new Date(range.hasta + "T12:00:00");
@@ -613,9 +619,7 @@ class FBMCard extends HTMLElement {
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
           remoteAttempted = true;
-          const data = await this._hass.callWS({ type: "fbm/team/standings", ...common, equipo: state.selected });
-          if (!Array.isArray(data.clasificacion)) throw new Error("Clasificación no válida.");
-          state.standings = data.clasificacion;
+          await this._loadStandings(state);
         }
       }
     } catch (_) {
@@ -632,10 +636,28 @@ class FBMCard extends HTMLElement {
     } finally { state.busy = false; this._render(); }
   }
 
+  async _loadStandings(state) {
+    const data = await this._hass.callWS({
+      type: "fbm/team/standings", entry_id: state.entry, equipo: state.selected
+    });
+    if (!Array.isArray(data?.clasificacion)) throw new Error("Clasificación no válida.");
+    state.standings = data.clasificacion;
+    state.lastStandingsUpdate = Date.now();
+  }
+
+  _resetTeamData(state) {
+    Object.assign(state, {
+      archivedData: false, lastArchiveCheck: 0, schedule: null, standings: null,
+      players: null, playerDetail: null, playerStats: null, photoDiagnostic: null,
+      lastStandingsUpdate: 0, lastPlayersUpdate: 0, lastScheduleUpdate: 0,
+      rounds: null, round: "", phaseName: "", matchRound: "all", showGroup: false,
+      tab: "clasificacion", partidosTab: "fases", showTeamDetail: false
+    });
+  }
+
   _renderExperimental(card) {
     const state = this._experimentalState();
     card.append(this._element("h2", this._config.title || "🏀 FBM Card"));
-    card.append(this._element("p", "Consulta equipos y clasificaciones oficiales de la Federación de Baloncesto de Madrid.", "muted"));
     const button = (label, action, enabled = true) => {
       const el = this._element("button", label); el.type = "button"; el.disabled = state.busy || !enabled;
       el.addEventListener("click", () => this._experimentalAction(action)); card.append(el);
@@ -651,8 +673,6 @@ class FBMCard extends HTMLElement {
       button("Reintentar conexión", "status", !!this._hass?.callWS);
     if (state.status) {
       const connected = state.status.sesion_vigente === true;
-      const sessionText = connected ? "vigente en la última comprobación local" : (state.status.sesion_en_memoria ? "necesita reconexión" : "sin conectar");
-      card.append(this._element("p", `Identidad: ${state.status.identidad_creada ? "creada" : "pendiente"} · Dispositivo: ${state.status.candidato_guardado ? "guardado" : "pendiente"} · Sesión: ${sessionText}`, "muted"));
       if (state.status.registro_pendiente) card.append(this._element("p", "Hay un registro pendiente o incierto. No se reintentará hasta que se recupere de forma segura.", "muted"));
       if (!state.status.identidad_creada) button("Crear identidad local", "create", true);
       if (!connected && (state.status.candidato_guardado || state.status.identidad_creada)) input("Versión del perfil Android", "release");
@@ -663,8 +683,10 @@ class FBMCard extends HTMLElement {
       }
       if (!connected) button("Conectar", "connect", state.status.candidato_guardado);
       const fixed = this._config.tipo_tarjeta === "equipo";
-      const pinned = fixed ? this._restoreExperimentalTeam(state.entry) : null;
+      const selected = state.teams.find(team => team.id === state.selected);
+      const pinned = fixed ? this._restoreExperimentalTeam(state.entry) : selected;
       const editing = fixed && (!pinned || state.editFixed);
+      const showDetails = fixed ? !!pinned && !editing : !!pinned && state.showTeamDetail;
       const favorites = this._experimentalFavorites(state.entry);
       if (fixed && editing && favorites.length) {
         const label = this._element("label", "Elegir entre mis favoritos:");
@@ -677,12 +699,12 @@ class FBMCard extends HTMLElement {
         select.addEventListener("change", event => {
           const team = favorites.find(item => item.id === event.target.value);
           if (!team) return;
-          state.teams = [team]; state.selected = team.id; state.standings = null;
+          state.teams = [team]; state.selected = team.id; this._resetTeamData(state);
           this._render();
         });
         label.append(select); card.append(label);
       }
-      if (fixed && pinned && !editing) {
+      if (showDetails) {
         const header = this._element("div", "", "team-header");
         const configuredLogo = this._officialLogoUrl(this._config.logo_equipo);
         const standing = Array.isArray(state.standings) ? state.standings.find(item => item.id === pinned.id) : null;
@@ -705,6 +727,8 @@ class FBMCard extends HTMLElement {
           tab.addEventListener("click", () => {
             state.tab = name; this._render();
             if (!connected || !pinned?.id || state.busy) return;
+            if (name === "clasificacion" && !Array.isArray(state.standings))
+              void this._experimentalAction("standings");
             if (name === "partidos" && !this._fixedMatchesAvailable(state, pinned.id))
               void this._experimentalAction("fixed_schedule");
             if (name === "jugadores") {
@@ -719,7 +743,8 @@ class FBMCard extends HTMLElement {
           tabs.append(tab);
         }
         card.append(tabs);
-        if (state.tab === "clasificacion" || !state.tab) button("Actualizar clasificación", "standings", connected);
+        if (state.tab === "clasificacion" && !state.standings && state.busy)
+          card.append(this._element("p", "Consultando clasificación…", "muted"));
         if (state.tab === "partidos") {
           const subtabs = this._element("div", "", "fbm-tabs");
           for (const [name, title] of [["fases", "Fases"], ["jornadas", "Jornadas"]]) {
@@ -948,10 +973,6 @@ class FBMCard extends HTMLElement {
             card.append(collection);
           }
         }
-        const changeTeam = this._element("button", "Cambiar equipo");
-        changeTeam.type = "button";
-        changeTeam.addEventListener("click", () => { state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id; this._render(); });
-        if (!this._config.equipo_fijo) card.append(changeTeam);
       } else {
         if (fixed && !pinned && connected) {
           const recent = this._restoreRecentTeam(state.entry);
@@ -968,7 +989,7 @@ class FBMCard extends HTMLElement {
         input("Buscar equipo", "query");
         button("Buscar", "search", connected);
       }
-      if (!fixed && favorites.length) {
+      if (!fixed && !showDetails && favorites.length) {
         const label = this._element("label", "Mis equipos favoritos:");
         const select = document.createElement("select");
         const empty = this._element("option", "Selecciona un favorito"); empty.value = ""; select.append(empty);
@@ -979,12 +1000,12 @@ class FBMCard extends HTMLElement {
         select.addEventListener("change", event => {
           const team = favorites.find(item => item.id === event.target.value);
           if (!team) return;
-          state.teams = [team]; state.selected = team.id; state.standings = null;
+          state.teams = [team]; state.selected = team.id; this._resetTeamData(state);
           this._render();
         });
         label.append(select); card.append(label);
       }
-      if (state.teams.length && (!fixed || editing)) {
+      if (state.teams.length && !showDetails) {
         const label = this._element("label", "Equipo, categoría y temporada: ");
         const select = document.createElement("select");
         select.disabled = state.busy;
@@ -995,7 +1016,7 @@ class FBMCard extends HTMLElement {
         }
         select.value = state.selected;
         select.addEventListener("change", event => {
-          state.selected = event.target.value; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
+          state.selected = event.target.value; this._resetTeamData(state);
           const selectedTeam = state.teams.find(team => team.id === state.selected);
           if (selectedTeam && this._config.tipo_tarjeta !== "equipo") this._saveExperimentalTeam(state.entry, selectedTeam);
           if (selectedTeam) this._saveRecentTeam(state.entry, selectedTeam);
@@ -1005,7 +1026,13 @@ class FBMCard extends HTMLElement {
         label.append(select); card.append(label);
         if (fixed) button("Fijar este equipo en la tarjeta", "fix_team", !!state.selected && connected);
         else {
-          button("Consultar clasificación del grupo actual", "standings", !!state.selected && connected);
+          const consult = this._element("button", "Consultar equipo");
+          consult.type = "button"; consult.disabled = state.busy || !state.selected || !connected;
+          consult.addEventListener("click", () => {
+            state.showTeamDetail = true;
+            void this._experimentalAction("standings");
+          });
+          card.append(consult);
           const current = state.teams.find(team => team.id === state.selected);
           if (current) {
             const favorite = this._isExperimentalFavorite(state.entry, current.id);
@@ -1059,7 +1086,7 @@ class FBMCard extends HTMLElement {
           button("Consultar horarios", "schedule", !!state.selected && connected && Array.isArray(state.rounds) && (!state.rounds.length || !!state.round));
         }
       }
-      if (Array.isArray(state.standings) && (!fixed || !pinned || editing || !state.tab || state.tab === "clasificacion")) {
+      if (Array.isArray(state.standings) && showDetails && state.tab === "clasificacion") {
         card.append(this._element("h3", "Clasificación del grupo actual"));
         if (!state.standings.length) card.append(this._element("p", "No hay clasificación disponible.", "muted"));
         else {
@@ -1089,7 +1116,7 @@ class FBMCard extends HTMLElement {
           table.append(body); scroll.append(table); card.append(scroll);
         }
       }
-      if (this._config.mostrar_horarios === true && state.schedule && Array.isArray(state.schedule.partidos) && (!fixed || state.tab === "partidos")) {
+      if (this._config.mostrar_horarios === true && state.schedule && Array.isArray(state.schedule.partidos) && !showDetails && !fixed) {
         const visible = fixed ? state.schedule.partidos : this._experimentalMatches();
         card.append(this._element("h3", state.showGroup ? "Partidos del grupo" : "Partidos del equipo"));
         card.append(this._element("p", "La selección del equipo compara nombres; los homónimos pueden coincidir. FBM puede devolver fechas fuera del intervalo solicitado.", "muted"));
@@ -1110,6 +1137,20 @@ class FBMCard extends HTMLElement {
       }
     }
     if (state.message) card.append(this._element("p", state.message, "muted"));
+    const fixed = this._config.tipo_tarjeta === "equipo";
+    const pinned = fixed && this._restoreExperimentalTeam(state.entry);
+    if ((pinned && !state.editFixed && this._config.id_tarjeta) || (!fixed && state.showTeamDetail)) {
+      const back = this._element("button", fixed ? "Cambiar equipo" : "Volver a la búsqueda");
+      back.type = "button"; back.disabled = state.busy;
+      back.style.fontSize = "0.85em";
+      back.addEventListener("click", () => {
+        if (fixed) {
+          state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id;
+        } else this._resetTeamData(state);
+        this._render();
+      });
+      card.append(back);
+    }
   }
 
   _render() {
@@ -1311,6 +1352,7 @@ class FBMCompetitionCard extends HTMLElement {
         this._config.group_index < 0 || this._config.group_index > 49)
       throw new Error("Índice de competición inválido");
     this._groupIndex = this._config.group_index;
+    this._teamRequest = this._playerRequest = null;
     this._teamId = null; this._roster = null; this._matches = null;
     this._matchView = "jornadas"; this._matchRound = "all";
     this._playerId = null; this._playerStats = null; this._playerError = "";
@@ -1356,9 +1398,46 @@ class FBMCompetitionCard extends HTMLElement {
     const groups = Array.isArray(sensor?.attributes?.groups) ? sensor.attributes.groups : [];
     return { groups, group: groups[this._groupIndex] || null };
   }
+  _teamButton(team) {
+    const button = this._el("button", undefined, "team");
+    button.type = "button";
+    const crest = this._verifiedCrest(team.escudo);
+    if (crest) {
+      const img = this._el("img");
+      img.src = crest; img.alt = ""; img.className = "crest"; img.loading = "lazy";
+      img.addEventListener("error", () => img.remove(), { once: true });
+      button.append(img);
+    }
+    button.append(this._el("span", team.equipo));
+    button.disabled = !team.id;
+    button.addEventListener("click", () => { void this._openTeam(team); });
+    return button;
+  }
+
+  _rankingTable(ranking) {
+    const table = this._el("table"), head = this._el("tr");
+    for (const [name, numeric] of [["Pos.", true], ["Equipo", false], ["PJ", true], ["Pts", true]]) {
+      const th = this._el("th", name, numeric ? "num" : "");
+      th.scope = "col"; head.append(th);
+    }
+    const thead = this._el("thead"), tbody = this._el("tbody");
+    thead.append(head); table.append(thead, tbody);
+    for (const team of ranking) {
+      const row = this._el("tr"), name = this._el("td");
+      name.append(this._teamButton(team));
+      row.append(this._el("td", team.posicion ?? "", "num"), name,
+        this._el("td", team.jugados ?? "", "num"), this._el("td", team.puntos ?? "", "num"));
+      tbody.append(row);
+    }
+    return table;
+  }
+
   async _openTeam(team) {
     if (!team || typeof team.id !== "string" || !team.id ||
         typeof team.equipo !== "string") return;
+    if (this._teamId === team.id) return;
+    this._playerRequest = null;
+    this._detailTab = "partidos";
     this._teamId = team.id; this._roster = null; this._matches = null;
     this._matchView = "jornadas"; this._matchRound = "all";
     this._playerId = null; this._playerStats = null; this._playerError = "";
@@ -1366,7 +1445,8 @@ class FBMCompetitionCard extends HTMLElement {
     this._render();
     const { group } = this._group();
     if (!group || !this._hass?.callWS) return;
-    const teamId = team.id, groupIndex = this._groupIndex;
+    const teamId = team.id;
+    const request = this._teamRequest = {};
     try {
       const entries = await this._hass.callWS({type:"fbm/client/entries"});
       if (!Array.isArray(entries?.entries) || entries.entries.length !== 1)
@@ -1376,12 +1456,13 @@ class FBMCompetitionCard extends HTMLElement {
         season_id:group.season_id, phase_id:group.phase_id,
         group_id:group.group_id, equipo:teamId
       });
-      if (this._teamId !== teamId || this._groupIndex !== groupIndex) return;
+      if (this._teamRequest !== request) return;
       if (!Array.isArray(data?.jugadores)) throw new Error("Plantilla no disponible");
+      this._entryId = entries.entries[0];
       this._roster = data.jugadores;
       this._matches = Array.isArray(data.partidos) ? data.partidos : [];
     } catch (_) {
-      if (this._teamId === teamId && this._groupIndex === groupIndex)
+      if (this._teamRequest === request)
         this._error = "No se ha podido leer la plantilla archivada; no se hará una descarga adicional.";
     }
     this._render();
@@ -1397,23 +1478,21 @@ class FBMCompetitionCard extends HTMLElement {
     const {group} = this._group();
     if (!group || !this._teamId || !this._hass?.callWS) return;
     const teamId = this._teamId, playerId = player.id;
-    const index = this._groupIndex;
+    const request = this._playerRequest = {};
     this._playerId = playerId; this._playerStats = null; this._playerError = "";
     this._render();
     try {
-      const entries = await this._hass.callWS({type:"fbm/client/entries"});
-      if (!Array.isArray(entries?.entries) || entries.entries.length !== 1)
-        throw Error("Missing integration");
+      if (!this._entryId) throw Error("Missing integration");
       const data = await this._hass.callWS({
-        type:"fbm/competition/team_player_stats", entry_id:entries.entries[0],
+        type:"fbm/competition/team_player_stats", entry_id:this._entryId,
         season_id:group.season_id, phase_id:group.phase_id,
         group_id:group.group_id, equipo:teamId, jugador:playerId
       });
-      if (this._groupIndex !== index || this._teamId !== teamId ||
+      if (this._playerRequest !== request || this._teamId !== teamId ||
           this._playerId !== playerId) return;
       this._playerStats = data?.estadisticas || {};
     } catch (_) {
-      if (this._groupIndex === index && this._teamId === teamId &&
+      if (this._playerRequest === request && this._teamId === teamId &&
           this._playerId === playerId)
         this._playerError = "No se pudieron leer las estadísticas archivadas.";
     }
@@ -1480,6 +1559,7 @@ class FBMCompetitionCard extends HTMLElement {
       select.value = String(this._groupIndex);
       select.addEventListener("change", event => {
         this._groupIndex = Number(event.target.value);
+        this._teamRequest = this._playerRequest = null;
         this._teamId = null; this._roster = null; this._matches = null;
         this._playerId = null; this._playerStats = null; this._error = "";
         this._render();
@@ -1489,8 +1569,9 @@ class FBMCompetitionCard extends HTMLElement {
     const ranking = Array.isArray(group.ranking) ? group.ranking : [];
     const team = ranking.find(item => item.id === this._teamId);
     if (this._teamId && team) {
-      const back = this._el("button", "‹ Volver a clasificación", "back");
+      const back = this._el("button", "‹ Volver a la competición", "back");
       back.addEventListener("click", () => {
+        this._teamRequest = this._playerRequest = null;
         this._teamId = null; this._roster = null; this._error = "";
         this._render();
       });
@@ -1504,138 +1585,132 @@ class FBMCompetitionCard extends HTMLElement {
       } else header.append(this._el("span","🏀","team-logo-placeholder"));
       header.append(this._el("h3",team.equipo));
       card.append(back,header);
-      card.append(this._el("p", "Posición "+team.posicion+" · "+team.puntos+" puntos · "+team.jugados+" partidos", "muted"));
-      card.append(this._el("h3", "Partidos"));
-      if (!this._matches) card.append(this._el("p", "Consultando el calendario archivado…", "muted"));
-      else if (!this._matches.length) card.append(this._el("p", "No hay partidos archivados identificados para este equipo.", "muted"));
-      else {
-        const rounds = [...new Set(this._matches.map(m => m.jornada)
-          .filter(v => (typeof v === "number" && Number.isInteger(v)) ||
-                       (typeof v === "string" && v.trim())))].map(String);
-        rounds.sort((x,y) => x.localeCompare(y,"es",{numeric:true}));
-        if (rounds.length) {
-          const tabs=this._el("div",undefined,"tabs");
-          for (const [view,label] of [["jornadas","Jornadas"],["fases","Fase completa"]]) {
-            const btn=this._el("button",label);
-            btn.setAttribute("aria-pressed",String(this._matchView===view));
-            btn.addEventListener("click",()=>{this._matchView=view;this._render();});
-            tabs.append(btn);
-          }
-          card.append(tabs);
-        }
-        if (this._matchView === "jornadas" && rounds.length) {
-          const select=this._el("select");
-          const all=this._el("option","Todas las jornadas");all.value="all";select.append(all);
-          for (const round of rounds) {
-            const option=this._el("option","Jornada "+round);
-            option.value=round;select.append(option);
-          }
-          select.value=this._matchRound;
-          select.addEventListener("change",event=>{
-            this._matchRound=event.target.value;this._render();
-          });
-          card.append(select);
-        }
-        const matches=this._matchView==="jornadas" && this._matchRound!=="all"
-          ? this._matches.filter(m=>String(m.jornada)===this._matchRound)
-          : this._matches;
-        const ordered=[...matches].sort((x,y)=>{
-          const normalize=v=>typeof v==="string" && v.length===10 && v.charAt(2)==="/" && v.charAt(5)==="/"
-            ? v.slice(6)+v.slice(3,5)+v.slice(0,2) : String(v||"");
-          return normalize(x.fecha).localeCompare(normalize(y.fecha));
-        });
-        for (const match of ordered) {
-          const date=[match.fecha,match.hora].filter(v=>typeof v==="string" && v).join(" ");
-          const score=match.marcador && Number.isInteger(match.marcador.local) &&
-            Number.isInteger(match.marcador.visitante)
-            ? match.marcador.local+" – "+match.marcador.visitante : "vs";
-          card.append(this._el("div",
-            (match.jornada!==undefined && match.jornada!==null ? "J"+match.jornada+" · " : "")+
-            (date ? date+" · " : "")+(match.local||"Local")+" "+score+" "+
-            (match.visitante||"Visitante"),"fixture"));
-        }
+      const tabs = this._el("div", undefined, "tabs");
+      for (const [name, label] of [["partidos", "Partidos"], ["clasificacion", "Clasificación"], ["jugadores", "Jugadores"]]) {
+        const button = this._el("button", label);
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(this._detailTab === name));
+        button.addEventListener("click", () => { this._detailTab = name; this._render(); });
+        tabs.append(button);
       }
-      card.append(this._el("h3", "Jugadores"));
-      if (this._error) card.append(this._el("p", this._error, "muted"));
-      else if (!this._roster) card.append(this._el("p", "Consultando el archivo local…", "muted"));
-      else if (!this._roster.length) card.append(this._el("p", "No hay plantilla archivada para este equipo.", "muted"));
-      else {
-        const ul = this._el("ul", undefined, "players");
-        for (const player of this._roster) {
-          if (typeof player?.nombre !== "string") continue;
-          const li = this._el("li");
-          if (typeof player.id === "string" && player.id) {
-            const btn = this._el("button", player.nombre);
-            btn.addEventListener("click",()=>{void this._openPlayer(player);});
-            li.append(btn);
-          } else li.append(this._el("span",player.nombre));
-          if (this._playerId === player.id) {
-            if (this._playerError) li.append(this._el("p",this._playerError,"muted"));
-            else if (!this._playerStats) li.append(this._el("p","Consultando estadísticas archivadas…","muted"));
-            else {
-              const globals = this._playerStats.globales || {};
-              const details = [["puntos_totales","Puntos totales"],["media_puntos","Media puntos"],
-                ["asistencias","Asistencias"],["rebotes","Rebotes"],["valoracion","Valoración"]];
-              const stats = this._el("div",undefined,"player-stats");
-              let shown = 0;
-              for (const [key,label] of details)
-                if (typeof globals[key] === "number" && Number.isFinite(globals[key])) {
-                  stats.append(this._el("p",label+": "+globals[key]));shown++;
-                }
-              if (!shown) stats.append(this._el("p","Sin estadísticas globales archivadas.","muted"));
-              const games=Array.isArray(this._playerStats.partidos) ? this._playerStats.partidos : [];
-              if (games.length) {
-                stats.append(this._el("h4","Estadísticas por partido"));
-                for (const game of games.slice(0,100)) {
-                  const fields=[["puntos","Pts"],["asistencias","Asist."],
-                    ["rebotes","Reb."],["faltas_cometidas","Faltas"],
-                    ["valoracion","Valoración"]];
-                  const values=fields.filter(([key])=>typeof game[key]==="number" &&
-                    Number.isFinite(game[key])).map(([key,label])=>label+": "+game[key]);
-                  const header=[game.fecha,game.rival].filter(v=>typeof v==="string" && v).join(" · ");
-                  stats.append(this._el("div",
-                    (header || "Partido archivado")+(values.length ? " · "+values.join(" · ") : ""),
-                    "player-game"));
-                }
-              }
-              li.append(stats);
+      card.append(tabs);
+      if (this._detailTab === "clasificacion") {
+        card.append(this._rankingTable(ranking));
+      } else if (this._detailTab === "partidos") {
+        if (!this._matches) card.append(this._el("p", this._error || "Consultando el calendario archivado…", "muted"));
+        else if (!this._matches.length) card.append(this._el("p", "No hay partidos archivados identificados para este equipo.", "muted"));
+        else {
+          const rounds = [...new Set(this._matches.map(m => m.jornada)
+            .filter(v => (typeof v === "number" && Number.isInteger(v)) ||
+                         (typeof v === "string" && v.trim())))].map(String);
+          rounds.sort((x,y) => x.localeCompare(y,"es",{numeric:true}));
+          if (rounds.length) {
+            const tabs=this._el("div",undefined,"tabs");
+            for (const [view,label] of [["jornadas","Jornadas"],["fases","Fase completa"]]) {
+              const btn=this._el("button",label);
+              btn.setAttribute("aria-pressed",String(this._matchView===view));
+              btn.addEventListener("click",()=>{this._matchView=view;this._render();});
+              tabs.append(btn);
             }
+            card.append(tabs);
           }
-          ul.append(li);
+          if (this._matchView === "jornadas" && rounds.length) {
+            const select=this._el("select");
+            const all=this._el("option","Todas las jornadas");all.value="all";select.append(all);
+            for (const round of rounds) {
+              const option=this._el("option","Jornada "+round);
+              option.value=round;select.append(option);
+            }
+            select.value=this._matchRound;
+            select.addEventListener("change",event=>{
+              this._matchRound=event.target.value;this._render();
+            });
+            card.append(select);
+          }
+          const matches=this._matchView==="jornadas" && this._matchRound!=="all"
+            ? this._matches.filter(m=>String(m.jornada)===this._matchRound)
+            : this._matches;
+          const ordered=[...matches].sort((x,y)=>{
+            const normalize=v=>typeof v==="string" && v.length===10 && v.charAt(2)==="/" && v.charAt(5)==="/"
+              ? v.slice(6)+v.slice(3,5)+v.slice(0,2) : String(v||"");
+            return normalize(x.fecha).localeCompare(normalize(y.fecha));
+          });
+          for (const match of ordered) {
+            const date=[match.fecha,match.hora].filter(v=>typeof v==="string" && v).join(" ");
+            const score=match.marcador && Number.isInteger(match.marcador.local) &&
+              Number.isInteger(match.marcador.visitante)
+              ? match.marcador.local+" – "+match.marcador.visitante : "vs";
+            const fixture = this._el("div", undefined, "fixture");
+          const context = [match.jornada != null ? "J" + match.jornada : "", date].filter(Boolean).join(" · ");
+          if (context) fixture.append(this._el("div", context, "muted"));
+          for (const [index, name] of [match.local, match.visitante].entries()) {
+            if (index) fixture.append(this._el("span", " " + score + " "));
+            const candidates = typeof name === "string" ? ranking.filter(item => item.equipo?.trim().toLowerCase() === name.trim().toLowerCase()) : [];
+            if (candidates.length === 1) fixture.append(this._teamButton(candidates[0]));
+            else if (typeof name === "string" && name) fixture.append(this._el("span", name));
+          }
+          card.append(fixture);
+          }
         }
-        card.append(ul);
+      } else {
+        if (this._error) card.append(this._el("p", this._error, "muted"));
+        else if (!this._roster) card.append(this._el("p", "Consultando el archivo local…", "muted"));
+        else if (!this._roster.length) card.append(this._el("p", "No hay plantilla archivada para este equipo.", "muted"));
+        else {
+          const ul = this._el("ul", undefined, "players");
+          for (const player of this._roster) {
+            if (typeof player?.nombre !== "string") continue;
+            const li = this._el("li");
+            if (typeof player.id === "string" && player.id) {
+              const btn = this._el("button", player.nombre);
+              btn.addEventListener("click",()=>{void this._openPlayer(player);});
+              li.append(btn);
+            } else li.append(this._el("span",player.nombre));
+            if (this._playerId === player.id) {
+              if (this._playerError) li.append(this._el("p",this._playerError,"muted"));
+              else if (!this._playerStats) li.append(this._el("p","Consultando estadísticas archivadas…","muted"));
+              else {
+                const globals = this._playerStats.globales || {};
+                const details = [["puntos_totales","Puntos totales"],["media_puntos","Media puntos"],
+                  ["asistencias","Asistencias"],["rebotes","Rebotes"],["valoracion","Valoración"]];
+                const stats = this._el("div",undefined,"player-stats");
+                let shown = 0;
+                for (const [key,label] of details)
+                  if (typeof globals[key] === "number" && Number.isFinite(globals[key])) {
+                    stats.append(this._el("p",label+": "+globals[key]));shown++;
+                  }
+                if (!shown) stats.append(this._el("p","Sin estadísticas globales archivadas.","muted"));
+                const games=Array.isArray(this._playerStats.partidos) ? this._playerStats.partidos : [];
+                if (games.length) {
+                  stats.append(this._el("h4","Estadísticas por partido"));
+                  for (const game of games.slice(0,100)) {
+                    const fields=[["puntos","Pts"],["asistencias","Asist."],
+                      ["rebotes","Reb."],["faltas_cometidas","Faltas"],
+                      ["valoracion","Valoración"]];
+                    const values=fields.filter(([key])=>typeof game[key]==="number" &&
+                      Number.isFinite(game[key])).map(([key,label])=>label+": "+game[key]);
+                    const header=[game.fecha,game.rival].filter(v=>typeof v==="string" && v).join(" · ");
+                    stats.append(this._el("div",
+                      (header || "Partido archivado")+(values.length ? " · "+values.join(" · ") : ""),
+                      "player-game"));
+                  }
+                }
+                li.append(stats);
+              }
+            }
+            ul.append(li);
+          }
+          card.append(ul);
+        }
       }
     } else {
       this._teamId = null;
       card.append(this._el("p", "Temporada "+(group.season_id||"FBM")+" · "+[group.phase_name,group.group_name].filter(Boolean).join(" · ")+" · "+ranking.length+" equipos · "+(group.matches??"—")+" partidos", "muted"));
-      const table = this._el("table"), head = this._el("tr");
-      for (const [name,numeric] of [["Pos.",true],["Equipo",false],["PJ",true],["Pts",true]]) {
-        const th = this._el("th",name,numeric?"num":"");head.append(th);
+      for (const [key, label] of [["current", "Jornada actual"], ["last_completed", "Última jornada disputada"], ["next", "Próxima jornada"]]) {
+        const round = group.round_status?.[key];
+        if (round != null) card.append(this._el("p", label + ": " + round, "muted"));
       }
-      const thead = this._el("thead");thead.append(head);table.append(thead);
-      const tbody = this._el("tbody");
-      for (const t of ranking) {
-        const tr = this._el("tr");
-        tr.append(this._el("td",t.posicion??"—","num"));
-        const td = this._el("td");
-        const btn = this._el("button",undefined,"team");
-        const crest = this._verifiedCrest(t.escudo);
-        if (crest) {
-          const img = this._el("img");img.src=crest;img.alt="Escudo de "+t.equipo;
-          img.className="crest";img.loading="lazy";
-          img.addEventListener("error",()=>{
-            img.replaceWith(this._el("span","🏀"));
-          },{once:true});
-          btn.append(img);
-        } else btn.append(this._el("span","🏀"));
-        btn.append(this._el("span",t.equipo||"Equipo"));
-        btn.disabled = !t.id;
-        btn.addEventListener("click",()=>{void this._openTeam(t);});
-        td.append(btn);tr.append(td);
-        tr.append(this._el("td",t.jugados??"—","num"),this._el("td",t.puntos??"—","num"));
-        tbody.append(tr);
-      }
-      table.append(tbody);card.append(table);
+      card.append(this._rankingTable(ranking));
       if (group.standings_at) card.append(this._el("p","Clasificación archivada: "+group.standings_at,"muted"));
     }
     this.shadowRoot.replaceChildren(style,card);
@@ -1653,7 +1728,7 @@ if (!window.customCards.some(card => card.type === "fbm-competition-card"))
 if (!customElements.get("fbm-card")) customElements.define("fbm-card", FBMCard);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === "fbm-card")) {
-  window.customCards.push({ type: "fbm-card", name: "FBM Card", description: "Calendario y clasificación FBM (en desarrollo)" });
+  window.customCards.push({ type: "fbm-card", name: "FBM Card", description: "Busca equipos FBM y consulta partidos, clasificación y jugadores", preview: true });
 }
 
 
