@@ -286,9 +286,8 @@ class FBMCard extends HTMLElement {
     await this._experimentalAction("status");
   }
 
-  async _loadArchivedFixed() {
+  async _loadArchivedFixed(selected = this._restoreExperimentalTeam(this._experimentalState().entry)) {
     const state = this._experimentalState();
-    const selected = this._restoreExperimentalTeam(state.entry);
     if (!state.entry || !selected?.id || !this._hass?.callWS) return false;
     const entryId = state.entry, teamId = selected.id;
     let data;
@@ -519,7 +518,7 @@ class FBMCard extends HTMLElement {
           remoteAttempted = true;
           const data = await this._hass.callWS({ type: "fbm/team/search", ...common, texto: state.query.trim(), skip: 0 });
           state.teams = Array.isArray(data.equipos) ? data.equipos : [];
-          state.selected = ""; state.rounds = null; state.round = ""; state.schedule = null; state.standings = null; state.showGroup = false;
+          state.selected = ""; this._resetTeamData(state);
           state.message = state.teams.length ? "Elige un equipo, categoría y temporada." : "No se han encontrado equipos.";
         } else if (action === "fix_team") {
           const selected = state.teams.find(team => team.id === state.selected);
@@ -618,6 +617,9 @@ class FBMCard extends HTMLElement {
             : "Diagnóstico no disponible: revisa la sesión y vuelve a consultar.";
         } else if (action === "standings") {
           if (!state.selected) throw new Error("Elige un equipo.");
+          const team = state.teams.find(item => item.id === state.selected);
+          if (this._config.tipo_tarjeta !== "equipo" && !state.standings && team &&
+              await this._loadArchivedFixed(team)) return;
           remoteAttempted = true;
           await this._loadStandings(state);
         }
@@ -1030,7 +1032,8 @@ class FBMCard extends HTMLElement {
           consult.type = "button"; consult.disabled = state.busy || !state.selected || !connected;
           consult.addEventListener("click", () => {
             state.showTeamDetail = true;
-            void this._experimentalAction("standings");
+            if (state.standings) this._render();
+            else void this._experimentalAction("standings");
           });
           card.append(consult);
           const current = state.teams.find(team => team.id === state.selected);
@@ -1146,7 +1149,7 @@ class FBMCard extends HTMLElement {
       back.addEventListener("click", () => {
         if (fixed) {
           state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id;
-        } else this._resetTeamData(state);
+        } else state.showTeamDetail = false;
         this._render();
       });
       card.append(back);
@@ -1416,7 +1419,7 @@ class FBMCompetitionCard extends HTMLElement {
 
   _rankingTable(ranking) {
     const table = this._el("table"), head = this._el("tr");
-    for (const [name, numeric] of [["Pos.", true], ["Equipo", false], ["PJ", true], ["Pts", true]]) {
+    for (const [name, numeric] of [["Pos.", true], ["Equipo", false], ["PJ", true], ["G", true], ["P", true], ["Pts", true]]) {
       const th = this._el("th", name, numeric ? "num" : "");
       th.scope = "col"; head.append(th);
     }
@@ -1426,7 +1429,8 @@ class FBMCompetitionCard extends HTMLElement {
       const row = this._el("tr"), name = this._el("td");
       name.append(this._teamButton(team));
       row.append(this._el("td", team.posicion ?? "", "num"), name,
-        this._el("td", team.jugados ?? "", "num"), this._el("td", team.puntos ?? "", "num"));
+        this._el("td", team.jugados ?? "", "num"), this._el("td", team.ganados ?? "", "num"),
+        this._el("td", team.perdidos ?? "", "num"), this._el("td", team.puntos ?? "", "num"));
       tbody.append(row);
     }
     return table;
@@ -1666,6 +1670,10 @@ class FBMCompetitionCard extends HTMLElement {
               btn.addEventListener("click",()=>{void this._openPlayer(player);});
               li.append(btn);
             } else li.append(this._el("span",player.nombre));
+            const summary = [["partidos_jugados", "PJ"], ["puntos_totales", "Pts"], ["media_puntos", "Pts/partido"]]
+              .filter(([key]) => Number.isFinite(player[key]))
+              .map(([key, label]) => label + " " + player[key]);
+            if (summary.length) li.append(this._el("div", summary.join(" · "), "muted"));
             if (this._playerId === player.id) {
               if (this._playerError) li.append(this._el("p",this._playerError,"muted"));
               else if (!this._playerStats) li.append(this._el("p","Consultando estadísticas archivadas…","muted"));
