@@ -15,8 +15,18 @@ sensor_mod.SensorEntity = type("SensorEntity", (), {})
 sys.modules["homeassistant.components.sensor"] = sensor_mod
 core_mod = sys.modules.setdefault("homeassistant.core", types.ModuleType("homeassistant.core"))
 core_mod.HomeAssistant = object
+core_mod.callback = lambda fn: fn
 config_mod = sys.modules.setdefault("homeassistant.config_entries", types.ModuleType("homeassistant.config_entries"))
 config_mod.ConfigEntry = object
+
+dispatcher_mod = sys.modules.setdefault(
+    "homeassistant.helpers.dispatcher",
+    types.ModuleType("homeassistant.helpers.dispatcher"))
+registered=[]
+def connect(hass, signal, callback):
+    registered.append((signal,callback))
+    return lambda: None
+dispatcher_mod.async_dispatcher_connect=connect
 
 pkg_name = "fbm_sensor_test_pkg"
 pkg = types.ModuleType(pkg_name)
@@ -33,6 +43,23 @@ Archive = sys.modules[pkg_name + ".competition_archive"].CompetitionArchive
 
 
 class SensorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_refresh_signal_schedules_entity_update(self):
+        sensor = Sensor.FBMCompetitionsSensor(
+            types.SimpleNamespace(), types.SimpleNamespace(entry_id="entry"))
+        sensor.async_on_remove = lambda unsub: None
+        called=[]
+        sensor.async_schedule_update_ha_state = lambda force: called.append(force)
+        original=Sensor.FBMCompetitionsSensor.__bases__
+        try:
+            # Fake SensorEntity has no lifecycle implementation.
+            sensor.__class__.__bases__[0].async_added_to_hass = AsyncMock()
+            await sensor.async_added_to_hass()
+        finally:
+            delattr(sensor.__class__.__bases__[0], "async_added_to_hass")
+        self.assertEqual(registered[-1][0], "fbm_competitions_refresh_entry")
+        registered[-1][1]()
+        self.assertEqual(called, [True])
+
     async def test_does_not_create_database_or_contact_fbm(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "absent.db")
