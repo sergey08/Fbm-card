@@ -33,6 +33,7 @@ test("competition card shows standings and loads roster on team click",async()=>
   c.setConfig({entity:"sensor.competiciones"});
   c.hass={states:{"sensor.competiciones":{state:"1",attributes:{groups:[{
     season_id:"26/27",phase_id:"phase",group_id:"group",matches:30,
+    round_status:{current:3,last_completed:2,next:4},
     ranking:[{id:"team1",equipo:"Equipo A",posicion:1,jugados:4,puntos:8}]
   }]}}},callWS:async request=>{
     calls.push(request.type);
@@ -46,26 +47,32 @@ test("competition card shows standings and loads roster on team click",async()=>
         partidos:[{fecha:"12/11/2026",rival:"Equipo B",puntos:12,asistencias:2}]}};
     throw Error("Unexpected call");
   }};
+  assert.equal(walk(c.shadowRoot,x=>x.textContent==="Jornada actual: 3").length,1);
+  assert.equal(walk(c.shadowRoot,x=>x.textContent==="Última jornada disputada: 2").length,1);
+  assert.equal(walk(c.shadowRoot,x=>x.textContent==="Próxima jornada: 4").length,1);
   const buttons=walk(c.shadowRoot,x=>x.tagName==="button");
   assert.equal(buttons.length,1);
   buttons[0].listeners.click();
   await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(calls,["fbm/client/entries","fbm/competition/team_roster"]);
   assert.equal(c._roster.length,1);
-  assert.ok(walk(c.shadowRoot,x=>x.textContent==="Jugador de prueba").length);
-  assert.ok(walk(c.shadowRoot,x=>String(x.textContent).includes("Equipo A 44 – 39 Equipo B")).length);
+  assert.ok(walk(c.shadowRoot,x=>x.textContent===" 44 – 39 ").length);
   assert.ok(walk(c.shadowRoot,x=>x.tagName==="option" && x.textContent==="Jornada 3").length);
   const rounds=walk(c.shadowRoot,x=>x.tagName==="select")[0];
   rounds.listeners.change({target:{value:"3"}});
-  assert.ok(walk(c.shadowRoot,x=>String(x.textContent).includes("Equipo A 44 – 39 Equipo B")).length);
-  assert.equal(walk(c.shadowRoot,x=>String(x.textContent).includes("Equipo B vs Equipo A")).length,0);
+  assert.ok(walk(c.shadowRoot,x=>x.textContent===" 44 – 39 ").length);
+  assert.equal(walk(c.shadowRoot,x=>x.textContent===" vs ").length,0);
+  walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Clasificación")[0].listeners.click();
+  assert.ok(walk(c.shadowRoot,x=>x.tagName==="table").length);
+  walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Jugadores")[0].listeners.click();
+  assert.deepEqual(calls,["fbm/client/entries","fbm/competition/team_roster"]);
   const playerButton=walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Jugador de prueba")[0];
   playerButton.listeners.click();
   await new Promise(resolve=>setImmediate(resolve));
-  assert.ok(calls.includes("fbm/competition/team_player_stats"));
+  assert.deepEqual(calls,["fbm/client/entries","fbm/competition/team_roster","fbm/competition/team_player_stats"]);
   assert.ok(walk(c.shadowRoot,x=>x.textContent==="Puntos totales: 22").length);
   assert.ok(walk(c.shadowRoot,x=>String(x.textContent).includes("Pts: 12")).length);
-  const back=walk(c.shadowRoot,x=>x.textContent==="‹ Volver a clasificación")[0];
+  const back=walk(c.shadowRoot,x=>x.textContent==="‹ Volver a la competición")[0];
   back.listeners.click();
   assert.equal(c._teamId,null);
 });
