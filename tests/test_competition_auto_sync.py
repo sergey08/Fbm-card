@@ -15,6 +15,13 @@ pkg=types.ModuleType(PKG)
 pkg.__path__=[str(ROOT)]
 sys.modules[PKG]=pkg
 
+core_name="homeassistant.core"
+core_mod=sys.modules.setdefault(core_name,types.ModuleType(core_name))
+def callback(fn):
+    fn.__ha_callback=True
+    return fn
+core_mod.callback=callback
+
 event_name="homeassistant.helpers.event"
 event_mod=sys.modules.setdefault(event_name,types.ModuleType(event_name))
 listeners=[]
@@ -143,6 +150,24 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(listeners[1]["interval"],mod.PLAYER_INTERVAL)
         await self.updater.async_stop()
         self.assertTrue(all(x["cancelled"] for x in listeners))
+
+    async def test_time_interval_callbacks_are_marked_for_event_loop(self):
+        # HA 2026.11 runs unmarked sync listeners in an executor thread;
+        # hass.async_create_task must only run on the event loop.
+        self.assertTrue(getattr(mod.CompetitionAutoUpdater._group_tick,
+                                "__ha_callback", False))
+        self.assertTrue(getattr(mod.CompetitionAutoUpdater._player_tick,
+                                "__ha_callback", False))
+        await self.updater.async_start(True,True)
+        with patch.object(self.updater,"_run_group",new_callable=AsyncMock) as group:
+            with patch.object(self.updater,"_run_players",new_callable=AsyncMock) as player:
+                listeners[0]["callback"](None)
+                listeners[1]["callback"](None)
+                await asyncio.sleep(0)
+                await asyncio.sleep(0)
+                group.assert_awaited_once()
+                player.assert_awaited_once()
+        await self.updater.async_stop()
 
     async def test_group_tick_targets_only_followed_group_without_roster(self):
         with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
