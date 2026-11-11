@@ -190,5 +190,84 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(config[0][0], "/fbm_static/fbm-card.js")
 
 
+
+class MatchPreviewWebSocketTests(unittest.IsolatedAsyncioTestCase):
+    """Exercise actual archived-match command using an in-memory fake archive."""
+
+    def setUp(self):
+        from custom_components.fbm import websocket as ws
+        self.ws = ws
+        self.archive = MagicMock()
+        self.archive.is_followed.return_value = True
+        self.archive.latest.side_effect = lambda identity, source: {
+            "standings": {"payload": {"clasificacion": [
+                {"equipo": "PINTO", "posicion": 1},
+                {"equipo": "PARLA", "posicion": 2}]},
+                "observed_at": "2026-11-11T12:00:00+00:00"},
+            "fixtures": {"payload": {"partidos": [
+                {"fecha": "14/11/2026", "hora": "14:00:00",
+                 "local": "PARLA", "visitante": "PINTO",
+                 "estado": "scheduled", "jornada": 5,
+                 "campo": "LA CANTUEÑA"}]},
+                "observed_at": "2026-11-11T12:01:00+00:00"}
+        }[source]
+        self.hass = MagicMock()
+        self.hass.data = {"fbm": {"entry": {
+            "cliente_independiente": object(),
+            "competitions_archive_factory": lambda _: self.archive,
+            "competitions_sqlite_path": "unused",
+        }}}
+        self.hass.async_add_executor_job = AsyncMock(
+            side_effect=lambda func, *args: func(*args))
+        self.connection = MagicMock()
+        self.msg = {"id": 7, "entry_id": "entry", "season_id": "26/27",
+                    "phase_id": "phase", "group_id": "group", "equipo": "PINTO"}
+
+    async def test_followed_group_returns_archived_preview(self):
+        await self.ws.ws_competition_match_preview(
+            self.hass, self.connection, self.msg)
+        self.connection.send_error.assert_not_called()
+        self.connection.send_result.assert_called_once()
+        result = self.connection.send_result.call_args.args[1]
+        self.assertEqual(result["rival"], "PARLA")
+        self.assertEqual(result["proximo_partido"]["jornada"], 5)
+        self.assertEqual(result["observed_at"]["fixtures"],
+                         "2026-11-11T12:01:00+00:00")
+
+    async def test_unfollowed_group_is_denied_before_snapshot_read(self):
+        self.archive.is_followed.return_value = False
+        await self.ws.ws_competition_match_preview(
+            self.hass, self.connection, self.msg)
+        self.connection.send_result.assert_not_called()
+        self.connection.send_error.assert_called_once()
+        self.assertEqual(self.archive.latest.call_count, 0)
+
+    async def test_team_outside_group_is_denied(self):
+        self.msg["equipo"] = "UNKNOWN"
+        await self.ws.ws_competition_match_preview(
+            self.hass, self.connection, self.msg)
+        self.connection.send_result.assert_not_called()
+        self.connection.send_error.assert_called_once()
+
+    async def test_missing_snapshot_is_denied(self):
+        self.archive.latest.side_effect = lambda identity, source: None
+        await self.ws.ws_competition_match_preview(
+            self.hass, self.connection, self.msg)
+        self.connection.send_result.assert_not_called()
+        self.connection.send_error.assert_called_once()
+
+    def test_command_retains_admin_decorator(self):
+        # Verify the production source, not the identity mock decorators.
+        import ast
+        source = (PKG / "websocket.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        handler = next(node for node in tree.body
+                       if isinstance(node, ast.AsyncFunctionDef)
+                       and node.name == "ws_competition_match_preview")
+        decorators = [ast.unparse(node) for node in handler.decorator_list]
+        self.assertIn("websocket_api.require_admin", decorators)
+        self.assertIn("websocket_api.async_response", decorators)
+
+
 if __name__ == "__main__":
     unittest.main()
