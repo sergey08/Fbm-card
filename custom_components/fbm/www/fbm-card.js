@@ -44,6 +44,29 @@ function fbmFixtureDateKey(value) {
   return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : value;
 }
 
+function fbmCrestKey(name) {
+  return typeof name === "string" ? name.trim().toUpperCase() : "";
+}
+
+function fbmFixtureCrestRange(matches) {
+  const dates = matches.map(match => fbmFixtureDateKey(match.fecha))
+    .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
+  if (!dates.length) return null;
+  const desde = dates[0];
+  const end = Math.min(Date.parse(dates.at(-1)), Date.parse(desde) + 125 * 86400000);
+  return Number.isFinite(end) ? { desde, hasta: new Date(end).toISOString().slice(0, 10) } : null;
+}
+
+function fbmAddFixtureCrests(view, crests, matches) {
+  for (const match of matches) {
+    for (const side of ["local", "visitante"]) {
+      const name = fbmCrestKey(match[side]);
+      const image = match["img_" + side] || view._apkCrestUrl(match["escudo_" + side]);
+      if (name && image && !crests[name]) crests[name] = image;
+    }
+  }
+}
+
 function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
   const games = view._element("div", "", "fbm-fixture-list");
   const sorted = [...matches].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
@@ -63,7 +86,7 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
         box.type = "button";
         box.addEventListener("click", () => view._openTeam(team));
       }
-      image ||= (crests && Object.hasOwn(crests, name) ? crests[name] : null) || team?.escudo;
+      image ||= (crests && Object.hasOwn(crests, name) ? crests[name] : null) || crests?.[fbmCrestKey(name)] || team?.escudo;
       if (typeof image === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(image) || view._officialLogoUrl(image))) {
         const img = document.createElement("img"); img.src = image;
         img.className = "fbm-fixture-logo"; img.alt = "Escudo de " + name;
@@ -540,6 +563,43 @@ class FBMCard extends HTMLElement {
     }
   }
 
+  _fixedFixtureCrests(state, team) {
+    const crests = Object.assign(Object.create(null), state.fixtureCrests);
+    for (const [name, image] of Object.entries(state.schedule?.escudos || {}))
+      crests[fbmCrestKey(name)] ||= image;
+    fbmAddFixtureCrests(this, crests, state.schedule?.partidos || []);
+    for (const row of state.standings || []) {
+      if (row.equipo && row.escudo)
+        crests[fbmCrestKey(row.equipo)] ||= this._officialLogoUrl(row.escudo) || this._apkCrestUrl(row.escudo);
+    }
+    const logo = this._fixedCrestCandidates(state, team)[0];
+    if (logo) crests[fbmCrestKey(team.nombre)] ||= logo;
+    return crests;
+  }
+
+  async _loadFixedFixtureCrests(state, team) {
+    if (state.fixtureCrestLookup || !state.archivedData || !state.status?.sesion_vigente) return;
+    const matches = state.schedule?.partidos || [];
+    const crests = this._fixedFixtureCrests(state, team);
+    if (!matches.some(match => [match.local, match.visitante].some(name => name && !crests[fbmCrestKey(name)]))) return;
+    const range = fbmFixtureCrestRange(matches);
+    if (!range) return;
+    state.fixtureCrestLookup = true;
+    const entryId = state.entry;
+    try {
+      const data = await this._hass.callWS({
+        type: "fbm/team/schedule", entry_id: entryId, equipo: team.id, ...range
+      });
+      if (this._experimental !== state || state.entry !== entryId ||
+          state.selected !== team.id || !Array.isArray(data?.partidos)) return;
+      state.fixtureCrests = Object.create(null);
+      fbmAddFixtureCrests(this, state.fixtureCrests, data.partidos);
+      this._render();
+    } catch (_) {
+      if (this._experimental === state && state.selected === team.id) state.fixtureCrestLookup = false;
+    }
+  }
+
   async _initializeFixed() {
     if (this._fixedInit || !this._hass?.callWS || this._config?.tipo_tarjeta !== "equipo") return;
     this._fixedInit = true;
@@ -876,7 +936,7 @@ class FBMCard extends HTMLElement {
   _resetTeamData(state) {
     Object.assign(state, {
       archivedData: false, lastArchiveCheck: 0, schedule: null, standings: null,
-      recoveredCrest: "", crestLookup: false,
+      recoveredCrest: "", crestLookup: false, fixtureCrests: null, fixtureCrestLookup: false,
       players: null, playerDetail: null, playerStats: null, photoDiagnostic: null,
       lastStandingsUpdate: 0, lastPlayersUpdate: 0, lastScheduleUpdate: 0,
       rounds: null, round: "", phaseName: "", matchRound: "all", showGroup: false,
@@ -965,8 +1025,10 @@ class FBMCard extends HTMLElement {
             if (!connected || !pinned?.id || state.busy) return;
             if (name === "clasificacion" && !Array.isArray(state.standings))
               void this._experimentalAction("standings");
-            if (name === "partidos" && !this._fixedMatchesAvailable(state, pinned.id))
-              void this._experimentalAction("fixed_schedule");
+            if (name === "partidos") {
+              if (!this._fixedMatchesAvailable(state, pinned.id)) void this._experimentalAction("fixed_schedule");
+              else if (state.partidosTab === "jornadas") void this._loadFixedFixtureCrests(state, pinned);
+            }
             if (name === "jugadores") {
               const cached = state.playersEntryId === state.entry &&
                 state.playersTeamId === pinned.id && Array.isArray(state.players);
@@ -991,6 +1053,7 @@ class FBMCard extends HTMLElement {
               state.partidosTab = name; this._render();
               if (connected && !this._fixedMatchesAvailable(state, pinned.id))
                 this._experimentalAction("fixed_schedule");
+              else if (name === "jornadas") void this._loadFixedFixtureCrests(state, pinned);
             });
             subtabs.append(sub);
           }
@@ -1027,6 +1090,7 @@ class FBMCard extends HTMLElement {
               const jump = this._element("button", "Ver enfrentamientos por jornada", "fbm-action");
               jump.type = "button"; jump.addEventListener("click", () => {
                 state.partidosTab = "jornadas"; this._render();
+                void this._loadFixedFixtureCrests(state, pinned);
               }); card.append(jump);
             } else {
               const roundSelector = this._element("label", "Seleccionar jornada");
@@ -1057,7 +1121,8 @@ class FBMCard extends HTMLElement {
               card.append(this._element("p", filtered.length + (state.showGroup ?
                 " enfrentamientos del grupo" : " partidos de tu equipo"), "fbm-section-subtitle"));
               if (!filtered.length) card.append(this._element("p", "FBM no devuelve partidos en esta jornada.", "fbm-player-caption"));
-              renderFBMFixtures(this, card, filtered);
+              const crests = this._fixedFixtureCrests(state, pinned);
+              renderFBMFixtures(this, card, filtered, undefined, crests);
             }
           }
         }
@@ -1580,17 +1645,11 @@ class FBMCompetitionCard extends HTMLElement {
     const known = new Map(ranking.map(team => [team.equipo, this._verifiedCrest(team.escudo)]));
     const names = new Set(this._matches.flatMap(match => [match.local, match.visitante]).filter(Boolean));
     if (![...names].some(name => !known.get(name) && !Object.hasOwn(this._fixtureCrests || {}, name))) return;
-    const dates = this._matches.map(match => fbmFixtureDateKey(match.fecha))
-      .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
-    if (!dates.length) return;
-    const desde = dates[0];
-    const last = Date.parse(dates[dates.length - 1]);
-    const limit = Date.parse(desde) + 125 * 86400000;
-    if (!Number.isFinite(last) || !Number.isFinite(limit)) return;
-    const hasta = new Date(Math.min(last, limit)).toISOString().slice(0, 10);
+    const range = fbmFixtureCrestRange(this._matches);
+    if (!range) return;
     try {
       const data = await this._hass.callWS({
-        type: "fbm/team/schedule", entry_id: this._entryId, equipo: this._teamId, desde, hasta
+        type: "fbm/team/schedule", entry_id: this._entryId, equipo: this._teamId, ...range
       });
       if (this._teamRequest !== request || !Array.isArray(data?.partidos)) return;
       const crests = Object.assign(Object.create(null), this._fixtureCrests);
