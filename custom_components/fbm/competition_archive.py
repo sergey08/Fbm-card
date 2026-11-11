@@ -62,6 +62,7 @@ class CompetitionArchive:
                     team_name TEXT NOT NULL DEFAULT '',
                     phase_name TEXT NOT NULL DEFAULT '',
                     group_name TEXT NOT NULL DEFAULT '',
+                    competition_name TEXT NOT NULL DEFAULT '',
                     PRIMARY KEY (season, phase, group_id)
                 );
                 CREATE TABLE IF NOT EXISTS snapshots (
@@ -87,7 +88,7 @@ class CompetitionArchive:
                 db.execute(
                     "ALTER TABLE competitions ADD COLUMN anchor_team_id TEXT NOT NULL DEFAULT ''"
                 )
-            for label in ("team_name", "phase_name", "group_name"):
+            for label in ("team_name", "phase_name", "group_name", "competition_name"):
                 if label not in columns:
                     db.execute(
                         f"ALTER TABLE competitions ADD COLUMN {label} TEXT NOT NULL DEFAULT ''"
@@ -115,7 +116,7 @@ class CompetitionArchive:
                 or (anchor_team_id and not anchor_team_id.strip())):
             raise ValueError("Equipo de referencia inválido")
         labels = []
-        for field in ("team_name", "phase_name", "group_name"):
+        for field in ("team_name", "phase_name", "group_name", "competition_name"):
             label = (display or {}).get(field, "")
             if type(label) is not str or len(label) > 120:
                 raise ValueError("Nombre visible inválido")
@@ -124,8 +125,8 @@ class CompetitionArchive:
             db.execute(
                 """INSERT INTO competitions
                    (season, phase, group_id, followed, anchor_team_id,
-                    team_name, phase_name, group_name)
-                   VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+                    team_name, phase_name, group_name, competition_name)
+                   VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)
                    ON CONFLICT(season,phase,group_id) DO UPDATE SET
                       followed=1,
                       anchor_team_id=CASE WHEN excluded.anchor_team_id <> ''
@@ -135,7 +136,9 @@ class CompetitionArchive:
                       phase_name=CASE WHEN excluded.phase_name <> ''
                         THEN excluded.phase_name ELSE competitions.phase_name END,
                       group_name=CASE WHEN excluded.group_name <> ''
-                        THEN excluded.group_name ELSE competitions.group_name END""",
+                        THEN excluded.group_name ELSE competitions.group_name END,
+                      competition_name=CASE WHEN excluded.competition_name <> ''
+                        THEN excluded.competition_name ELSE competitions.competition_name END""",
                 (*key, anchor_team_id, *labels),
             )
         return key
@@ -145,15 +148,16 @@ class CompetitionArchive:
         with self._db() as db:
             rows = db.execute(
                 """SELECT season,phase,group_id,anchor_team_id,
-                          team_name,phase_name,group_name
+                          team_name,phase_name,group_name,competition_name
                    FROM competitions WHERE followed=1
                    ORDER BY season,phase,group_id"""
             ).fetchall()
         return [
             {"season_id": season, "phase_id": phase, "group_id": group,
              "anchor_team_id": anchor, "team_name": team,
-             "phase_name": phase_label, "group_name": group_label}
-            for season,phase,group,anchor,team,phase_label,group_label in rows
+             "phase_name": phase_label, "group_name": group_label,
+             "competition_name": competition_label}
+            for season,phase,group,anchor,team,phase_label,group_label,competition_label in rows
         ]
 
     def update_display(self, identity: dict, display: dict):
@@ -162,7 +166,7 @@ class CompetitionArchive:
         if type(display) is not dict:
             raise ValueError("Etiquetas inválidas")
         labels = []
-        for field in ("team_name", "phase_name", "group_name"):
+        for field in ("team_name", "phase_name", "group_name", "competition_name"):
             value = display.get(field, "")
             if type(value) is not str or len(value) > 120:
                 raise ValueError("Etiqueta inválida")
@@ -172,10 +176,10 @@ class CompetitionArchive:
                 """UPDATE competitions SET
                    team_name=CASE WHEN ?<>'' THEN ? ELSE team_name END,
                    phase_name=CASE WHEN ?<>'' THEN ? ELSE phase_name END,
-                   group_name=CASE WHEN ?<>'' THEN ? ELSE group_name END
+                   group_name=CASE WHEN ?<>'' THEN ? ELSE group_name END,
+                   competition_name=CASE WHEN ?<>'' THEN ? ELSE competition_name END
                    WHERE season=? AND phase=? AND group_id=? AND followed=1""",
-                (labels[0], labels[0], labels[1], labels[1], labels[2], labels[2],
-                 *key),
+                (*(value for label in labels for value in (label, label)), *key),
             )
 
     def selected_for_team(self, team_id: str, phase_id: str, group_id: str):
@@ -302,6 +306,12 @@ class CompetitionArchive:
                 crest = _official_team_crest(row.get("escudo"))
                 if crest:
                     item["escudo"] = crest
+            elif source == "fixtures":
+                for side in ("local", "visitante"):
+                    crest = (_official_team_crest(row.get(f"img_{side}"))
+                             or _official_team_crest(row.get(f"escudo_{side}")))
+                    if crest:
+                        item[f"img_{side}"] = crest
             clean.append(item)
         payload = {output_key: clean}
         encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
