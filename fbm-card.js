@@ -44,7 +44,7 @@ function fbmFixtureDateKey(value) {
   return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : value;
 }
 
-function renderFBMFixtures(view, card, matches, resolveTeam) {
+function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
   const games = view._element("div", "", "fbm-fixture-list");
   const sorted = [...matches].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
     fbmFixtureDateKey(a.fecha).localeCompare(fbmFixtureDateKey(b.fecha)) ||
@@ -63,7 +63,7 @@ function renderFBMFixtures(view, card, matches, resolveTeam) {
         box.type = "button";
         box.addEventListener("click", () => view._openTeam(team));
       }
-      image ||= team?.escudo;
+      image ||= (crests && Object.hasOwn(crests, name) ? crests[name] : null) || team?.escudo;
       if (typeof image === "string" && (/^data:image\/(png|jpeg|webp);base64,/.test(image) || view._officialLogoUrl(image))) {
         const img = document.createElement("img"); img.src = image;
         img.className = "fbm-fixture-logo"; img.alt = "Escudo de " + name;
@@ -1499,6 +1499,7 @@ class FBMCompetitionCard extends HTMLElement {
       this._entryId = entries.entries[0];
       this._roster = data.jugadores;
       this._matches = Array.isArray(data.partidos) ? data.partidos : [];
+      this._fixtureCrests = data.escudos;
     } catch (_) {
       if (this._teamRequest === request)
         this._error = "No se ha podido leer la plantilla archivada; no se hará una descarga adicional.";
@@ -1664,7 +1665,7 @@ class FBMCompetitionCard extends HTMLElement {
             const candidates = ranking.filter(item =>
               item.equipo?.trim().toLowerCase() === name.trim().toLowerCase());
             return candidates.length === 1 ? candidates[0] : null;
-          });
+          }, this._fixtureCrests);
         }
       } else {
         if (this._error) card.append(this._el("p", this._error, "muted"));
