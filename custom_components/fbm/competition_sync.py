@@ -82,6 +82,38 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     if type(fixtures) is not dict or type(fixtures.get("partidos")) is not list:
         raise ValueError("Calendario oficial no válido")
 
+    # Opt-in incremental mode: new officially finished matches imply that
+    # rosters may have changed. Only then load all team rosters again.
+    # Missing initial rosters are also backfilled; no player stats are fetched
+    # here and no unselected competition can be enrolled.
+    fixture_results_changed = False
+    if fetch_rosters == "on_change":
+        previous = await asyncio.to_thread(
+            archive.latest, group, "fixtures")
+        def finished_scores(document):
+            rows = (document or {}).get("partidos", [])
+            return {
+                item["id"]: (item["marcador"]["local"],
+                             item["marcador"]["visitante"])
+                for item in rows if type(item) is dict
+                and type(item.get("id")) is str
+                and item.get("estado") == "finished"
+                and type(item.get("marcador")) is dict
+                and type(item["marcador"].get("local")) is int
+                and type(item["marcador"].get("visitante")) is int
+            }
+        old = finished_scores((previous or {}).get("payload"))
+        new = finished_scores(fixtures)
+        fixture_results_changed = old != new
+        missing_roster = any(
+            not await asyncio.to_thread(
+                archive.latest, group, "roster", tid)
+            for tid in team_ids
+        )
+        fetch_rosters = fixture_results_changed or missing_roster
+    elif type(fetch_rosters) is not bool:
+        raise ValueError("Modo de plantillas no válido")
+
     # Fetch rosters sequentially, not concurrently, and keep a simple delay.
     # This limits pressure on the unofficial access to FBM.
     rosters = {}
@@ -151,6 +183,7 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         "rosters_saved": len(rosters), "roster_errors": len(failed_rosters),
         "failed_roster_names": [name for name in failed_rosters if name],
         "records_written": sum(bool(v) for v in results.values()),
+        "fixture_results_changed": fixture_results_changed,
         "competition": {k: group[k] for k in ("season_id", "phase_id", "group_id")},
     }
 
