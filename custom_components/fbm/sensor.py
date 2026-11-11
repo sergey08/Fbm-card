@@ -81,14 +81,17 @@ def _read_competition_summary(path: str) -> dict:
     uri = "file:" + quote(str(Path(path).resolve()), safe="/") + "?mode=ro"
     today = datetime.now(ZoneInfo("Europe/Madrid")).date()
     with sqlite3.connect(uri, uri=True) as db:
+        columns = {row[1] for row in db.execute("PRAGMA table_info(competitions)")}
+        competition = "competition_name" if "competition_name" in columns else "''"
         groups = db.execute(
-            """SELECT season, phase, group_id, phase_name, group_name FROM competitions
+            f"""SELECT season, phase, group_id, phase_name, group_name,
+                       team_name, {competition} FROM competitions
                WHERE followed=1 ORDER BY season, phase, group_id LIMIT 51"""
         ).fetchall()
         if len(groups) > 50:
             raise ValueError("Demasiadas competiciones seguidas")
         result = []
-        for season, phase, group_id, phase_name, group_name in groups:
+        for season, phase, group_id, phase_name, group_name, team_name, competition_name in groups:
             snapshots = []
             for source in ("standings", "fixtures"):
                 record = db.execute(
@@ -139,6 +142,7 @@ def _read_competition_summary(path: str) -> dict:
             result.append({
                 "season_id": season, "phase_id": phase, "group_id": group_id,
                 "phase_name": phase_name, "group_name": group_name,
+                "team_name": team_name, "competition_name": competition_name,
                 "teams": count_teams, "matches": count_matches,
                 "standings_at": standings[0] if standings else None,
                 "fixtures_at": fixtures[0] if fixtures else None,
