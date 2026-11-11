@@ -79,3 +79,29 @@ test("fixed card uses official crest URLs and archived fixture images", () => {
   assert.equal(urls[0],"https://fbm.es/crest.png");
   assert.equal(urls[1],"data:image/png;base64,AA==");
 });
+
+test("archived matchdays load only missing crests and preserve archived scores", async () => {
+  const card = new Card();
+  card._config = {};
+  card._render = () => {};
+  const state = card._experimentalState();
+  const team = {id:"A",nombre:"Equipo A",escudo:"OWN"};
+  const schedule = {partidos:[{local:"Equipo A",visitante:"Equipo B",fecha:"11/11/2026",
+    marcador:{local:30,visitante:20}}]};
+  Object.assign(state,{entry:"fbm",selected:"A",status:{sesion_vigente:true},archivedData:true,schedule});
+  let calls = 0;
+  card._hass = {callWS: async request => {
+    calls++;
+    assert.equal(request.type,"fbm/team/schedule");
+    assert.equal(request.desde,"2026-11-11");
+    return {partidos:[{local:" equipo b ",escudo_local:"AB".repeat(384)}]};
+  }};
+  await card._loadFixedFixtureCrests(state, team);
+  const crests = card._fixedFixtureCrests(state,team);
+  assert.ok(crests["EQUIPO A"].endsWith("OWN"));
+  assert.ok(crests["EQUIPO B"].endsWith("AB".repeat(384)));
+  assert.equal(state.schedule,schedule);
+  assert.equal(state.schedule.partidos[0].marcador.local,30);
+  await card._loadFixedFixtureCrests(state, team);
+  assert.equal(calls,1);
+});
