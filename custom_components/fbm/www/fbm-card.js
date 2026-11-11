@@ -77,7 +77,7 @@ class FBMCard extends HTMLElement {
   getCardSize() { return 5; }
   static getStubConfig() {
     return {
-      type: "custom:fbm-card", title: "Buscar equipos FBM",
+      type: "custom:fbm-card", title: "FBM Card", equipos: [],
       modo_experimental: true, tipo_tarjeta: "busqueda"
     };
   }
@@ -675,6 +675,8 @@ class FBMCard extends HTMLElement {
       button("Reintentar conexión", "status", !!this._hass?.callWS);
     if (state.status) {
       const connected = state.status.sesion_vigente === true;
+      if (!connected && state.status.sesion_en_memoria)
+        card.append(this._element("p", "La sesión de FBM necesita reconexión.", "muted"));
       if (state.status.registro_pendiente) card.append(this._element("p", "Hay un registro pendiente o incierto. No se reintentará hasta que se recupere de forma segura.", "muted"));
       if (!state.status.identidad_creada) button("Crear identidad local", "create", true);
       if (!connected && (state.status.candidato_guardado || state.status.identidad_creada)) input("Versión del perfil Android", "release");
@@ -1143,9 +1145,8 @@ class FBMCard extends HTMLElement {
     const fixed = this._config.tipo_tarjeta === "equipo";
     const pinned = fixed && this._restoreExperimentalTeam(state.entry);
     if ((pinned && !state.editFixed && this._config.id_tarjeta) || (!fixed && state.showTeamDetail)) {
-      const back = this._element("button", fixed ? "Cambiar equipo" : "Volver a la búsqueda");
+      const back = this._element("button", fixed ? "Cambiar equipo" : "Volver a la búsqueda", "fbm-action");
       back.type = "button"; back.disabled = state.busy;
-      back.style.fontSize = "0.85em";
       back.addEventListener("click", () => {
         if (fixed) {
           state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id;
