@@ -144,7 +144,7 @@ async def run():
         assert followed["type"] == "create_entry", followed
         assert Archive(str(db)).followed_with_anchor()[0]["anchor_team_id"] == "pinto"
         assert "schedule" in client.calls
-        assert "roster" not in client.calls
+        assert client.calls.count("roster") == 2
 
         settings = await flow.async_step_automatic()
         assert settings["step_id"] == "automatic"
@@ -167,6 +167,7 @@ async def run():
         assert scheduler.PLAYER_INTERVAL.total_seconds() == 2 * 3600
         assert scheduler.PLAYER_CYCLE_DELAY.total_seconds() == 24 * 3600
 
+        client.calls.clear()
         offered = await flow.async_step_refresh()
         assert offered["step_id"] == "refresh", offered
         choice = await flow.async_step_refresh({"competicion": "0"})
