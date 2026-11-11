@@ -35,7 +35,7 @@
       },
       "confirm": {
         "title": "Seguir competición completa",
-        "description": "Equipo: {team}. Grupo oficial: {group}. La selección no descarga automáticamente plantillas.",
+        "description": "Equipo: {team}. Grupo oficial: {group}. Al confirmar se descargan la clasificación, los partidos y las plantillas de todos los equipos.",
         "data": {
           "confirmar": "Confirmo que deseo seguir esta competición"
         }
@@ -87,6 +87,8 @@
       "season_unverified": "Temporada todavía no verificada; no se guardan datos",
       "not_followed": "La competición ya no está seguida",
       "competition_changed": "La fase, el grupo o la temporada han cambiado. Selecciona la nueva competición desde el buscador.",
+      "rosters_pending": "Se guardaron la clasificación, los partidos y las plantillas disponibles. Quedan plantillas pendientes. Confirma de nuevo para reintentar.",
+      "rosters_pending_named": "Se guardaron la clasificación, los partidos y las plantillas disponibles. Plantillas pendientes: {pending_rosters}. Confirma de nuevo para reintentar.",
       "cannot_refresh": "No se pudo actualizar la competición",
       "auto_requires_groups": "Para actualizar jugadores, activa también la actualización de resultados."
     },
