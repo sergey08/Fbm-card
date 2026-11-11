@@ -5,6 +5,8 @@ on:
       - beta/0.2.2b9
     paths:
       - ".github/workflows/publish-0.2.2b9.yml"
+      - "custom_components/fbm/competition_auto_sync.py"
+      - "tests/test_competition_auto_sync.py"
   workflow_dispatch:
 permissions:
   contents: write
