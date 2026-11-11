@@ -158,21 +158,40 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                 step_id="confirm", errors={"base": "season_unverified"},
                 description_placeholders={"team": candidate["name"], "group": "Temporada no verificada"},
                 data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}))
+        errors = {}
         if user_input is not None and user_input.get("confirmar") is True:
+            from datetime import date, timedelta
+            from homeassistant.helpers.dispatcher import async_dispatcher_send
+            from .competition_sync import sync_group
+
             entry = self._entry()
+            identity = group_selection(data)
             archive = await self.hass.async_add_executor_job(
                 entry["competitions_archive_factory"],
                 entry["competitions_sqlite_path"])
             await self.hass.async_add_executor_job(
-                archive.follow, group_selection(data), candidate["team_id"],
+                archive.follow, identity, candidate["team_id"],
                 {"team_name": candidate["name"],
                  "competition_name": (candidate.get("category") or "")[:120],
                  "phase_name": data.get("phase_name", ""),
                  "group_name": data.get("group_name", "")})
-            # This selects a group. It does not automatically download rosters.
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+            today = date.today()
+            try:
+                result = await sync_group(
+                    entry["cliente_independiente"], archive, candidate["team_id"],
+                    today - timedelta(days=45), today + timedelta(days=60),
+                    fetch_rosters=False, expected_competition=identity)
+                if result.get("saved"):
+                    return self.async_create_entry(title="", data=dict(self.config_entry.options))
+                errors["base"] = result.get("status", "cannot_refresh")
+            except Exception:
+                errors["base"] = "cannot_refresh"
+            finally:
+                async_dispatcher_send(
+                    self.hass, f"fbm_competitions_refresh_{self.config_entry.entry_id}")
+
         return self.async_show_form(
-            step_id="confirm",
+            step_id="confirm", errors=errors,
             data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}),
             description_placeholders={
                 "team": candidate["name"],
