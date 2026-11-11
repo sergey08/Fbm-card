@@ -18,7 +18,7 @@ from .competition_sync import sync_group
 from .competition_player_stats import sync_player_stats_batch
 
 GROUP_INTERVAL = timedelta(hours=4)
-PLAYER_INTERVAL = timedelta(hours=2)
+PLAYER_INTERVAL = timedelta(minutes=30)
 PLAYER_CYCLE_DELAY = timedelta(hours=24)
 
 
@@ -170,7 +170,7 @@ class CompetitionAutoUpdater:
             response = await sync_group(
                 self.client, archive, group["anchor_team_id"],
                 now - timedelta(days=45), now + timedelta(days=60),
-                fetch_rosters=False,
+                fetch_rosters="on_change",
                 expected_competition={k: group[k] for k in
                                       ("season_id", "phase_id", "group_id")})
             status = response.get("status") if isinstance(response, dict) else None
@@ -245,5 +245,8 @@ class CompetitionAutoUpdater:
         else:
             cursor = {"group_index": 0, "team_index": 0, "offset": 0,
                       "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
+        # The bounded cursor advances across all followed groups; unchanged
+        # player records are skipped by sync_player_stats_batch.  This lowers
+        # the cost of a 30-minute pass while preserving the 5-player cap.
         await self._save_state({"players": cursor})
         await self._mark("players", response["status"])
