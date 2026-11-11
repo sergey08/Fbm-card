@@ -199,6 +199,9 @@ class FBMCompetitionsSensor(SensorEntity):
         auto_groups, auto_players = entry.get("auto_sync_flags", (False, False))
         updater = entry.get("auto_updater")
         health = updater.health if updater is not None else {}
+        checked = updater.group_checked_at if updater is not None else {}
+        for group in summary["groups"]:
+            group["last_checked_at"] = checked.get(group["group_id"])
         self._attr_extra_state_attributes = {
             "groups": summary["groups"],
             "automatic_refresh": {
