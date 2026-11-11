@@ -2,12 +2,19 @@
 import asyncio
 import importlib.util
 from pathlib import Path
+import sys
 import tempfile
+import types
 import unittest
 
 ROOT=Path(__file__).resolve().parents[1]/"custom_components"/"fbm"
+PACKAGE = "fbm_stats_test_pkg"
+package = types.ModuleType(PACKAGE)
+package.__path__ = [str(ROOT)]
+sys.modules[PACKAGE] = package
+
 def load(name):
-    spec=importlib.util.spec_from_file_location("test_stats_"+name,ROOT/(name+".py"))
+    spec=importlib.util.spec_from_file_location(PACKAGE + "." + name,ROOT/(name+".py"))
     mod=importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
