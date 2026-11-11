@@ -189,6 +189,8 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
 
 /* FBM Card DEV — presentación de datos; fuente oficial pendiente de validar. */
 class FBMCard extends HTMLElement {
+  static getConfigElement() { return document.createElement("fbm-card-editor"); }
+
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Configuración inválida");
     const priorTeam = this._config?.equipo_fijo?.id;
@@ -1364,6 +1366,8 @@ class FBMCard extends HTMLElement {
 // Individual player rosters are fetched only on explicit team selection, from
 // an admin-only local SQLite archive endpoint, never from the remote FBM API.
 class FBMCompetitionCard extends HTMLElement {
+  static getConfigElement() { return document.createElement("fbm-competition-card-editor"); }
+
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("Configuración inválida");
     this._config = { title: "Competición FBM", entity: "sensor.competiciones",
@@ -1793,6 +1797,264 @@ class FBMCompetitionCard extends HTMLElement {
     this.shadowRoot.replaceChildren(style,card);
   }
 }
+class FBMCardEditor extends HTMLElement {
+  setConfig(config) {
+    if (JSON.stringify(config) === JSON.stringify(this._config)) return;
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    const groups = this._groups();
+    if (JSON.stringify(groups) !== this._groupsSignature) this._render();
+  }
+
+  _groups() {
+    if (!this._config || !this._competition) return [];
+    const groups = this._hass?.states?.[this._config.entity || "sensor.competiciones"]?.attributes?.groups;
+    return Array.isArray(groups) ? groups : [];
+  }
+
+  _update(patch, redraw = false) {
+    const config = { ...this._config, ...patch };
+    for (const key of Object.keys(patch)) {
+      if (patch[key] === undefined) delete config[key];
+    }
+    this._config = config;
+    if (redraw) this._render();
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config }, bubbles: true, composed: true
+    }));
+  }
+
+  _field(parent, label, value, onChange, { type = "text", options, min, max, placeholder, pattern, required } = {}) {
+    const field = document.createElement("label");
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    field.append(caption);
+    const control = document.createElement(options ? "select" : "input");
+    if (options) {
+      for (const [key, title] of options) {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = title;
+        control.append(option);
+      }
+    } else {
+      control.type = type;
+      if (min !== undefined) control.min = min;
+      if (max !== undefined) control.max = max;
+      if (placeholder) control.placeholder = placeholder;
+      if (pattern) control.pattern = pattern;
+      if (required) control.required = true;
+    }
+    if (type === "checkbox") {
+      field.className = "toggle";
+      control.checked = value === true;
+    } else control.value = value ?? "";
+    control.addEventListener("change", () => {
+      if ((type === "number" && !control.value) || (control.checkValidity && !control.checkValidity())) {
+        control.reportValidity?.();
+        return;
+      }
+      onChange(type === "checkbox" ? control.checked : control.value);
+    });
+    field.append(control);
+    parent.append(field);
+  }
+
+  _render() {
+    const config = this._config;
+    if (!config) return;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    const advancedOpen = this.shadowRoot.querySelector?.("details")?.open;
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { display: block; color: var(--primary-text-color); }
+      label { display: grid; gap: 6px; margin: 0 0 16px; font-weight: 500; }
+      input:not([type=checkbox]), select {
+        width: 100%; min-height: 40px; box-sizing: border-box; padding: 8px 10px;
+        border: 1px solid var(--divider-color, #ccc); border-radius: 8px;
+        background: var(--card-background-color, #fff); color: inherit; font: inherit;
+      }
+      input:focus-visible, select:focus-visible, summary:focus-visible, button:focus-visible {
+        outline: 2px solid var(--primary-color); outline-offset: 2px;
+      }
+      input[type=checkbox] { accent-color: var(--primary-color); }
+      .toggle { display: flex; align-items: center; justify-content: space-between; }
+      details { margin-top: 12px; }
+      summary { cursor: pointer; margin-bottom: 12px; font-weight: 600; }
+      p { margin: 0 0 16px; color: var(--secondary-text-color); }
+      fieldset { border: 1px solid var(--divider-color); border-radius: 8px; margin: 0 0 12px; }
+      button { cursor: pointer; padding: 7px 10px; border: 1px solid var(--divider-color);
+        border-radius: 6px; background: var(--card-background-color, #fff); color: inherit; font: inherit; }
+    `;
+    const form = document.createElement("div");
+    const edit = (parent, label, key, options = {}) =>
+      this._field(parent, label, config[key] ?? options.default, value =>
+        this._update({ [key]: value === "" ? undefined : value }, options.redraw), options);
+    edit(form, "Título", "title");
+    const groups = this._groups();
+    this._groupsSignature = JSON.stringify(groups);
+    if (this._competition) {
+      edit(form, "Sensor de competiciones", "entity", {
+        default: "sensor.competiciones", redraw: true, pattern: "sensor\\.[a-z0-9_]+"
+      });
+      const index = config.group_index ?? 0;
+      const options = groups.map((group, position) => [String(position),
+        [group.competition_name || group.team_name || "Competición " + (position + 1),
+          group.group_name, group.season_id].filter(Boolean).join(" · ")]);
+      if (options.length && !options.some(([value]) => Number(value) === index))
+        options.push([String(index), "Grupo " + (index + 1) + " (sin datos)"]);
+      this._field(form, "Competición inicial", options.length ? String(index) : index + 1,
+        value => this._update({ group_index: Number(value) - (options.length ? 0 : 1) }),
+        options.length ? { options } : { type: "number", min: 1, max: 50 });
+    } else {
+      const mode = config.modo_experimental === true ? config.tipo_tarjeta || "busqueda" : "entidades";
+      this._field(form, "Tipo de tarjeta", mode, value => {
+        const patch = { modo_experimental: value !== "entidades" };
+        if (value !== "entidades") patch.tipo_tarjeta = value;
+        if (value === "equipo" && !config.id_tarjeta && !config.equipo_fijo) {
+          const suffix = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+          patch.id_tarjeta = "fbm-equipo-" + suffix;
+        }
+        this._update(patch, true);
+      }, { options: [["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"],
+        ["entidades", "Equipos de entidades de Home Assistant"]] });
+
+      if (mode === "equipo") {
+        const hint = document.createElement("p");
+        hint.textContent = config.equipo_fijo?.nombre
+          ? "Equipo configurado: " + config.equipo_fijo.nombre
+          : "Después de guardar, elige el equipo desde la tarjeta.";
+        form.append(hint);
+        this._teamSearch(form);
+        edit(form, "URL del escudo", "logo_equipo", { placeholder: "https://…" });
+      }
+      if (mode === "entidades") {
+        edit(form, "Nombre del equipo", "equipo");
+        edit(form, "Entidad de datos", "entidad_datos");
+        edit(form, "Detectar entidades de FBM", "descubrir_entidades", { type: "checkbox" });
+        this._editTeams(form, config.equipos);
+        edit(form, "URL de la competición", "url_oficial", { placeholder: "https://…" });
+      }
+      const advanced = document.createElement("details");
+      advanced.open = !!advancedOpen;
+      const summary = document.createElement("summary");
+      summary.textContent = "Opciones avanzadas";
+      advanced.append(summary);
+      edit(advanced, "Identificador de la tarjeta", "id_tarjeta", {
+        required: mode === "equipo" && !config.equipo_fijo
+      });
+      if (mode === "busqueda") edit(advanced, "Mostrar consulta de horarios", "mostrar_horarios", { type: "checkbox" });
+      if (mode === "equipo") {
+        edit(advanced, "Mostrar diagnóstico de fotos", "mostrar_diagnostico", { type: "checkbox" });
+        if (config.equipo_fijo) {
+          for (const [key, label] of [["id", "ID oficial del equipo"], ["nombre", "Nombre del equipo"],
+              ["club", "Club"], ["categoria", "Categoría"], ["temporada", "Temporada"]]) {
+            this._field(advanced, label, config.equipo_fijo[key], value => {
+              if (value.trim()) this._update({ equipo_fijo: { ...this._config.equipo_fijo, [key]: value.trim() } });
+            });
+          }
+        }
+      }
+      form.append(advanced);
+    }
+    this.shadowRoot.replaceChildren(style, form);
+  }
+
+  _teamSearch(form) {
+    const label = document.createElement("label");
+    label.textContent = "Buscar equipo en FBM";
+    const input = document.createElement("input");
+    input.type = "search";
+    input.maxLength = 100;
+    label.append(input);
+    const search = document.createElement("button");
+    search.type = "button";
+    search.textContent = "Buscar equipo";
+    const results = document.createElement("div");
+    results.setAttribute("aria-live", "polite");
+    search.addEventListener("click", async () => {
+      const texto = input.value.trim();
+      if (!texto || search.disabled) return;
+      search.disabled = true;
+      results.textContent = "Buscando…";
+      try {
+        const entry = await this._hass.callWS({ type: "fbm/client/entries" });
+        if (entry?.entries?.length !== 1) throw new Error("FBM entry unavailable");
+        const response = await this._hass.callWS({
+          type: "fbm/team/search", entry_id: entry.entries[0], texto, skip: 0
+        });
+        const teams = Array.isArray(response?.equipos)
+          ? response.equipos.filter(team => FBMCard.prototype._experimentalTeamIsValid(team)) : [];
+        results.textContent = teams.length ? "" : "No se han encontrado equipos.";
+        if (!teams.length) return;
+        this._field(results, "Equipo, categoría y temporada", "", index => {
+          if (index === "") return;
+          const { id, nombre, club, categoria, temporada, escudo } = teams[Number(index)];
+          const equipo_fijo = { id, nombre, club, categoria, temporada };
+          if (typeof escudo === "string") equipo_fijo.escudo = escudo;
+          this._update({ equipo_fijo }, true);
+        }, { options: [["", "Selecciona un equipo"], ...teams.map((team, index) =>
+          [String(index), [team.nombre, team.categoria, team.temporada].join(" · ")])] });
+      } catch (_) {
+        results.textContent = "No se pudo buscar. Comprueba la conexión a FBM.";
+      } finally {
+        search.disabled = false;
+      }
+    });
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        search.click();
+      }
+    });
+    form.append(label, search, results);
+  }
+
+  _editTeams(form, entries) {
+    const teams = Array.isArray(entries) ? entries : [];
+    const button = (parent, label, action) => {
+      const element = document.createElement("button");
+      element.type = "button";
+      element.textContent = label;
+      element.addEventListener("click", action);
+      parent.append(element);
+    };
+    teams.forEach((team, index) => {
+      const group = document.createElement("fieldset");
+      const title = document.createElement("legend");
+      title.textContent = "Equipo " + (index + 1);
+      group.append(title);
+      for (const [key, label] of [["nombre", "Nombre"], ["entidad_datos", "Entidad de datos"]]) {
+        this._field(group, label, team?.[key], value => {
+          const updated = this._config.equipos.map((entry, position) =>
+            position === index ? { ...entry, [key]: value } : entry);
+          this._update({ equipos: updated });
+        });
+      }
+      button(group, "Quitar equipo", () => this._update({
+        equipos: this._config.equipos.filter((_, position) => position !== index)
+      }, true));
+      form.append(group);
+    });
+    button(form, "Añadir equipo", () => this._update({
+      equipos: [...(this._config.equipos || []), { nombre: "", entidad_datos: "" }]
+    }, true));
+  }
+}
+
+class FBMCompetitionCardEditor extends FBMCardEditor {
+  get _competition() { return true; }
+}
+
+if (!customElements.get("fbm-card-editor"))
+  customElements.define("fbm-card-editor", FBMCardEditor);
+if (!customElements.get("fbm-competition-card-editor"))
+  customElements.define("fbm-competition-card-editor", FBMCompetitionCardEditor);
+
 if (!customElements.get("fbm-competition-card"))
   customElements.define("fbm-competition-card", FBMCompetitionCard);
 window.customCards = window.customCards || [];
