@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 
+from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 
@@ -61,10 +62,12 @@ class CompetitionAutoUpdater:
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
+    @callback
     def _group_tick(self, _now):
         if not self._stopped and not self._group_lock.locked():
             self._spawn(self._run_group())
 
+    @callback
     def _player_tick(self, _now):
         if not self._stopped and not self._player_lock.locked():
             self._spawn(self._run_players())
