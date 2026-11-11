@@ -129,7 +129,8 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                     data_schema=probatio.Schema({probatio.Required("equipo"): probatio.In(choices)}),
                     errors={"base": "invalid_selection"})
             self._candidate = {"team_id": team_id, "name": self._results[team_id]["nombre"],
-                               "season": self._results[team_id].get("temporada")}
+                               "season": self._results[team_id].get("temporada"),
+                               "category": self._results[team_id].get("categoria")}
             return await self.async_step_confirm()
         return self.async_show_form(
             step_id="select",
@@ -165,6 +166,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             await self.hass.async_add_executor_job(
                 archive.follow, group_selection(data), candidate["team_id"],
                 {"team_name": candidate["name"],
+                 "competition_name": (candidate.get("category") or "")[:120],
                  "phase_name": data.get("phase_name", ""),
                  "group_name": data.get("group_name", "")})
             # This selects a group. It does not automatically download rosters.
