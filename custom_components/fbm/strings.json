@@ -35,7 +35,7 @@
       },
       "confirm": {
         "title": "Follow entire competition",
-        "description": "Team: {team}. Official group: {group}. Selection does not automatically download rosters.",
+        "description": "Team: {team}. Official group: {group}. Confirm to download standings, fixtures and every team roster.",
         "data": {
           "confirmar": "I confirm following this competition"
         }
@@ -87,6 +87,8 @@
       "season_unverified": "Season not yet verified; no data saved",
       "not_followed": "Competition is no longer followed",
       "competition_changed": "Season, phase or group changed. Select the new competition in search.",
+      "rosters_pending": "Standings, fixtures and available rosters were saved. Some rosters are pending. Confirm again to retry.",
+      "rosters_pending_named": "Standings, fixtures and available rosters were saved. Pending rosters: {pending_rosters}. Confirm again to retry.",
       "cannot_refresh": "Could not refresh competition",
       "auto_requires_groups": "Enable group updates before enabling player statistics."
     },
