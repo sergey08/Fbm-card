@@ -140,6 +140,8 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         result = await self.flow.async_step_confirm({"confirmar": True})
         self.assertEqual(result["type"], "create_entry")
         self.assertEqual(len(Archive(str(self.path)).followed()), 1)
+        self.assertIn("schedule", self.client.calls)
+        self.assertNotIn("roster", self.client.calls)
         self.assertEqual(
             Archive(str(self.path)).followed_with_anchor()[0]["anchor_team_id"],
             "team-A")
@@ -215,7 +217,9 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         selected = {"season_verified": True, "season_id": "26/27",
                     "phase_id": "phase", "group_id": "group"}
         self.assertTrue(Archive(str(self.path)).is_followed(selected))
-        self.assertIsNone(Archive(str(self.path)).latest(selected, "fixtures"))
+        self.assertIsNotNone(Archive(str(self.path)).latest(selected, "fixtures"))
+        changed = {**selected, "phase_id": "another-phase", "group_id": "another-group"}
+        self.assertIsNone(Archive(str(self.path)).latest(changed, "fixtures"))
 
     async def test_manual_refresh_requires_existing_follow_and_anchor(self):
         self.assertEqual((await self.flow.async_step_refresh())["reason"], "none_followed")
