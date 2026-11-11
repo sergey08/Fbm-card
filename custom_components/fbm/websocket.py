@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date
 from .competition_sync import sync_group, preview_group
 from .competition_analysis import competition_analysis
+from .competition_match_preview import match_preview
 from .competition_player_stats import sync_player_stats_batch
 from .competition_manager import competition_season_diagnostic
 import probatio
@@ -653,6 +654,45 @@ async def ws_competition_analysis(hass, connection, msg):
 
 
 
+
+@websocket_api.websocket_command({
+    "type": "fbm/competition/match_preview",
+    probatio.Required("entry_id"): str,
+    probatio.Required("season_id"): str,
+    probatio.Required("phase_id"): str,
+    probatio.Required("group_id"): str,
+    probatio.Required("equipo"): str,
+})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_competition_match_preview(hass, connection, msg):
+    """Admin-only next match and recent form from followed SQLite archive."""
+    try:
+        _client(hass, msg["entry_id"])
+        entry = hass.data[DOMAIN][msg["entry_id"]]
+        archive = await hass.async_add_executor_job(
+            entry["competitions_archive_factory"], entry["competitions_sqlite_path"])
+        identity = {"season_verified": True, "season_id": msg["season_id"],
+                    "phase_id": msg["phase_id"], "group_id": msg["group_id"]}
+        if not await hass.async_add_executor_job(archive.is_followed, identity):
+            raise ValueError("Competition not followed")
+        standings = await hass.async_add_executor_job(
+            archive.latest, identity, "standings")
+        fixtures = await hass.async_add_executor_job(
+            archive.latest, identity, "fixtures")
+        if standings is None or fixtures is None:
+            raise ValueError("Missing archive")
+        result = await hass.async_add_executor_job(
+            match_preview, standings["payload"], fixtures["payload"], msg["equipo"])
+        result["observed_at"] = {"standings": standings["observed_at"],
+                                  "fixtures": fixtures["observed_at"]}
+    except Exception:
+        connection.send_error(msg["id"], "fbm_error",
+                              "No se pudo consultar el informe previo archivado.")
+        return
+    connection.send_result(msg["id"], result)
+
+
 @websocket_api.websocket_command({
     "type": "fbm/competition/player_stats_batch",
     probatio.Required("entry_id"): str,
@@ -706,7 +746,7 @@ async def ws_competition_verify_season(hass, connection, msg):
     connection.send_result(msg["id"], result)
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_verify_season, ws_competition_player_stats_batch):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_match_preview, ws_competition_verify_season, ws_competition_player_stats_batch):
         websocket_api.async_register_command(hass, command)
 
 
