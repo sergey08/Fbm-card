@@ -1406,12 +1406,16 @@ class FBMCompetitionCard extends HTMLElement {
   _element(tag, value, className) { return this._el(tag, value, className); }
   _officialLogoUrl(value) { return this._verifiedCrest(value); }
   _apkCrestUrl(value) {
-    return this._verifiedCrest(value) ||
-      (typeof value === "string" && /^[a-z0-9]{1,256}$/i.test(value)
-        ? "https://appaficionfbm.gesdeportiva.es/imagenes.ashx?tipo=escudo&id=" + value : "");
+    return this._verifiedCrest(value) || FBMCard.prototype._apkCrestUrl(value);
   }
+
+  _crestForTeam(team) {
+    return this._fixtureCrests && Object.hasOwn(this._fixtureCrests, team.equipo)
+      ? this._fixtureCrests[team.equipo] : this._verifiedCrest(team.escudo);
+  }
+
   _verifiedCrest(value) {
-    if (typeof value !== "string" || value.length > 1024) return "";
+    if (typeof value !== "string" || value.length > 4096) return "";
     try {
       const url=new URL(value);
       if (url.protocol !== "https:" || url.username || url.password ||
@@ -1422,7 +1426,7 @@ class FBMCompetitionCard extends HTMLElement {
         const params=url.searchParams;
         const id=params.get("id");
         if (params.size!==2 || params.get("tipo")!=="escudo" ||
-            !id || !/^[a-z0-9]{1,256}$/i.test(id)) return "";
+            !FBMCard.prototype._apkCrestUrl(id)) return "";
         return url.href;
       }
       if ((host==="fbm.es" || host==="www.fbm.es") &&
@@ -1528,8 +1532,11 @@ class FBMCompetitionCard extends HTMLElement {
     const dates = this._matches.map(match => fbmFixtureDateKey(match.fecha))
       .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
     if (!dates.length) return;
-    const desde = dates[0], hasta = dates[dates.length - 1];
-    if (!(Date.parse(hasta) - Date.parse(desde) <= 125 * 86400000)) return;
+    const desde = dates[0];
+    const last = Date.parse(dates[dates.length - 1]);
+    const limit = Date.parse(desde) + 125 * 86400000;
+    if (!Number.isFinite(last) || !Number.isFinite(limit)) return;
+    const hasta = new Date(Math.min(last, limit)).toISOString().slice(0, 10);
     try {
       const data = await this._hass.callWS({
         type: "fbm/team/schedule", entry_id: this._entryId, equipo: this._teamId, desde, hasta
@@ -1538,8 +1545,10 @@ class FBMCompetitionCard extends HTMLElement {
       const crests = Object.assign(Object.create(null), this._fixtureCrests);
       for (const match of data.partidos) {
         for (const side of ["local", "visitante"]) {
-          const name = match[side];
-          if (!names.has(name) || Object.hasOwn(crests, name)) continue;
+          const officialName = match[side];
+          const name = typeof officialName === "string" && [...names].find(candidate =>
+            candidate.trim().toUpperCase() === officialName.trim().toUpperCase());
+          if (!name || Object.hasOwn(crests, name)) continue;
           const image = match["img_" + side] || this._apkCrestUrl(match["escudo_" + side]);
           if (image) crests[name] = image;
         }
@@ -1681,7 +1690,7 @@ class FBMCompetitionCard extends HTMLElement {
         this._render();
       });
       const header=this._el("div",undefined,"team-header");
-      const crest=this._verifiedCrest(team.escudo);
+      const crest=this._crestForTeam(team);
       if (crest) {
         const img=this._el("img");img.src=crest;img.alt="Escudo de "+team.equipo;
         img.className="team-logo";img.loading="lazy";
