@@ -85,7 +85,8 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     # Fetch rosters sequentially, not concurrently, and keep a simple delay.
     # This limits pressure on the unofficial access to FBM.
     rosters = {}
-    errors = 0
+    failed_rosters = []
+    team_names = {row['id']: row.get('equipo') for row in rows}
     if fetch_rosters:
         for tid in team_ids:
             # The user may have stopped following while the earlier remote
@@ -98,7 +99,8 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
                     raise ValueError("Plantilla no válida")
                 rosters[tid] = response
             except Exception:
-                errors += 1
+                name = team_names[tid]
+                failed_rosters.append(name.strip()[:120] if isinstance(name, str) else "")
             await asyncio.sleep(0.3)
 
     # The explicit follow can be revoked during the requests. Check again
@@ -143,10 +145,11 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         "group_name": identity.get("group_name") or "",
     })
     return {
-        "status": "partial" if errors else "ok",
+        "status": "partial" if failed_rosters else "ok",
         "saved": True, "team_count": len(team_ids),
         "fixture_count": len(fixtures["partidos"]),
-        "rosters_saved": len(rosters), "roster_errors": errors,
+        "rosters_saved": len(rosters), "roster_errors": len(failed_rosters),
+        "failed_roster_names": [name for name in failed_rosters if name],
         "records_written": sum(bool(v) for v in results.values()),
         "competition": {k: group[k] for k in ("season_id", "phase_id", "group_id")},
     }
