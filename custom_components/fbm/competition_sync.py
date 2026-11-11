@@ -105,11 +105,12 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         old = finished_scores((previous or {}).get("payload"))
         new = finished_scores(fixtures)
         fixture_results_changed = old != new
-        missing_roster = any(
-            not await asyncio.to_thread(
-                archive.latest, group, "roster", tid)
-            for tid in team_ids
-        )
+        missing_roster = False
+        for tid in team_ids:
+            if not await asyncio.to_thread(
+                    archive.latest, group, "roster", tid):
+                missing_roster = True
+                break
         fetch_rosters = fixture_results_changed or missing_roster
     elif type(fetch_rosters) is not bool:
         raise ValueError("Modo de plantillas no válido")
