@@ -48,6 +48,23 @@ class MatchPreviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             match_preview(self.standings, self.fixtures, "UNKNOWN")
 
+    def test_duplicate_team_names_rejected(self):
+        standings = {"clasificacion": [
+            {"equipo": "PINTO", "posicion": 1},
+            {"equipo": "PINTO", "posicion": 2},
+        ]}
+        with self.assertRaises(ValueError):
+            match_preview(standings, self.fixtures, "PINTO")
+
+    def test_undated_prior_results_excluded(self):
+        fixtures = {"partidos": [
+            {"local": "PINTO", "visitante": "PARLA", "estado": "finished",
+             "marcador": {"local": 30, "visitante": 20}},
+            self.fixtures["partidos"][2],
+        ]}
+        report = match_preview(self.standings, fixtures, "PINTO")
+        self.assertEqual(report["enfrentamientos_previos"], [])
+
     def test_bad_scores_do_not_count(self):
         fixture = {"partidos": [{"fecha": "01/11/2026", "local": "PINTO",
                                  "visitante": "PARLA", "estado": "finished",
