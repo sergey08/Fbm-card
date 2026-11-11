@@ -159,6 +159,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                 description_placeholders={"team": candidate["name"], "group": "Temporada no verificada"},
                 data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}))
         errors = {}
+        pending_rosters = ""
         if user_input is not None and user_input.get("confirmar") is True:
             from datetime import date, timedelta
             from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -180,10 +181,14 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                 result = await sync_group(
                     entry["cliente_independiente"], archive, candidate["team_id"],
                     today - timedelta(days=45), today + timedelta(days=60),
-                    fetch_rosters=False, expected_competition=identity)
-                if result.get("saved"):
+                    fetch_rosters=True, expected_competition=identity)
+                if result.get("saved") and not result.get("roster_errors"):
                     return self.async_create_entry(title="", data=dict(self.config_entry.options))
-                errors["base"] = result.get("status", "cannot_refresh")
+                if result.get("saved"):
+                    pending_rosters = ", ".join(result.get("failed_roster_names", []))
+                    errors["base"] = "rosters_pending_named" if pending_rosters else "rosters_pending"
+                else:
+                    errors["base"] = result.get("status", "cannot_refresh")
             except Exception:
                 errors["base"] = "cannot_refresh"
             finally:
@@ -195,6 +200,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}),
             description_placeholders={
                 "team": candidate["name"],
+                "pending_rosters": pending_rosters,
                 "group": (
                     f'{data["season_id"]} · '
                     f'{data.get("phase_name", "Fase")} · '
