@@ -10,7 +10,7 @@ const window = {
   localStorage: { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) }
 };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../fbm-card.js"), "utf8"), {
-  HTMLElement: class {}, window,
+  HTMLElement: class {}, window, URL,
   customElements: { get: key => registered.get(key), define: (key, value) => registered.set(key, value) },
 });
 const Card = registered.get("fbm-card");
@@ -50,4 +50,32 @@ test("search reuses archived standings without a remote standings query", async 
   await card._experimentalAction("standings");
   assert.deepEqual(calls, ["fbm/competition/team_snapshot"]);
   assert.equal(state.standings[0].equipo, "A");
+});
+
+test("fixed cards recover missing crests by exact FBM team ID", async () => {
+  const card = new Card();
+  card._config = {};
+  const state = card._experimentalState();
+  Object.assign(state,{entry:"fbm",selected:"selected",status:{sesion_vigente:true}});
+  let calls = 0;
+  card._hass = {callWS: async () => {
+    calls++;
+    return {equipos:[{id:"another",escudo:"WRONG"},{id:"selected",escudo:"AB".repeat(384)}]};
+  }};
+  const team = {id:"selected",nombre:"Equipo",club:"Club",categoria:"Alevín",temporada:"26/27"};
+  assert.equal(await card._recoverFixedCrest(state,team),true);
+  assert.equal(card._fixedCrestCandidates(state,team)[0].endsWith("AB".repeat(384)),true);
+  assert.equal(await card._recoverFixedCrest(state,team),false);
+  assert.equal(calls,1);
+  assert.match(card._fixedCardYaml({...team,escudo:"ABCD"}), /escudo: "ABCD"/);
+});
+
+test("fixed card uses official crest URLs and archived fixture images", () => {
+  const card = new Card();
+  card._config = {};
+  const team = {id:"selected",nombre:"Equipo",escudo:"https://fbm.es/crest.png"};
+  const state = {schedule:{partidos:[{local:" equipo ",img_local:"data:image/png;base64,AA=="}]}};
+  const urls = card._fixedCrestCandidates(state,team);
+  assert.equal(urls[0],"https://fbm.es/crest.png");
+  assert.equal(urls[1],"data:image/png;base64,AA==");
 });
