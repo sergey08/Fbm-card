@@ -117,8 +117,28 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     # sync; never re-follow a group that an admin has deactivated.
     source_team = next(
         (row.get("equipo") for row in rows if row.get("id") == team_id), "")
+    competition_name = ""
+    search = getattr(client, "async_search_teams", None)
+    if callable(search) and isinstance(source_team, str) and 0 < len(source_team) <= 100:
+        followed = await asyncio.to_thread(archive.followed_with_anchor)
+        saved = next((item for item in followed if all(
+            item[key] == group[key] for key in ("season_id", "phase_id", "group_id")
+        )), None)
+        if saved is not None and not saved.get("competition_name"):
+            try:
+                candidates = await search(source_team)
+                labels = {item["categoria"].strip() for item in candidates
+                          if item.get("id") == team_id
+                          and isinstance(item.get("categoria"), str)
+                          and 0 < len(item["categoria"].strip()) <= 120}
+                if len(labels) == 1:
+                    competition_name = labels.pop()
+            except Exception:
+                # The display label is optional; the archive remains usable.
+                pass
     await asyncio.to_thread(archive.update_display, group, {
         "team_name": source_team if type(source_team) is str else "",
+        "competition_name": competition_name,
         "phase_name": identity.get("phase_name") or "",
         "group_name": identity.get("group_name") or "",
     })
