@@ -10,6 +10,8 @@ import json
 import sqlite3
 from urllib.parse import urlsplit, parse_qs
 
+from .image_references import image_data_uri
+
 
 def _official_team_crest(value):
     """Accept only a genuine full FBM crest URL, never opaque references."""
@@ -298,6 +300,8 @@ class CompetitionArchive:
         output_key = {"standings": "clasificacion", "fixtures": "partidos",
                       "roster": "jugadores"}[source]
         clean = []
+        crests = {}
+        crest_chars = 0
         for row in payload[output_key]:
             if type(row) is not dict:
                 raise ValueError("Registro deportivo inválido")
@@ -308,12 +312,21 @@ class CompetitionArchive:
                     item["escudo"] = crest
             elif source == "fixtures":
                 for side in ("local", "visitante"):
-                    crest = (_official_team_crest(row.get(f"img_{side}"))
-                             or _official_team_crest(row.get(f"escudo_{side}")))
-                    if crest:
-                        item[f"img_{side}"] = crest
+                    name = row.get(side)
+                    if not isinstance(name, str) or not name or name in crests:
+                        continue
+                    image = row.get(f"img_{side}")
+                    reference = row.get(f"escudo_{side}")
+                    crest = (_official_team_crest(image)
+                             or _official_team_crest(reference)
+                             or image_data_uri(image, max_bytes=65536))
+                    if crest and crest_chars + len(crest) <= 256 * 1024:
+                        crests[name] = crest
+                        crest_chars += len(crest)
             clean.append(item)
         payload = {output_key: clean}
+        if crests:
+            payload["escudos"] = crests
         encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
         if len(encoded.encode("utf-8")) > self.MAX_JSON_BYTES:
             raise ValueError("Instantánea demasiado grande")
