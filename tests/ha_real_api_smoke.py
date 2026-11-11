@@ -122,6 +122,9 @@ async def run():
                 "competitions_archive_factory": Archive,
             }}}
 
+        def verify_event_loop_thread(self, operation):
+            assert operation == "async_dispatcher_send"
+
         async def async_add_executor_job(self, callback, *args):
             return callback(*args)
 
@@ -140,6 +143,8 @@ async def run():
         followed = await flow.async_step_confirm({"confirmar": True})
         assert followed["type"] == "create_entry", followed
         assert Archive(str(db)).followed_with_anchor()[0]["anchor_team_id"] == "pinto"
+        assert "schedule" in client.calls
+        assert "roster" not in client.calls
 
         settings = await flow.async_step_automatic()
         assert settings["step_id"] == "automatic"
