@@ -16,8 +16,9 @@ from homeassistant.helpers.storage import Store
 
 from .competition_sync import sync_group
 from .competition_player_stats import sync_player_stats_batch
+from .competition_refresh_policy import should_poll_group
 
-GROUP_INTERVAL = timedelta(hours=4)
+GROUP_INTERVAL = timedelta(hours=1)
 PLAYER_INTERVAL = timedelta(minutes=30)
 PLAYER_CYCLE_DELAY = timedelta(hours=24)
 
@@ -160,6 +161,25 @@ class CompetitionAutoUpdater:
         state = await self._read_state()
         index = int(state.get("group_index", 0)) % len(groups)
         group = groups[index]
+        # Round-robin across every followed group, but do not poll FBM
+        # outside the post-game window unless the weekly heartbeat is due.
+        # Keep the last successful check in the private HA Store so an
+        # unchanged SQLite snapshot does not cause repeated network calls.
+        group_id = group["group_id"]
+        checks = state.get("group_checked_at", {})
+        if type(checks) is not dict:
+            checks = {}
+        previous = checks.get(group_id)
+        identity = {**{k: group[k] for k in
+                       ("season_id", "phase_id", "group_id")},
+                    "season_verified": True}
+        fixture_snapshot = await self.hass.async_add_executor_job(
+            archive.latest, identity, "fixtures")
+        if not should_poll_group(
+                (fixture_snapshot or {}).get("payload"), previous,
+                datetime.now(timezone.utc)):
+            await self._save_state({"group_index": (index + 1) % len(groups)})
+            return
         # Advance even after a network failure so one group does not
         # permanently block others. Never follow automatically.
         await self._save_state({"group_index": (index + 1) % len(groups)})
@@ -174,6 +194,12 @@ class CompetitionAutoUpdater:
                 expected_competition={k: group[k] for k in
                                       ("season_id", "phase_id", "group_id")})
             status = response.get("status") if isinstance(response, dict) else None
+            if status in ("ok", "partial"):
+                # Bound Store metadata to current followed groups only.
+                checks = {key: val for key, val in checks.items()
+                          if key in {item["group_id"] for item in groups}}
+                checks[group_id] = datetime.now(timezone.utc).isoformat()
+                await self._save_state({"group_checked_at": checks})
             await self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
         except Exception:
             # Never leak service errors, IDs or player details into HA state.
