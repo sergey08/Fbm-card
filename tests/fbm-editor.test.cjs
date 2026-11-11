@@ -56,8 +56,15 @@ test("fixed team can be created visually and selected from official search", asy
   editor.hass = {callWS: async request => request.type === "fbm/client/entries"
     ? {entries:["entry"]} : {equipos:[{id:"official",nombre:"Equipo A",club:"Club",categoria:"Alevín",temporada:"26/27"}]}};
   const nodes = descendants(editor.shadowRoot);
-  nodes.find(node => node.type === "search").value = "Equipo A";
-  await nodes.find(node => node.tagName === "button" && node.textContent === "Buscar equipo").listeners.click();
+  const input = nodes.find(node => node.type === "search");
+  const button = nodes.find(node => node.tagName === "button" && node.textContent === "Buscar en FBM");
+  await button.listeners.click();
+  assert.ok(nodes.some(node => node.textContent === "Escribe el nombre de un equipo para buscar."));
+  input.value = "Equipo A";
+  input.listeners.input();
+  const pending = button.listeners.click();
+  editor.setConfig({...editor._config, title:"Equipo elegido"});
+  await pending;
   change(editor, "Equipo, categoría y temporada", "0");
   assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "official");
   assert.equal(editor.lastEvent.detail.config.id_tarjeta, id);
@@ -72,4 +79,17 @@ test("competition editor uses names and saves the numeric group index", () => {
   assert.equal(field(editor, "Competición inicial").children[1].textContent, "Getafe · Grupo 2");
   change(editor, "Competición inicial", "1");
   assert.equal(editor.lastEvent.detail.config.group_index, 1);
+});
+
+test("standard editor exposes only user-facing card types and hides internal settings", () => {
+  const editor = registry.get("fbm-card").getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"equipo",
+    id_tarjeta:"keep", logo_equipo:"https://fbm.es/existing.png"});
+  const mode = field(editor, "Tipo de tarjeta");
+  assert.deepEqual(Array.from(mode.children, item => item.value), ["busqueda", "equipo"]);
+  assert.ok(!descendants(editor.shadowRoot).some(node =>
+    ["URL del escudo", "Identificador de la tarjeta"].includes(node.textContent)));
+  change(editor, "Título", "Mi equipo");
+  assert.equal(editor.lastEvent.detail.config.id_tarjeta, "keep");
+  assert.equal(editor.lastEvent.detail.config.logo_equipo, "https://fbm.es/existing.png");
 });
