@@ -99,6 +99,37 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(self.client.calls.count("3"), 2)
         self.assertEqual(len(self.client.calls), 6)
 
+    def test_zero_appearance_player_is_skipped_without_api_error(self):
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": str(i), "nombre": f"Jugador {i}",
+             "partidos_jugados": 0 if i in (1, 4) else 1}
+            for i in range(9)
+        ]}, subject="team-A")
+        result = self.run_batch()
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["errors"], 0)
+        self.assertEqual(result["skipped_unchanged"], 2)
+        self.assertEqual(result["saved"], 3)
+        self.assertEqual(self.client.calls, ["0", "2", "3"])
+
+    def test_first_appearance_enables_deferred_player_fetch(self):
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": str(i), "nombre": f"Jugador {i}",
+             "partidos_jugados": 0 if i == 1 else 1}
+            for i in range(9)
+        ]}, subject="team-A")
+        self.run_batch()
+        self.assertNotIn("1", self.client.calls)
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": str(i), "nombre": f"Jugador {i}",
+             "partidos_jugados": 1}
+            for i in range(9)
+        ]}, subject="team-A")
+        result = self.run_batch()
+        self.assertEqual(result["saved"], 1)
+        self.assertEqual(result["skipped_unchanged"], 4)
+        self.assertEqual(self.client.calls.count("1"), 1)
+
     def test_no_roster_for_unselected_team(self):
         result=asyncio.run(sync(self.client,self.archive,IDENTITY,"another"))
         self.assertEqual(result["status"],"no_roster")
