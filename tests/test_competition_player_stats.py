@@ -131,7 +131,7 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(self.client.calls.count("1"), 1)
 
     def test_periodic_recheck_fetches_even_if_appearances_unchanged(self):
-        self.archive.record(IDENT, "roster", {"jugadores": [
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
             {"id": str(i), "nombre": f"Jugador {i}",
              "partidos_jugados": 1} for i in range(9)]},
              subject="team-A")
@@ -147,7 +147,7 @@ class StatsTests(unittest.TestCase):
         self.assertIsNotNone(self.archive.latest(IDENTITY,"player_stats","0"))
 
     def test_full_recheck_still_skips_zero_game_player(self):
-        self.archive.record(IDENT, "roster", {"jugadores": [
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
             {"id": "0", "nombre": "Sin partido", "partidos_jugados": 0},
             {"id": "1", "nombre": "Con partido", "partidos_jugados": 1}]},
             subject="team-A")
