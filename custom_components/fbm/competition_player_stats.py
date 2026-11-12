@@ -10,7 +10,10 @@ import asyncio
 
 async def sync_player_stats_batch(client, archive, competition: dict,
                                   team_id: str, offset: int = 0,
-                                  limit: int = 5) -> dict:
+                                  limit: int = 5,
+                                  force_recheck: bool = False) -> dict:
+    if type(force_recheck) is not bool:
+        raise ValueError("Revalidación no válida")
     if type(team_id) is not str or not team_id.strip() or len(team_id) > 512:
         raise ValueError("Equipo inválido")
     if (type(offset) is not int or offset < 0
@@ -51,7 +54,8 @@ async def sync_player_stats_batch(client, archive, competition: dict,
             if type(appearances) is int and appearances == 0:
                 skipped += 1
                 continue
-            if (type(appearances) is int and 0 <= appearances <= 200
+            if (not force_recheck
+                    and type(appearances) is int and 0 <= appearances <= 200
                     and type(cached_games) is list
                     and len({m.get("id_partido") for m in cached_games
                              if type(m) is dict and type(m.get("id_partido")) is str})
