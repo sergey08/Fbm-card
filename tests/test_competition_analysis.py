@@ -127,6 +127,39 @@ class AnalysisTests(unittest.TestCase):
         self.assertIsNone(cov["cobertura_completa"])
         self.assertIsNone(cov["puntos_sin_atribuir"])
 
+    def test_two_sided_score_mismatch_is_reported_without_estimation(self):
+        standings = {"clasificacion": [
+            {"id": "a", "equipo": "Pinto"},
+            {"id": "b", "equipo": "Parla"}]}
+        fixtures = {"partidos": [
+            {"id": "m1", "fecha": "17/10/2026", "local": "Pinto",
+             "visitante": "Parla", "estado": "finished",
+             "marcador": {"local": 115, "visitante": 96}}]}
+        rosters = {"a": {"jugadores": [
+            {"id": "a1", "nombre": "A", "partidos_jugados": 1}]},
+                   "b": {"jugadores": [
+            {"id": "b1", "nombre": "B", "partidos_jugados": 1}]}}
+        individual = {
+            "a1": {"partidos": [{"id_partido": "m1", "puntos": 4},
+                               {"id_partido": "m1", "puntos": 4}]},
+            "b1": {"partidos": [{"id_partido": "m1", "puntos": 3}]}}
+        result = mod.competition_analysis(standings, fixtures, rosters, individual)
+        self.assertEqual(result["partidos_con_desajuste_individual"], 1)
+        item = result["incidencias_anotacion_partidos"][0]
+        self.assertEqual([x["diferencia"] for x in item["equipos"]], [111, 93])
+        self.assertEqual([x["puntos_individuales"] for x in item["equipos"]], [4, 3])
+        self.assertTrue(item["ambos_equipos_con_desajuste"])
+        self.assertNotIn("a1", repr(item))
+        self.assertNotIn("b1", repr(item))
+
+    def test_missing_player_data_stays_unknown_not_zero(self):
+        fixtures = {"partidos": [
+            {"id": "m1", "local": "Pinto", "visitante": "Rival",
+             "estado": "finished", "marcador": {"local": 40, "visitante": 20}}]}
+        result = mod.competition_analysis(self.standings, fixtures)
+        self.assertEqual(result["partidos_con_desajuste_individual"], 0)
+        self.assertEqual(result["incidencias_anotacion_partidos"], [])
+
     def test_duplicate_team_ids_rejected(self):
         standings = {"clasificacion": [
             {"id": "a", "equipo": "Pinto"}, {"id": "a", "equipo": "Other"}]}
