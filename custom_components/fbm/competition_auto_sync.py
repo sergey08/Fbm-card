@@ -42,10 +42,18 @@ class CompetitionAutoUpdater:
         self.health = {"groups": {"status": "pending", "last_run": None},
                        "players": {"status": "pending", "last_run": None}}
 
-    async def _mark(self, kind, status):
-        # Persist only bounded status metadata, never player or FBM payloads.
+    async def _mark(self, kind, status, metrics=None):
+        # Persist only bounded numeric counters, never names, player IDs,
+        # error messages, match details or raw FBM responses.
         record = {"status": status,
                   "last_run": datetime.now(timezone.utc).isoformat()}
+        if kind == "players" and type(metrics) is dict:
+            for key in ("processed", "saved", "skipped_unchanged",
+                        "errors", "players_without_match_data",
+                        "retry_pending"):
+                value = metrics.get(key)
+                if type(value) is int and 0 <= value <= 100:
+                    record[key] = value
         self.health[kind] = record
         try:
             await self._save_state({"health": {kind: record}})
@@ -78,8 +86,17 @@ class CompetitionAutoUpdater:
                         except ValueError:
                             continue
                         if stamp.tzinfo is not None:
-                            self.health[kind] = {"status": record["status"],
-                                                 "last_run": record["last_run"]}
+                            self.health[kind] = {
+                                "status": record["status"],
+                                "last_run": record["last_run"]}
+                            if kind == "players":
+                                for key in ("processed", "saved",
+                                            "skipped_unchanged", "errors",
+                                            "players_without_match_data",
+                                            "retry_pending"):
+                                    value = record.get(key)
+                                    if type(value) is int and 0 <= value <= 100:
+                                        self.health[kind][key] = value
         except Exception:
             # A broken state store should not prevent the scheduler starting.
             pass
@@ -266,6 +283,26 @@ class CompetitionAutoUpdater:
         if response.get("status") not in ("ok", "partial", "no_roster"):
             await self._mark("players", "failed")
             return
+        # Retry a partial batch once at the next scheduled tick. Keep
+        # counters only: the private cursor contains no player identity.
+        # The second failure advances as usual, so a bad official record
+        # cannot block other teams or followed competitions indefinitely.
+        attempt = int(cursor.get("retry_attempt", 0))
+        should_retry = (
+            response.get("status") == "partial"
+            and type(response.get("errors")) is int
+            and response["errors"] > 0
+            and attempt == 0
+        )
+        if should_retry:
+            await self._save_state({"players": {
+                "group_index": group_index,
+                "team_index": team_index,
+                "offset": offset,
+                "retry_attempt": 1}})
+            await self._mark("players", "partial", {
+                **response, "retry_pending": 1})
+            return
         if response.get("next_offset") is not None:
             cursor = {"group_index": group_index,
                       "team_index": team_index,
@@ -283,4 +320,5 @@ class CompetitionAutoUpdater:
         # player records are skipped by sync_player_stats_batch.  This lowers
         # the cost of a 30-minute pass while preserving the 5-player cap.
         await self._save_state({"players": cursor})
-        await self._mark("players", response["status"])
+        await self._mark("players", response["status"], {
+            **response, "retry_pending": 0})
