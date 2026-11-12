@@ -130,6 +130,33 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(result["skipped_unchanged"], 4)
         self.assertEqual(self.client.calls.count("1"), 1)
 
+    def test_periodic_recheck_fetches_even_if_appearances_unchanged(self):
+        self.archive.record(IDENT, "roster", {"jugadores": [
+            {"id": str(i), "nombre": f"Jugador {i}",
+             "partidos_jugados": 1} for i in range(9)]},
+             subject="team-A")
+        self.run_batch()
+        self.assertEqual(len(self.client.calls), 5)
+        second = asyncio.run(sync(self.client, self.archive, IDENTITY,
+                                  "team-A", offset=0, limit=5,
+                                  force_recheck=True))
+        self.assertEqual(second["status"], "ok")
+        self.assertEqual(len(self.client.calls), 10)
+        self.assertEqual(second["saved"], 0)
+        self.assertEqual(second["skipped_unchanged"], 0)
+        self.assertIsNotNone(self.archive.latest(IDENTITY,"player_stats","0"))
+
+    def test_full_recheck_still_skips_zero_game_player(self):
+        self.archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "0", "nombre": "Sin partido", "partidos_jugados": 0},
+            {"id": "1", "nombre": "Con partido", "partidos_jugados": 1}]},
+            subject="team-A")
+        result = asyncio.run(sync(self.client, self.archive, IDENTITY,
+                                  "team-A", force_recheck=True))
+        self.assertEqual(result["status"],"ok")
+        self.assertEqual(result["skipped_unchanged"],1)
+        self.assertEqual(self.client.calls,["1"])
+
     def test_no_roster_for_unselected_team(self):
         result=asyncio.run(sync(self.client,self.archive,IDENTITY,"another"))
         self.assertEqual(result["status"],"no_roster")
