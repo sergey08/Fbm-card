@@ -55,6 +55,7 @@ def competition_analysis(standings: dict, fixtures: dict,
                           "puntos_favor": 0, "puntos_contra": 0}
              for team in teams}
     finished_ids = set()
+    finished_games = []
     team_game_ids = {team["id"]: set() for team in teams}
     for match in matches:
         if type(match) is not dict or match.get("estado") != "finished":
@@ -72,6 +73,7 @@ def competition_analysis(standings: dict, fixtures: dict,
                 or canonical_name(visitor) not in unique):
             continue
         finished_ids.add(match_id)
+        finished_games.append((match_id, match.get("fecha"), local, visitor, a, b))
         for name, pf, pc in ((local, a, b), (visitor, b, a)):
             rec = stats[unique[canonical_name(name)]["id"]]
             rec["finalizados_con_marcador"] += 1
@@ -136,6 +138,7 @@ def competition_analysis(standings: dict, fixtures: dict,
                 "partidos_con_puntos": len(explicit),
                 "origen": "suma_de_partidos_disponibles",
             })
+    per_team_game = {team["id"]: {} for team in teams}
     # Validate scorer coverage against the actual finished fixture IDs.
     # A successful download is NOT proof that every team point is attributed.
     # Do not expose private player data in team-level coverage diagnostics.
@@ -173,6 +176,10 @@ def competition_analysis(standings: dict, fixtures: dict,
                         and 0 <= pts <= 500):
                     used.add(game_id)
                     attributed += pts
+                    totals = per_team_game[team["id"]]
+                    game_sum = totals.setdefault(game_id, {"puntos": 0, "jugadores": 0})
+                    game_sum["puntos"] += pts
+                    game_sum["jugadores"] += 1
                     found = True
             if found:
                 with_points += 1
@@ -184,6 +191,35 @@ def competition_analysis(standings: dict, fixtures: dict,
         item["puntos_atribuidos"] = attributed
         item["puntos_sin_atribuir"] = match_points - attributed
         item["cobertura_completa"] = (attributed == match_points)
+    # Show exceptional fixtures without changing any FBM score or assigning
+    # missing points. Never call the API here, and never leak player IDs.
+    # The discrepancy is unknown when no individual records exist at all.
+    anomalous_matches = []
+    for game_id, game_date, home_name, away_name, home_pts, away_pts in finished_games:
+        participants = []
+        for name, official in ((home_name, home_pts), (away_name, away_pts)):
+            team = unique[canonical_name(name)]
+            observed = per_team_game[team["id"]].get(game_id)
+            participants.append({
+                "equipo": team["nombre"],
+                "puntos_marcador": official,
+                "puntos_individuales": observed["puntos"] if observed else None,
+                "jugadores_con_registro": observed["jugadores"] if observed else 0,
+                "diferencia": official - observed["puntos"] if observed else None,
+            })
+        if any(side["diferencia"] not in (None, 0) for side in participants):
+            anomalous_matches.append({
+                "fecha": game_date,
+                "local": home_name,
+                "visitante": away_name,
+                "equipos": participants,
+                "ambos_equipos_con_desajuste": all(
+                    side["diferencia"] not in (None, 0) for side in participants),
+            })
+    # Keep WebSocket responses bounded even if an older archive contains
+    # many games with partial individual coverage.
+    anomaly_count = len(anomalous_matches)
+    anomalous_matches = anomalous_matches[:40]
     leaders.sort(key=lambda item: (-item["puntos_totales"], item["jugador_id"]))
     return {
         "equipos": teams, "numero_equipos": len(teams),
@@ -192,5 +228,7 @@ def competition_analysis(standings: dict, fixtures: dict,
         "plantillas_disponibles": sum(
             1 for team in teams if type(rosters.get(team["id"])) is dict),
         "jugadores_con_puntos_por_partido": covered,
+        "partidos_con_desajuste_individual": anomaly_count,
+        "incidencias_anotacion_partidos": anomalous_matches,
         "aviso": "Solo estadísticas publicadas por FBM; las ausentes no se estiman.",
     }
