@@ -43,6 +43,14 @@ async def sync_player_stats_batch(client, archive, competition: dict,
                 archive.latest, competition, "player_stats", player_id)
             cached_games = (existing or {}).get("payload", {}).get("partidos")
             appearances = player.get("partidos_jugados")
+            # A zero-appearance player cannot have official match stats.
+            # The FBM endpoint returns an error-like payload for these
+            # roster entries, so do not request them or count a sync error.
+            # Once the roster reports a first appearance, the normal
+            # incremental mechanism fetches their individual statistics.
+            if type(appearances) is int and appearances == 0:
+                skipped += 1
+                continue
             if (type(appearances) is int and 0 <= appearances <= 200
                     and type(cached_games) is list
                     and len({m.get("id_partido") for m in cached_games
