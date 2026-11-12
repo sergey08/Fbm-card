@@ -284,6 +284,60 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.updater.health["groups"]["status"],"failed")
         self.assertNotIn("hidden",str(self.updater.health))
 
+    async def test_partial_batch_retried_once_then_advances(self):
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {
+                "status": "partial", "processed": 5, "saved": 2,
+                "skipped_unchanged": 1, "errors": 2,
+                "players_without_match_data": 0,
+                "next_offset": 5}
+            await self.updater._run_players()
+            first = stored[self.updater.storage.key]["players"]
+            self.assertEqual(first["offset"], 0)
+            self.assertEqual(first["retry_attempt"], 1)
+            self.assertEqual(self.updater.health["players"]["retry_pending"], 1)
+            self.assertEqual(self.updater.health["players"]["errors"], 2)
+
+            await self.updater._run_players()
+            second = stored[self.updater.storage.key]["players"]
+            self.assertEqual(second["offset"], 5)
+            self.assertNotIn("retry_attempt", second)
+            self.assertEqual(sync.await_count, 2)
+            self.assertEqual(sync.await_args.kwargs["limit"], 5)
+            self.assertEqual(self.updater.health["players"]["retry_pending"], 0)
+
+    async def test_retry_success_clears_partial_status(self):
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.side_effect = [
+                {"status": "partial", "processed": 5, "saved": 2,
+                 "errors": 1, "next_offset": 5},
+                {"status": "ok", "processed": 5, "saved": 1,
+                 "skipped_unchanged": 4, "errors": 0,
+                 "next_offset": 5}
+            ]
+            await self.updater._run_players()
+            await self.updater._run_players()
+        self.assertEqual(self.updater.health["players"]["status"], "ok")
+        self.assertEqual(self.updater.health["players"]["saved"], 1)
+        self.assertEqual(self.updater.health["players"]["errors"], 0)
+        self.assertEqual(stored[self.updater.storage.key]["players"]["offset"], 5)
+
+    async def test_numeric_health_restored_without_private_fields(self):
+        await self.updater._mark("players", "partial", {
+            "processed": 5, "saved": 2, "errors": 1,
+            "retry_pending": 1, "player_id": "PRIVATE"})
+        newer = mod.CompetitionAutoUpdater(
+            self.hass, "test", FakeClient(), self.path, Archive)
+        await newer.async_start(True, True)
+        health = newer.health["players"]
+        self.assertEqual(health["errors"], 1)
+        self.assertEqual(health["retry_pending"], 1)
+        self.assertNotIn("PRIVATE", repr(health))
+        self.assertNotIn("player_id", repr(health))
+        await newer.async_stop()
+
     async def test_scheduler_player_health_is_bounded(self):
         with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
             sync.return_value={"status":"ok","next_offset":5}
