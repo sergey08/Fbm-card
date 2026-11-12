@@ -21,6 +21,8 @@ from .competition_refresh_policy import should_poll_group
 GROUP_INTERVAL = timedelta(hours=1)
 PLAYER_INTERVAL = timedelta(minutes=30)
 PLAYER_CYCLE_DELAY = timedelta(hours=24)
+PLAYER_FULL_RECHECK_INTERVAL = timedelta(days=7)
+ROSTER_FULL_RECHECK_INTERVAL = timedelta(days=7)
 
 
 class CompetitionAutoUpdater:
@@ -209,15 +211,33 @@ class CompetitionAutoUpdater:
         await self._save_state({"group_index": (index + 1) % len(groups)})
         if self._stopped:
             return
+        # Refresh all official rosters at least weekly, even if no fixture
+        # result changed. Newly registered players and corrections must not
+        # remain hidden just because match scores are unchanged.
+        roster_checks = state.get("roster_checked_at", {})
+        if type(roster_checks) is not dict:
+            roster_checks = {}
+        last_roster = roster_checks.get(group_id)
+        try:
+            stamp = datetime.fromisoformat(last_roster) if type(last_roster) is str else None
+            full_rosters_due = (stamp is None or stamp.tzinfo is None
+                or datetime.now(timezone.utc) - stamp >= ROSTER_FULL_RECHECK_INTERVAL)
+        except ValueError:
+            full_rosters_due = True
         now = date.today()
         try:
             response = await sync_group(
                 self.client, archive, group["anchor_team_id"],
                 now - timedelta(days=45), now + timedelta(days=60),
-                fetch_rosters="on_change",
+                fetch_rosters=True if full_rosters_due else "on_change",
                 expected_competition={k: group[k] for k in
                                       ("season_id", "phase_id", "group_id")})
             status = response.get("status") if isinstance(response, dict) else None
+            if full_rosters_due and status == "ok":
+                roster_checks = {k: v for k, v in roster_checks.items()
+                                 if k in {item["group_id"] for item in groups}}
+                roster_checks[group_id] = datetime.now(timezone.utc).isoformat()
+                await self._save_state({"roster_checked_at": roster_checks})
             if status in ("ok", "partial"):
                 # Bound Store metadata to current followed groups only.
                 checks = {key: val for key, val in checks.items()
@@ -275,11 +295,22 @@ class CompetitionAutoUpdater:
             return
         team_index = int(cursor.get("team_index", 0)) % len(team_ids)
         offset = max(0, int(cursor.get("offset", 0)))
+        starting_cycle = group_index == 0 and team_index == 0 and offset == 0
+        if starting_cycle and "full_recheck" not in cursor:
+            last_full = state.get("player_full_recheck_at")
+            try:
+                stamp = datetime.fromisoformat(last_full) if type(last_full) is str else None
+                full_due = (stamp is None or stamp.tzinfo is None
+                    or datetime.now(timezone.utc) - stamp >= PLAYER_FULL_RECHECK_INTERVAL)
+            except ValueError:
+                full_due = True
+            cursor["full_recheck"] = full_due
+        full_recheck = cursor.get("full_recheck") is True
         if self._stopped:
             return
         response = await sync_player_stats_batch(
             self.client, archive, identity, team_ids[team_index],
-            offset=offset, limit=5)
+            offset=offset, limit=5, force_recheck=full_recheck)
         if response.get("status") not in ("ok", "partial", "no_roster"):
             await self._mark("players", "failed")
             return
@@ -299,23 +330,28 @@ class CompetitionAutoUpdater:
                 "group_index": group_index,
                 "team_index": team_index,
                 "offset": offset,
-                "retry_attempt": 1}})
+                "retry_attempt": 1, "full_recheck": full_recheck}})
             await self._mark("players", "partial", {
                 **response, "retry_pending": 1})
             return
         if response.get("next_offset") is not None:
             cursor = {"group_index": group_index,
                       "team_index": team_index,
-                      "offset": response["next_offset"]}
+                      "offset": response["next_offset"], "full_recheck": full_recheck}
         elif team_index + 1 < len(team_ids):
             cursor = {"group_index": group_index,
-                      "team_index": team_index + 1, "offset": 0}
+                      "team_index": team_index + 1, "offset": 0,
+                      "full_recheck": full_recheck}
         elif group_index + 1 < len(groups):
             cursor = {"group_index": group_index + 1,
-                      "team_index": 0, "offset": 0}
+                      "team_index": 0, "offset": 0,
+                      "full_recheck": full_recheck}
         else:
             cursor = {"group_index": 0, "team_index": 0, "offset": 0,
                       "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
+        if "cycle_finished_at" in cursor and full_recheck:
+            await self._save_state({
+                "player_full_recheck_at": cursor["cycle_finished_at"]})
         # The bounded cursor advances across all followed groups; unchanged
         # player records are skipped by sync_player_stats_batch.  This lowers
         # the cost of a 30-minute pass while preserving the 5-player cap.
