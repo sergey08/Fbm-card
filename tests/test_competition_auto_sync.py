@@ -242,7 +242,7 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
             await self.updater._run_group()
         sync.assert_awaited_once()
-        self.assertEqual(sync.await_args.kwargs["fetch_rosters"], "on_change")
+        self.assertEqual(sync.await_args.kwargs["fetch_rosters"], True)
         self.assertEqual(sync.await_args.kwargs["expected_competition"]["season_id"],"26/27")
         self.assertEqual(stored[self.updater.storage.key]["group_index"],0)
 
@@ -251,6 +251,50 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(listeners), 2)
         self.assertEqual(listeners[1]["interval"], mod.timedelta(minutes=30))
         await self.updater.async_stop()
+
+    async def test_initial_player_pass_rechecks_cached_records(self):
+        with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"ok","next_offset":5}
+            await self.updater._run_players()
+        self.assertTrue(sync.await_args.kwargs["force_recheck"])
+        self.assertTrue(stored[self.updater.storage.key]["players"]["full_recheck"])
+
+    async def test_recent_weekly_recheck_uses_incremental_mode(self):
+        from datetime import datetime, timezone
+        await self.updater._save_state({
+            "player_full_recheck_at": datetime.now(timezone.utc).isoformat()})
+        with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"ok","next_offset":5}
+            await self.updater._run_players()
+        self.assertFalse(sync.await_args.kwargs["force_recheck"])
+
+    async def test_weekly_mode_survives_restart_and_partial_retry(self):
+        with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
+            sync.side_effect=[
+                {"status":"partial","errors":1,"next_offset":5},
+                {"status":"ok","errors":0,"next_offset":5}]
+            await self.updater._run_players()
+            self.assertTrue(stored[self.updater.storage.key]["players"]["full_recheck"])
+            newer=mod.CompetitionAutoUpdater(
+                self.hass,"test",FakeClient(),self.path,Archive)
+            await newer._run_players()
+            self.assertTrue(sync.await_args.kwargs["force_recheck"])
+            self.assertEqual(stored[self.updater.storage.key]["players"]["offset"],5)
+
+    async def test_full_roster_recheck_uses_incremental_when_recent(self):
+        from datetime import datetime, timezone
+        await self.updater._save_state({"roster_checked_at": {
+            "group": datetime.now(timezone.utc).isoformat()}})
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"ok"}
+            await self.updater._run_group()
+        self.assertEqual(sync.await_args.kwargs["fetch_rosters"],"on_change")
+
+    async def test_weekly_roster_recheck_timestamp_saved_on_success(self):
+        with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
+            sync.return_value={"status":"ok"}
+            await self.updater._run_group()
+        self.assertTrue(stored[self.updater.storage.key]["roster_checked_at"]["group"])
 
     async def test_stats_cursor_moves_and_survives_new_coordinator(self):
         with patch.object(mod,"sync_player_stats_batch",new_callable=AsyncMock) as sync:
