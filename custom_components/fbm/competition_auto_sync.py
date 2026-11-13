@@ -320,8 +320,10 @@ class CompetitionAutoUpdater:
         followed_ids = sorted(g["group_id"] for g in groups)
         previous_ids = state.get("player_followed_groups")
         if previous_ids != followed_ids:
-            if type(previous_ids) is list:
-                cursor = {}
+            # On upgrade from b26 there is no followed-group fingerprint.
+            # Reset even then: otherwise a pre-upgrade 24h cooldown can
+            # postpone bootstrap of a newly followed competition.
+            cursor = {}
             await self._save_state({"player_followed_groups": followed_ids,
                                     "players": cursor})
         last = cursor.get("cycle_finished_at")
