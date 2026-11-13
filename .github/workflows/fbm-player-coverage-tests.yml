@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - feat/fbm-player-coverage-diagnostics
+  pull_request:
+    branches:
+      - feat/fbm-complete-differential-sync
   workflow_dispatch:
 jobs:
   player-coverage:
