@@ -140,6 +140,18 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(stored[self.updater.storage.key][
                 "player_followed_groups"], ["group", "group-new"])
 
+    async def test_bootstrap_counts_incomplete_cached_player_stats(self):
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "p-incomplete", "partidos_jugados": 2}]},
+            subject="a")
+        archive.record(IDENT, "player_stats", {"partidos": [
+            {"id_partido": "game1", "puntos": 4}], "globales": {}},
+            subject="p-incomplete")
+        chosen = mod.CompetitionAutoUpdater._bootstrap_priority(
+            archive, archive.followed_with_anchor())
+        self.assertEqual(chosen, "group")
+
     async def test_bootstrap_ignores_zero_appearance_players(self):
         archive = Archive(self.path)
         archive.record(IDENT, "roster", {"jugadores": [
