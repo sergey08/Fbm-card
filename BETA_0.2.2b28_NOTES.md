@@ -29,3 +29,7 @@
 - Development branch commit `2684b96`: [FBM b28 coverage regression](https://github.com/sergey08/Fbm-card/actions/runs/43529840779) — success, including Python/JS and HA Core smoke.
 - Other checks on same commit: incremental refresh, persisted health, MCP archive preview — success.
 - Beta branch requires independent gated validation before release. / La rama beta requiere validación independiente antes de publicar.
+
+## Release verification / Verificación de publicación
+- Prerelease is published only after both regression and Home Assistant Core smoke jobs pass on the beta branch.
+- La beta solo se publica tras superar las pruebas de regresión y la integración con Home Assistant Core en esta rama.
