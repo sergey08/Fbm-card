@@ -115,6 +115,37 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             await self.updater._run_players()
             self.assertEqual(sync.await_args.args[3], "a")
 
+    async def test_unchanged_followed_groups_preserve_cooldown(self):
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": "2099-01-01T00:00:00+00:00",
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            await self.updater._run_players()
+            sync.assert_not_awaited()
+
+    async def test_new_followed_group_interrupts_midcycle_cursor(self):
+        archive = Archive(self.path)
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"group_index": 0, "team_index": 1, "offset": 3}})
+        other = {**IDENT, "group_id": "group-new"}
+        archive.follow(other, "anchor-new")
+        archive.record(other, "standings", {"clasificacion": [
+            {"id": "new-team", "equipo": "New"}]})
+        archive.record(other, "roster", {"jugadores": [
+            {"id": "new-player", "partidos_jugados": 1}]},
+            subject="new-team")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_args.args[3], "new-team")
+            self.assertEqual(sync.await_args.kwargs["offset"], 0)
+
     async def test_upgrade_from_b26_resets_old_completed_cycle(self):
         archive = Archive(self.path)
         await self.updater._save_state({
