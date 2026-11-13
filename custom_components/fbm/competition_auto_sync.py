@@ -53,7 +53,8 @@ class CompetitionAutoUpdater:
             for key in ("processed", "saved", "skipped_unchanged",
                         "errors", "players_without_match_data",
                         "players_zero_appearances", "players_cached_complete",
-                        "players_queried", "retry_pending"):
+                        "players_queried", "players_incomplete_cache",
+                        "players_missing_points", "retry_pending"):
                 value = metrics.get(key)
                 if type(value) is int and 0 <= value <= 100:
                     record[key] = value
