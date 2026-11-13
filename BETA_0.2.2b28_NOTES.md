@@ -4,7 +4,7 @@
 **Status: development branch, not released or installed.**
 
 - Introduces read-only per-competition coverage counters in `sensor.competiciones` under `coverage`.
-- Counts teams with standings, archived rosters, players with at least one appearance, complete individual statistics, and pending/incomplete statistics.
+- Counts teams with standings, archived and missing rosters, players with at least one appearance, complete individual statistics, and pending/incomplete statistics. Coverage percentage is withheld while rosters are missing.
 - Uses the same completion rule as differential synchronization: distinct official match IDs and integer points for each match.
 - Only followed groups are inspected; no external requests, no player names or identifiers in coverage output, no SQLite writes.
 - Added offline regression tests for absent databases, followed-only filtering, duplicate match IDs and zero-appearance players.
@@ -14,7 +14,7 @@
 **Estado: rama de desarrollo; no publicada ni instalada.**
 
 - Añade contadores de cobertura por competición, de solo lectura, en el atributo `coverage` de `sensor.competiciones`.
-- Cuenta equipos en clasificación, plantillas archivadas, jugadores con al menos una aparición, estadísticas individuales completas y estadísticas pendientes/incompletas.
+- Cuenta equipos en clasificación, plantillas archivadas y ausentes, jugadores con al menos una aparición, estadísticas individuales completas y estadísticas pendientes/incompletas. No muestra porcentaje de cobertura mientras falten plantillas.
 - Aplica el mismo criterio que la sincronización diferencial: identificadores únicos de partido y puntos enteros por partido.
 - Solo analiza competiciones seguidas; sin peticiones externas, sin nombres ni identificadores de jugadores en el resumen y sin escrituras SQLite.
 - Pruebas offline para base de datos ausente, filtrado de grupos favoritos, partidos duplicados y jugadores sin partidos.
