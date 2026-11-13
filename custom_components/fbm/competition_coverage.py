@@ -26,16 +26,22 @@ def read_coverage(path: str) -> dict:
         if len(selected) > 50:
             raise ValueError("Too many followed competitions")
         for season, phase, group_id in selected:
+            # Only the newest snapshot for each source/subject. Historical
+            # versions must not inflate memory use as the archive grows.
             rows = db.execute(
-                """SELECT source,subject,payload FROM snapshots
-                   WHERE season=? AND phase=? AND group_id=?
-                     AND source IN ('standings','roster','player_stats')
-                   ORDER BY observed_at DESC""",
+                """SELECT s.source,s.subject,s.payload FROM snapshots AS s
+                   WHERE s.season=? AND s.phase=? AND s.group_id=?
+                     AND s.source IN ('standings','roster','player_stats')
+                     AND s.observed_at=(
+                       SELECT MAX(t.observed_at) FROM snapshots AS t
+                       WHERE t.season=s.season AND t.phase=s.phase
+                         AND t.group_id=s.group_id AND t.source=s.source
+                         AND t.subject=s.subject
+                     )""",
                 (season, phase, group_id),
             ).fetchall()
-            latest = {}
-            for source, subject, payload in rows:
-                latest.setdefault((source, subject), payload)
+            latest = {(source, subject): payload
+                      for source, subject, payload in rows}
             standings_raw = latest.get(("standings", ""))
             standings = json.loads(standings_raw).get("clasificacion", []) if standings_raw else []
             teams = [r for r in standings[:20] if isinstance(r, dict) and isinstance(r.get("id"), str)]
