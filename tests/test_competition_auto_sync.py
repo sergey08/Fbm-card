@@ -115,6 +115,31 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             await self.updater._run_players()
             self.assertEqual(sync.await_args.args[3], "a")
 
+    async def test_new_followed_group_bypasses_completed_cycle_delay(self):
+        archive = Archive(self.path)
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at":
+                        "2099-01-01T00:00:00+00:00",
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        new_group = {**IDENT, "group_id": "group-new"}
+        archive.follow(new_group, "anchor-new")
+        archive.record(new_group, "standings", {"clasificacion": [
+            {"id": "new-team", "equipo": "New"}]})
+        archive.record(new_group, "roster", {"jugadores": [
+            {"id": "new-player", "partidos_jugados": 1}]},
+            subject="new-team")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_count, 1)
+            self.assertEqual(sync.await_args.args[3], "new-team")
+            self.assertEqual(stored[self.updater.storage.key][
+                "player_followed_groups"], ["group", "group-new"])
+
     async def test_bootstrap_ignores_zero_appearance_players(self):
         archive = Archive(self.path)
         archive.record(IDENT, "roster", {"jugadores": [
