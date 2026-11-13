@@ -382,11 +382,13 @@ class CompetitionAutoUpdater:
         elif team_index + 1 < len(team_ids):
             cursor = {"group_index": group_index,
                       "team_index": team_index + 1, "offset": 0,
-                      "full_recheck": full_recheck}
+                      "full_recheck": full_recheck,
+                      "priority_group_id": priority_id}
         elif group_index + 1 < len(groups):
             cursor = {"group_index": group_index + 1,
                       "team_index": 0, "offset": 0,
-                      "full_recheck": full_recheck}
+                      "full_recheck": full_recheck,
+                      "priority_group_id": priority_id}
         else:
             cursor = {"group_index": 0, "team_index": 0, "offset": 0,
                       "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
