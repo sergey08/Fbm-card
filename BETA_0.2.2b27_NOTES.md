@@ -37,3 +37,5 @@
 ### Observaciones
 - La prioridad comienza en la siguiente ejecución programada de sincronización, no inmediatamente al seguir una competición.
 - Los datos individuales no publicados o inconsistentes se señalan sin rellenarlos con valores inventados.
+
+Release validation is triggered by pushes to `beta/0.2.2b27`; publication remains gated on both regression and real Home Assistant checks.
