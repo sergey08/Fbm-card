@@ -43,7 +43,8 @@ class CoverageTests(unittest.TestCase):
             result = coverage.read_coverage(path)
             self.assertEqual(len(result["groups"]), 1)
             self.assertEqual(result["totals"], {"teams": 1, "rosters": 1,
-                                                  "players": 3, "complete": 1, "pending": 2})
+                                                  "players": 3, "complete": 1, "pending": 2,
+                                                  "missing_rosters": 0, "coverage_percent": 33.3})
 
 
     def test_five_competitions_and_missing_rosters(self):
@@ -64,6 +65,8 @@ class CoverageTests(unittest.TestCase):
             self.assertEqual(result["totals"]["rosters"], 0)
             self.assertEqual(result["totals"]["players"], 0)
             self.assertEqual(result["totals"]["pending"], 0)
+            self.assertEqual(result["totals"]["missing_rosters"], 5)
+            self.assertIsNone(result["totals"]["coverage_percent"])
 
 
 if __name__ == "__main__":
