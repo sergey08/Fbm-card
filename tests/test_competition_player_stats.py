@@ -57,6 +57,8 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(result["status"],"ok")
         self.assertEqual(result["processed"],5)
         self.assertEqual(result["saved"],5)
+        self.assertEqual(result["players_queried"],5)
+        self.assertEqual(result["players_zero_appearances"],0)
         self.assertEqual(result["next_offset"],5)
         self.assertEqual(len(self.client.calls),5)
         row=self.archive.latest(IDENTITY,"player_stats","0")
@@ -79,6 +81,8 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(len(self.client.calls), 5)
         second = self.run_batch()
         self.assertEqual(second["skipped_unchanged"], 5)
+        self.assertEqual(second["players_cached_complete"], 5)
+        self.assertEqual(second["players_queried"], 0)
         self.assertEqual(second["saved"], 0)
         self.assertEqual(len(self.client.calls), 5)
 
@@ -109,6 +113,8 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["errors"], 0)
         self.assertEqual(result["skipped_unchanged"], 2)
+        self.assertEqual(result["players_zero_appearances"], 2)
+        self.assertEqual(result["players_queried"], 3)
         self.assertEqual(result["saved"], 3)
         self.assertEqual(self.client.calls, ["0", "2", "3"])
 
