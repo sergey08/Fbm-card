@@ -1,0 +1,23 @@
+name: FBM player coverage regression
+on:
+  push:
+    branches:
+      - feat/fbm-player-coverage-diagnostics
+  workflow_dispatch:
+jobs:
+  player-coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax
+        run: |
+          python -m py_compile custom_components/fbm/competition_auto_sync.py custom_components/fbm/competition_player_stats.py tests/test_competition_auto_sync.py tests/test_competition_player_stats.py
+      - name: Run offline regression tests
+        run: |
+          python -m unittest discover -s tests -p 'test_competition_auto_sync.py' -v
+          python -m unittest discover -s tests -p 'test_competition_player_stats.py' -v
