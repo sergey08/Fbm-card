@@ -14,7 +14,8 @@ from urllib.parse import quote
 def read_coverage(path: str) -> dict:
     if not Path(path).is_file():
         return {"groups": [], "totals": {"teams": 0, "rosters": 0, "players": 0,
-                                           "complete": 0, "pending": 0}}
+                                           "complete": 0, "pending": 0, "missing_rosters": 0,
+                                           "coverage_percent": None}}
     uri = "file:" + quote(str(Path(path).resolve()), safe="/") + "?mode=ro"
     groups = []
     totals = {"teams": 0, "rosters": 0, "players": 0, "complete": 0, "pending": 0}
@@ -72,8 +73,20 @@ def read_coverage(path: str) -> dict:
                         counter["complete"] += 1
                     else:
                         counter["pending"] += 1
+            counter["missing_rosters"] = counter["teams"] - counter["rosters"]
+            counter["coverage_percent"] = (
+                round(100 * counter["complete"] / counter["players"], 1)
+                if counter["players"] and counter["missing_rosters"] == 0
+                else None
+            )
             for key in totals:
                 totals[key] += counter[key]
             groups.append({"season_id": season, "phase_id": phase,
                            "group_id": group_id, **counter})
+    totals["missing_rosters"] = totals["teams"] - totals["rosters"]
+    totals["coverage_percent"] = (
+        round(100 * totals["complete"] / totals["players"], 1)
+        if totals["players"] and totals["missing_rosters"] == 0
+        else None
+    )
     return {"groups": groups, "totals": totals}
