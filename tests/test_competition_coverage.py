@@ -46,5 +46,25 @@ class CoverageTests(unittest.TestCase):
                                                   "players": 3, "complete": 1, "pending": 2})
 
 
+    def test_five_competitions_and_missing_rosters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "five.db")
+            with sqlite3.connect(path) as db:
+                db.execute("CREATE TABLE competitions (season TEXT, phase TEXT, group_id TEXT, followed INTEGER)")
+                db.execute("CREATE TABLE snapshots (season TEXT, phase TEXT, group_id TEXT, source TEXT, subject TEXT, observed_at TEXT, payload TEXT)")
+                for n in range(5):
+                    group = f"group-{n}"
+                    db.execute("INSERT INTO competitions VALUES (?,?,?,?)", ("26/27", "phase", group, 1))
+                    db.execute("INSERT INTO snapshots VALUES (?,?,?,?,?,?,?)",
+                               ("26/27", "phase", group, "standings", "", "2026-11-14T00:00:00Z",
+                                json.dumps({"clasificacion": [{"id": f"team-{n}"}]})))
+            result = coverage.read_coverage(path)
+            self.assertEqual(len(result["groups"]), 5)
+            self.assertEqual(result["totals"]["teams"], 5)
+            self.assertEqual(result["totals"]["rosters"], 0)
+            self.assertEqual(result["totals"]["players"], 0)
+            self.assertEqual(result["totals"]["pending"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
