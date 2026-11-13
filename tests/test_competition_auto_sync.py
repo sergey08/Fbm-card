@@ -115,6 +115,21 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             await self.updater._run_players()
             self.assertEqual(sync.await_args.args[3], "a")
 
+    async def test_upgrade_from_b26_resets_old_completed_cycle(self):
+        archive = Archive(self.path)
+        await self.updater._save_state({
+            "players": {"cycle_finished_at": "2099-01-01T00:00:00+00:00",
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 0, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_count, 1)
+            self.assertEqual(stored[self.updater.storage.key][
+                "player_followed_groups"], ["group"])
+
     async def test_new_followed_group_bypasses_completed_cycle_delay(self):
         archive = Archive(self.path)
         await self.updater._save_state({
