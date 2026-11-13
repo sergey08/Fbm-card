@@ -91,11 +91,148 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
 
+    async def test_bootstrap_prefers_group_with_missing_player_snapshots(self):
+        archive = Archive(self.path)
+        other = {**IDENT, "group_id": "group-new"}
+        archive.follow(other, "anchor-new")
+        archive.record(other, "standings", {"clasificacion": [
+            {"id": "new-team", "equipo": "New"}]})
+        archive.record(other, "roster", {"jugadores": [
+            {"id": "new-player", "partidos_jugados": 1}]},
+            subject="new-team")
+        groups = archive.followed_with_anchor()
+        chosen = mod.CompetitionAutoUpdater._bootstrap_priority(archive, groups)
+        self.assertEqual(chosen, "group-new")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_args.args[3], "new-team")
+            cursor = stored[self.updater.storage.key]["players"]
+            self.assertEqual(cursor["priority_group_id"], "group-new")
+            await self.updater._run_players()
+            self.assertEqual(sync.await_args.args[3], "a")
+
+    async def test_unchanged_followed_groups_preserve_cooldown(self):
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": "2099-01-01T00:00:00+00:00",
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            await self.updater._run_players()
+            sync.assert_not_awaited()
+
+    async def test_new_followed_group_interrupts_midcycle_cursor(self):
+        archive = Archive(self.path)
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"group_index": 0, "team_index": 1, "offset": 3}})
+        other = {**IDENT, "group_id": "group-new"}
+        archive.follow(other, "anchor-new")
+        archive.record(other, "standings", {"clasificacion": [
+            {"id": "new-team", "equipo": "New"}]})
+        archive.record(other, "roster", {"jugadores": [
+            {"id": "new-player", "partidos_jugados": 1}]},
+            subject="new-team")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_args.args[3], "new-team")
+            self.assertEqual(sync.await_args.kwargs["offset"], 0)
+
+    async def test_upgrade_from_b26_resets_old_completed_cycle(self):
+        archive = Archive(self.path)
+        await self.updater._save_state({
+            "players": {"cycle_finished_at": "2099-01-01T00:00:00+00:00",
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 0, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_count, 1)
+            self.assertEqual(stored[self.updater.storage.key][
+                "player_followed_groups"], ["group"])
+
+    async def test_new_followed_group_bypasses_completed_cycle_delay(self):
+        archive = Archive(self.path)
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at":
+                        "2099-01-01T00:00:00+00:00",
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        new_group = {**IDENT, "group_id": "group-new"}
+        archive.follow(new_group, "anchor-new")
+        archive.record(new_group, "standings", {"clasificacion": [
+            {"id": "new-team", "equipo": "New"}]})
+        archive.record(new_group, "roster", {"jugadores": [
+            {"id": "new-player", "partidos_jugados": 1}]},
+            subject="new-team")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_count, 1)
+            self.assertEqual(sync.await_args.args[3], "new-team")
+            self.assertEqual(stored[self.updater.storage.key][
+                "player_followed_groups"], ["group", "group-new"])
+
+    async def test_bootstrap_counts_incomplete_cached_player_stats(self):
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "p-incomplete", "partidos_jugados": 2}]},
+            subject="a")
+        archive.record(IDENT, "player_stats", {"partidos": [
+            {"id_partido": "game1", "puntos": 4}], "globales": {}},
+            subject="p-incomplete")
+        chosen = mod.CompetitionAutoUpdater._bootstrap_priority(
+            archive, archive.followed_with_anchor())
+        self.assertEqual(chosen, "group")
+
+    async def test_bootstrap_ignores_zero_appearance_players(self):
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "zero", "partidos_jugados": 0}]}, subject="a")
+        chosen = mod.CompetitionAutoUpdater._bootstrap_priority(
+            archive, archive.followed_with_anchor())
+        self.assertIsNone(chosen)
+
     async def test_mark_notifies_competition_sensor(self):
         await self.updater._mark("groups", "ok")
         self.assertEqual(dispatched[-1], "fbm_competitions_refresh_test")
         self.assertEqual(self.updater.health["groups"]["status"], "ok")
         self.assertIsNotNone(self.updater.health["groups"]["last_run"])
+
+    async def test_player_coverage_counters_persist_and_restore(self):
+        await self.updater._mark("players", "ok", {
+            "processed": 5, "players_queried": 2,
+            "players_zero_appearances": 1,
+            "players_cached_complete": 2,
+            "players_incomplete_cache": 1,
+            "players_missing_points": 1,
+            "private_player_name": "hidden"})
+        current = self.updater.health["players"]
+        self.assertEqual(current["players_queried"], 2)
+        self.assertEqual(current["players_zero_appearances"], 1)
+        self.assertEqual(current["players_cached_complete"], 2)
+        self.assertEqual(current["players_missing_points"], 1)
+        self.assertNotIn("private_player_name", current)
+        restarted = mod.CompetitionAutoUpdater(
+            self.hass, "test", FakeClient(), self.path, Archive)
+        await restarted.async_start(False, False)
+        self.assertEqual(restarted.health["players"]["players_queried"], 2)
+        self.assertEqual(restarted.health["players"]["players_cached_complete"], 2)
+        self.assertEqual(restarted.health["players"]["players_incomplete_cache"], 1)
+        await restarted.async_stop()
 
     async def test_health_survives_restart_without_replaying_tasks(self):
         await self.updater._mark("players", "ok")

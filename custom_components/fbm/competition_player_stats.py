@@ -29,6 +29,8 @@ async def sync_player_stats_batch(client, archive, competition: dict,
         raise ValueError("Plantilla inválida")
     subset = players[offset:offset + limit]
     saved, errors, missing, skipped = 0, 0, 0, 0
+    zero_appearances, queried, cached_complete = 0, 0, 0
+    incomplete_cached, missing_points = 0, 0
     for player in subset:
         if not await asyncio.to_thread(archive.is_followed, competition):
             return {"status": "not_followed", "saved": saved,
@@ -52,6 +54,7 @@ async def sync_player_stats_batch(client, archive, competition: dict,
             # Once the roster reports a first appearance, the normal
             # incremental mechanism fetches their individual statistics.
             if type(appearances) is int and appearances == 0:
+                zero_appearances += 1
                 skipped += 1
                 continue
             if (not force_recheck
@@ -63,8 +66,16 @@ async def sync_player_stats_batch(client, archive, competition: dict,
                     and all(type(m) is dict and type(m.get("puntos")) is int
                             for m in cached_games)
                     and appearances > 0):
+                cached_complete += 1
                 skipped += 1
                 continue
+            if (type(appearances) is int and appearances > 0
+                    and type(cached_games) is list
+                    and (len(cached_games) < appearances or any(
+                        type(m) is not dict or type(m.get('puntos')) is not int
+                        for m in cached_games))):
+                incomplete_cached += 1
+            queried += 1
             stats = await client.async_player_statistics(player_id, team_id)
             if (type(stats) is not dict or stats.get("jugador") != player_id
                     or stats.get("equipo") != team_id):
@@ -81,6 +92,9 @@ async def sync_player_stats_batch(client, archive, competition: dict,
             saved += int(was_written)
             if not matches:
                 missing += 1
+            elif any(type(m) is not dict or type(m.get('puntos')) is not int
+                     for m in matches):
+                missing_points += 1
         except Exception:
             errors += 1
         await asyncio.sleep(0.5)
@@ -88,5 +102,10 @@ async def sync_player_stats_batch(client, archive, competition: dict,
             "processed": len(subset), "saved": saved, "skipped_unchanged": skipped,
             "errors": errors,
             "players_without_match_data": missing,
+            "players_zero_appearances": zero_appearances,
+            "players_cached_complete": cached_complete,
+            "players_queried": queried,
+            "players_incomplete_cache": incomplete_cached,
+            "players_missing_points": missing_points,
             "next_offset": offset + len(subset) if offset + len(subset) < len(players) else None,
             "roster_size": len(players)}

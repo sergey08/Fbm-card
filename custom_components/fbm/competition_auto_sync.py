@@ -52,7 +52,9 @@ class CompetitionAutoUpdater:
         if kind == "players" and type(metrics) is dict:
             for key in ("processed", "saved", "skipped_unchanged",
                         "errors", "players_without_match_data",
-                        "retry_pending"):
+                        "players_zero_appearances", "players_cached_complete",
+                        "players_queried", "players_incomplete_cache",
+                        "players_missing_points", "retry_pending"):
                 value = metrics.get(key)
                 if type(value) is int and 0 <= value <= 100:
                     record[key] = value
@@ -95,6 +97,11 @@ class CompetitionAutoUpdater:
                                 for key in ("processed", "saved",
                                             "skipped_unchanged", "errors",
                                             "players_without_match_data",
+                                            "players_zero_appearances",
+                                            "players_cached_complete",
+                                            "players_queried",
+                                            "players_incomplete_cache",
+                                            "players_missing_points",
                                             "retry_pending"):
                                     value = record.get(key)
                                     if type(value) is int and 0 <= value <= 100:
@@ -262,6 +269,43 @@ class CompetitionAutoUpdater:
                 # FBM failures are contained and never disclose player data.
                 await self._mark("players", "failed")
 
+    @staticmethod
+    def _bootstrap_priority(archive, groups):
+        """Select group with the most missing player snapshots."""
+        best_id, best_missing = None, 0
+        for group in groups:
+            identity = {k: group[k] for k in ("season_id", "phase_id", "group_id")}
+            identity["season_verified"] = True
+            standings = archive.latest(identity, "standings")
+            rows = (standings or {}).get("payload", {}).get("clasificacion", [])
+            missing = 0
+            for team in rows[:20]:
+                team_id = team.get("id") if type(team) is dict else None
+                if type(team_id) is not str:
+                    continue
+                roster = archive.latest(identity, "roster", team_id)
+                for player in (roster or {}).get("payload", {}).get("jugadores", [])[:100]:
+                    if type(player) is not dict or type(player.get("id")) is not str:
+                        continue
+                    if player.get("partidos_jugados") == 0:
+                        continue
+                    stats = archive.latest(identity, "player_stats", player["id"])
+                    games = (stats or {}).get("payload", {}).get("partidos")
+                    appearances = player.get("partidos_jugados")
+                    if stats is None or (type(appearances) is int
+                            and appearances > 0 and (
+                                type(games) is not list
+                                or len({m.get("id_partido") for m in games
+                                        if type(m) is dict and
+                                        type(m.get("id_partido")) is str}) < appearances
+                                or any(type(m) is not dict or
+                                       type(m.get("puntos")) is not int
+                                       for m in games))):
+                        missing += 1
+            if missing > best_missing:
+                best_id, best_missing = group["group_id"], missing
+        return best_id
+
     async def _run_players_impl(self):
         archive, groups = await self._archive_and_groups()
         if not groups:
@@ -271,6 +315,17 @@ class CompetitionAutoUpdater:
         cursor = state.get("players", {})
         if type(cursor) is not dict:
             cursor = {}
+        # A newly followed group must not wait behind a stale cursor or
+        # the 24-hour rest period. Store only official group identifiers.
+        followed_ids = sorted(g["group_id"] for g in groups)
+        previous_ids = state.get("player_followed_groups")
+        if previous_ids != followed_ids:
+            # On upgrade from b26 there is no followed-group fingerprint.
+            # Reset even then: otherwise a pre-upgrade 24h cooldown can
+            # postpone bootstrap of a newly followed competition.
+            cursor = {}
+            await self._save_state({"player_followed_groups": followed_ids,
+                                    "players": cursor})
         last = cursor.get("cycle_finished_at")
         if type(last) is str:
             try:
@@ -279,6 +334,17 @@ class CompetitionAutoUpdater:
                     return
             except ValueError:
                 pass
+        priority_id = cursor.get("priority_group_id")
+        if type(priority_id) is not str or priority_id not in {
+                g["group_id"] for g in groups}:
+            priority_id = None
+        if (priority_id is None and int(cursor.get("group_index", 0)) == 0
+                and int(cursor.get("team_index", 0)) == 0
+                and int(cursor.get("offset", 0)) == 0):
+            priority_id = await self.hass.async_add_executor_job(
+                self._bootstrap_priority, archive, groups)
+        if priority_id:
+            groups = sorted(groups, key=lambda g: g["group_id"] != priority_id)
         group_index = int(cursor.get("group_index", 0)) % len(groups)
         selected = groups[group_index]
         identity = {**{k: selected[k] for k in
@@ -330,22 +396,26 @@ class CompetitionAutoUpdater:
                 "group_index": group_index,
                 "team_index": team_index,
                 "offset": offset,
-                "retry_attempt": 1, "full_recheck": full_recheck}})
+                "retry_attempt": 1, "full_recheck": full_recheck,
+                "priority_group_id": priority_id}})
             await self._mark("players", "partial", {
                 **response, "retry_pending": 1})
             return
         if response.get("next_offset") is not None:
             cursor = {"group_index": group_index,
                       "team_index": team_index,
-                      "offset": response["next_offset"], "full_recheck": full_recheck}
+                      "offset": response["next_offset"], "full_recheck": full_recheck,
+                      "priority_group_id": priority_id}
         elif team_index + 1 < len(team_ids):
             cursor = {"group_index": group_index,
                       "team_index": team_index + 1, "offset": 0,
-                      "full_recheck": full_recheck}
+                      "full_recheck": full_recheck,
+                      "priority_group_id": priority_id}
         elif group_index + 1 < len(groups):
             cursor = {"group_index": group_index + 1,
                       "team_index": 0, "offset": 0,
-                      "full_recheck": full_recheck}
+                      "full_recheck": full_recheck,
+                      "priority_group_id": priority_id}
         else:
             cursor = {"group_index": 0, "team_index": 0, "offset": 0,
                       "cycle_finished_at": datetime.now(timezone.utc).isoformat()}
