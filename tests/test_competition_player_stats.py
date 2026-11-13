@@ -163,6 +163,29 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(result["skipped_unchanged"],1)
         self.assertEqual(self.client.calls,["1"])
 
+    def test_incomplete_cache_is_counted_and_refetched(self):
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": "0", "partidos_jugados": 2}]}, subject="team-A")
+        self.archive.record(IDENTITY, "player_stats", {
+            "partidos": [{"id_partido": "old", "puntos": None}],
+            "globales": {}}, subject="0")
+        result = self.run_batch()
+        self.assertEqual(result["players_incomplete_cache"], 1)
+        self.assertEqual(result["players_queried"], 1)
+        self.assertEqual(result["errors"], 0)
+
+    def test_null_match_points_are_reported(self):
+        async def missing_points(player_id, team_id):
+            return {"jugador": player_id, "equipo": team_id,
+                    "globales": {"estadisticas": {}},
+                    "partidos": {"partidos": [
+                        {"id_partido": "match-null", "puntos": None}]}}
+        self.client.async_player_statistics = missing_points
+        result = self.run_batch(limit=1)
+        self.assertEqual(result["players_missing_points"], 1)
+        self.assertEqual(result["players_queried"], 1)
+        self.assertEqual(result["errors"], 0)
+
     def test_no_roster_for_unselected_team(self):
         result=asyncio.run(sync(self.client,self.archive,IDENTITY,"another"))
         self.assertEqual(result["status"],"no_roster")
