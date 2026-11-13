@@ -3,8 +3,6 @@ name: FBM b27 complete differential archive validation and prerelease
 on:
   push:
     branches: [beta/0.2.2b27]
-    paths:
-      - '.github/workflows/publish-0.2.2b27.yml'
   workflow_dispatch:
 
 permissions:
