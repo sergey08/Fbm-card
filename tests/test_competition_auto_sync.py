@@ -102,17 +102,21 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             "processed": 5, "players_queried": 2,
             "players_zero_appearances": 1,
             "players_cached_complete": 2,
+            "players_incomplete_cache": 1,
+            "players_missing_points": 1,
             "private_player_name": "hidden"})
         current = self.updater.health["players"]
         self.assertEqual(current["players_queried"], 2)
         self.assertEqual(current["players_zero_appearances"], 1)
         self.assertEqual(current["players_cached_complete"], 2)
+        self.assertEqual(current["players_missing_points"], 1)
         self.assertNotIn("private_player_name", current)
         restarted = mod.CompetitionAutoUpdater(
             self.hass, "test", FakeClient(), self.path, Archive)
         await restarted.async_start(False, False)
         self.assertEqual(restarted.health["players"]["players_queried"], 2)
         self.assertEqual(restarted.health["players"]["players_cached_complete"], 2)
+        self.assertEqual(restarted.health["players"]["players_incomplete_cache"], 1)
         await restarted.async_stop()
 
     async def test_health_survives_restart_without_replaying_tasks(self):
