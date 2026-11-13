@@ -91,6 +91,38 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
 
+    async def test_bootstrap_prefers_group_with_missing_player_snapshots(self):
+        archive = Archive(self.path)
+        other = {**IDENT, "group_id": "group-new"}
+        archive.follow(other, "anchor-new")
+        archive.record(other, "standings", {"clasificacion": [
+            {"id": "new-team", "equipo": "New"}]})
+        archive.record(other, "roster", {"jugadores": [
+            {"id": "new-player", "partidos_jugados": 1}]},
+            subject="new-team")
+        groups = archive.followed_with_anchor()
+        chosen = mod.CompetitionAutoUpdater._bootstrap_priority(archive, groups)
+        self.assertEqual(chosen, "group-new")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_args.args[3], "new-team")
+            cursor = stored[self.updater.storage.key]["players"]
+            self.assertEqual(cursor["priority_group_id"], "group-new")
+            await self.updater._run_players()
+            self.assertEqual(sync.await_args.args[3], "a")
+
+    async def test_bootstrap_ignores_zero_appearance_players(self):
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "zero", "partidos_jugados": 0}]}, subject="a")
+        chosen = mod.CompetitionAutoUpdater._bootstrap_priority(
+            archive, archive.followed_with_anchor())
+        self.assertIsNone(chosen)
+
     async def test_mark_notifies_competition_sensor(self):
         await self.updater._mark("groups", "ok")
         self.assertEqual(dispatched[-1], "fbm_competitions_refresh_test")
