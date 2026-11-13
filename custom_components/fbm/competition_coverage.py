@@ -60,7 +60,7 @@ def read_coverage(path: str) -> dict:
                         continue
                     payload = json.loads(stats)
                     games = payload.get("partidos", [])
-                    if (isinstance(games, list) and len(games) >= appearances
+                    if (isinstance(games, list) and len({game.get("id_partido") for game in games if isinstance(game, dict) and isinstance(game.get("id_partido"), str)}) >= appearances
                             and all(isinstance(game, dict) and
                                     type(game.get("puntos")) is int for game in games)):
                         counter["complete"] += 1
