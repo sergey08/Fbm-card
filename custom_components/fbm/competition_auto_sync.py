@@ -289,7 +289,18 @@ class CompetitionAutoUpdater:
                         continue
                     if player.get("partidos_jugados") == 0:
                         continue
-                    if archive.latest(identity, "player_stats", player["id"]) is None:
+                    stats = archive.latest(identity, "player_stats", player["id"])
+                    games = (stats or {}).get("payload", {}).get("partidos")
+                    appearances = player.get("partidos_jugados")
+                    if stats is None or (type(appearances) is int
+                            and appearances > 0 and (
+                                type(games) is not list
+                                or len({m.get("id_partido") for m in games
+                                        if type(m) is dict and
+                                        type(m.get("id_partido")) is str}) < appearances
+                                or any(type(m) is not dict or
+                                       type(m.get("puntos")) is not int
+                                       for m in games))):
                         missing += 1
             if missing > best_missing:
                 best_id, best_missing = group["group_id"], missing
