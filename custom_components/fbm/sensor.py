@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 
 from .const import DOMAIN
+from .competition_coverage import read_coverage
 
 SCAN_INTERVAL = timedelta(minutes=5)
 
@@ -192,6 +193,11 @@ class FBMCompetitionsSensor(SensorEntity):
         except (OSError, ValueError, KeyError, sqlite3.Error):
             self._attr_available = False
             return
+        try:
+            coverage = await self.hass.async_add_executor_job(
+                read_coverage, entry["competitions_sqlite_path"])
+        except (OSError, ValueError, KeyError, sqlite3.Error, TypeError):
+            coverage = {"groups": [], "totals": {}, "status": "unavailable"}
         self._attr_available = True
         self._attr_native_value = summary["count"]
         # Keep the exposed state deliberately bounded. The actual roster,
@@ -204,6 +210,7 @@ class FBMCompetitionsSensor(SensorEntity):
             group["last_checked_at"] = checked.get(group["group_id"])
         self._attr_extra_state_attributes = {
             "groups": summary["groups"],
+            "coverage": coverage,
             "automatic_refresh": {
                 "groups_enabled": auto_groups,
                 "players_enabled": auto_players,
