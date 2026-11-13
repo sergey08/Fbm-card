@@ -304,6 +304,15 @@ class CompetitionAutoUpdater:
         cursor = state.get("players", {})
         if type(cursor) is not dict:
             cursor = {}
+        # A newly followed group must not wait behind a stale cursor or
+        # the 24-hour rest period. Store only official group identifiers.
+        followed_ids = sorted(g["group_id"] for g in groups)
+        previous_ids = state.get("player_followed_groups")
+        if previous_ids != followed_ids:
+            if type(previous_ids) is list:
+                cursor = {}
+            await self._save_state({"player_followed_groups": followed_ids,
+                                    "players": cursor})
         last = cursor.get("cycle_finished_at")
         if type(last) is str:
             try:
