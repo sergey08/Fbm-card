@@ -27,6 +27,11 @@ class PollPolicyTests(unittest.TestCase):
         last = (NOW - timedelta(hours=2)).isoformat()
         self.assertFalse(m.should_poll_group(self.schedule, last, NOW))
 
+    def test_recent_pending_score_is_rechecked_after_thirty_minutes(self):
+        pending = {"partidos": [{"fecha": "2026-11-11", "estado": "unknown", "marcador": None}]}
+        self.assertFalse(m.should_poll_group(pending, (NOW - timedelta(minutes=29)).isoformat(), NOW))
+        self.assertTrue(m.should_poll_group(pending, (NOW - timedelta(minutes=30)).isoformat(), NOW))
+
     def test_recent_match_is_rechecked(self):
         last = (NOW - timedelta(hours=5)).isoformat()
         self.assertTrue(m.should_poll_group(self.schedule, last, NOW))
