@@ -48,7 +48,10 @@ test("la configuración y el manifiesto identifican FBM Card como no oficial", (
   assert.deepEqual(Object.keys(es.options.error), Object.keys(strings.options.error));
   assert.match(es.config.step.user.description, /no oficial/);
   assert.match(es.config.step.user.description, /Federación de Baloncesto de Madrid/);
-  assert.match(strings.config.step.user.description, /no oficial/);
+  const en = JSON.parse(fs.readFileSync("custom_components/fbm/translations/en.json", "utf8"));
+  assert.deepEqual(en, strings);
+  assert.match(en.config.step.user.description, /unofficial/i);
+  assert.match(en.config.step.user.description, /Federación de Baloncesto de Madrid/);
   assert.equal(JSON.parse(fs.readFileSync("custom_components/fbm/manifest.json", "utf8")).name, "FBM Card (no oficial)");
   assert.ok(es.config.abort.already_configured);
 });
