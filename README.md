@@ -39,8 +39,9 @@ Pulsa el botón, selecciona tu instancia de Home Assistant y sigue el diálogo p
 3. Añade la URL `https://github.com/sergey08/Fbm-card` y selecciona el tipo **Integración**. Pulsa **Añadir**.
 4. Busca **FBM para Home Assistant** entre los repositorios añadidos, descarga la versión estable y reinicia Home Assistant si lo solicita.
 5. Ve a **Ajustes → Dispositivos y servicios**, añade **FBM Card (no oficial)**. En **Configurar → Buscar equipo para seguir su competición**, confirma el acceso de invitado si se solicita, busca el primer equipo y selecciona su grupo.
-6. La integración registra automáticamente `/fbm_static/fbm-card.js`: **no dupliques el recurso Lovelace**. Añade una tarjeta FBM desde el selector y configúrala con su editor visual o YAML.
-7. Recarga el navegador si sigue mostrando una tarjeta antigua en caché.
+6. La integración registra automáticamente `/fbm_static/fbm-card.js`: **no dupliques el recurso Lovelace**.
+7. Añade las tarjetas mediante el **editor visual del panel de control** (instrucciones abajo). No es necesario escribir YAML.
+8. Recarga el navegador si sigue mostrando una tarjeta antigua en caché.
 
 ### Capturas de pantalla
 
@@ -48,7 +49,23 @@ Queremos mostrar capturas reales de la pantalla de añadir repositorio personali
 
 **Actualizaciones:** conserva la identidad invitada y la configuración existente. No elimines ni vuelvas a añadir la integración, ni registres otra vez el dispositivo, solo por actualizar la tarjeta.
 
-## Tarjetas y ejemplos de configuración
+## Añadir tarjetas desde el panel de control (sin código)
+
+La forma recomendada de utilizar FBM Card es mediante la interfaz gráfica de Home Assistant:
+
+1. Abre el **panel de control** (dashboard) donde quieras mostrar los equipos o las competiciones.
+2. Entra en **Editar panel** y selecciona **Añadir tarjeta**.
+3. Abre la pestaña **Por tarjeta** y escribe `fbm` en el buscador.
+4. En el selector verás las opciones **FBM Card** y **FBM Competition Card**:
+   - **FBM Card**: busca equipos y permite seguir un equipo en una tarjeta independiente, con pestañas **Partidos**, **Clasificación** y **Jugadores**.
+   - **FBM Competition Card**: muestra la competición seleccionada, sus jornadas, clasificación y datos archivados disponibles.
+5. Selecciona la tarjeta, configura sus opciones con el **editor visual** y guárdala. Puedes añadir tantas tarjetas independientes como necesites.
+
+**No necesitas pegar código YAML** para añadir las tarjetas. La configuración mediante código se mantiene como alternativa para usuarios avanzados o para copiar una configuración existente.
+
+## Configuración avanzada mediante YAML (opcional)
+
+Los siguientes ejemplos son opcionales. Para una instalación normal, usa **Editar panel → Añadir tarjeta → Por tarjeta**.
 
 **Tarjeta de búsqueda** — encuentra un equipo y copia sus identificadores oficiales:
 
