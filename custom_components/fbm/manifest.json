@@ -1,16 +1,16 @@
 {
   "domain": "fbm",
   "name": "FBM Card (no oficial)",
-  "version": "0.2.10",
-  "documentation": "https://github.com/sergey08/Fbm-card",
-  "issue_tracker": "https://github.com/sergey08/Fbm-card/issues",
   "codeowners": [],
   "config_flow": true,
-  "requirements": [],
-  "iot_class": "cloud_polling",
-  "integration_type": "service",
   "dependencies": [
     "http",
     "lovelace"
-  ]
+  ],
+  "documentation": "https://github.com/sergey08/Fbm-card",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/sergey08/Fbm-card/issues",
+  "requirements": [],
+  "version": "0.2.10"
 }

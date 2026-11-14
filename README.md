@@ -141,6 +141,12 @@ La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por gr
 
 Consulta las [pruebas de GitHub Actions](https://github.com/sergey08/Fbm-card/actions). Las pruebas automáticas no sustituyen la validación funcional en Home Assistant.
 
+## Licencia y atribuciones
+
+El código original de FBM Card se publica bajo la [licencia MIT](LICENSE). La licencia cubre el software propio del repositorio, pero **no concede derechos sobre contenidos de terceros** como los escudos de clubes, las fotografías de jugadores, los datos deportivos, la marca FBM ni el servicio/API de Afición FBM o Gesdeportiva. Estos elementos conservan sus respectivos titulares y condiciones de uso.
+
+FBM Card es un proyecto comunitario **no oficial**, independiente de la Federación de Baloncesto de Madrid. El acceso público o como invitado no implica por sí solo autorización para redistribuir datos o reutilizar una API; consultar las condiciones del proveedor.
+
 ## Privacidad, limitaciones y soporte
 
 Este proyecto usa datos deportivos públicos y una identidad invitada FBM compartida. No publiques tokens, datos de registro del dispositivo, información personal ni fotografías de jugadores en incidencias públicas. La disponibilidad de datos, rutas e imágenes oficiales puede cambiar. Para comunicar errores, abre una [incidencia en GitHub](https://github.com/sergey08/Fbm-card/issues) indicando versión de Home Assistant, versión de FBM Card, registros anonimizados y pasos para reproducir el problema.
