@@ -40,7 +40,7 @@ test("el flujo de CI valida la nueva estructura de integración", () => {
   assert.match(workflow, /Validar sintaxis de integración Python/);
 });
 
-test("la configuración identifica el proyecto como no oficial", () => {
+test("la configuración y el manifiesto identifican FBM Card como no oficial", () => {
   const strings = JSON.parse(fs.readFileSync("custom_components/fbm/strings.json", "utf8"));
   const es = JSON.parse(fs.readFileSync("custom_components/fbm/translations/es.json", "utf8"));
   assert.deepEqual(Object.keys(es.config), Object.keys(strings.config));
