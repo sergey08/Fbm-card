@@ -16,6 +16,7 @@ from .query_cache import QueryCache
 from .independent_identity import IndependentIdentityStore
 from .independent_client import IndependentClient
 from .followed_groups_store import FollowedGroups
+from .competition_archive import CompetitionArchive
 from .websocket import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,10 +78,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # No requests, new groups or filesystem mutations are triggered here.
         "grupos_sqlite_path": hass.config.path(f"fbm_groups_{entry.entry_id}.sqlite"),
         "grupos_store_factory": FollowedGroups,
+        "competitions_sqlite_path": hass.config.path(f"fbm_competitions_{entry.entry_id}.sqlite"),
+        "competitions_archive_factory": CompetitionArchive,
     }
     # Existing-device access only; no registration or identity replacement.
     restored = await client.async_restore()
     _LOGGER.info("FBM saved guest session restored: %s", restored)
+    # Automatic network requests are disabled by default and require
+    # explicit consent in the native Configure → Automatic menu.
+    auto_groups = entry.options.get("auto_groups") is True
+    auto_players = entry.options.get("auto_players") is True
+    hass.data[DOMAIN][entry.entry_id]["auto_sync_flags"] = (
+        auto_groups, auto_players)
+    if auto_groups:
+        from .competition_auto_sync import CompetitionAutoUpdater
+        service = CompetitionAutoUpdater(
+            hass, entry.entry_id, client,
+            hass.data[DOMAIN][entry.entry_id]["competitions_sqlite_path"],
+            CompetitionArchive)
+        await service.async_start(groups=True, players=auto_players)
+        hass.data[DOMAIN][entry.entry_id]["auto_updater"] = service
+
+    async def _options_updated(hass, updated_entry):
+        # Following/unfollowing and manual refresh also save OptionsFlow,
+        # but they must not interrupt an existing FBM guest session or cards.
+        previous = hass.data.get(DOMAIN, {}).get(
+            updated_entry.entry_id, {}).get("auto_sync_flags")
+        desired = (
+            updated_entry.options.get("auto_groups") is True,
+            updated_entry.options.get("auto_players") is True)
+        if previous != desired:
+            await hass.config_entries.async_reload(updated_entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(_options_updated))
+    # Forward platforms only once the options and scheduler are initialized.
+    # Otherwise the first sensor poll can incorrectly expose both as disabled.
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     return True
 
 
@@ -88,6 +121,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Eliminar el estado de la entrada."""
     state = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if state is not None:
+        updater = state.get("auto_updater")
+        if updater is not None:
+            await updater.async_stop()
         await state["cliente_independiente"].async_disconnect()
         state["cache_consultas"].clear()
-    return True
+    return await hass.config_entries.async_unload_platforms(entry, ["sensor"])

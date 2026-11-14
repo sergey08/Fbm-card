@@ -9,5 +9,92 @@
     "abort": {
       "already_configured": "La integración FBM ya está configurada."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gestor de competiciones FBM",
+        "menu_options": {
+          "search": "Buscar equipo para seguir competición",
+          "manage": "Dejar de seguir una competición",
+          "refresh": "Actualizar una competición seguida",
+          "automatic": "Actualización automática"
+        }
+      },
+      "search": {
+        "title": "Buscar un equipo FBM",
+        "data": {
+          "texto": "Nombre del equipo"
+        }
+      },
+      "select": {
+        "title": "Seleccionar equipo",
+        "data": {
+          "equipo": "Equipo"
+        }
+      },
+      "confirm": {
+        "title": "Seguir competición completa",
+        "description": "Equipo: {team}. Grupo oficial: {group}. Al confirmar se descargan la clasificación, los partidos y las plantillas de todos los equipos.",
+        "data": {
+          "confirmar": "Confirmo que deseo seguir esta competición"
+        }
+      },
+      "manage": {
+        "title": "Dejar de seguir competición",
+        "description": "La competición dejará de actualizarse. Se conservarán sus históricos.",
+        "data": {
+          "competicion": "Competición"
+        }
+      },
+      "unfollow": {
+        "title": "Confirmar dejar de seguir",
+        "description": "¿Dejar de seguir el grupo {group}? Se conservarán todos los históricos.",
+        "data": {
+          "confirmar": "Confirmar"
+        }
+      },
+      "refresh": {
+        "title": "Elegir competición para actualizar",
+        "description": "Solo aparecen grupos previamente seleccionados con equipo de referencia oficial.",
+        "data": {
+          "competicion": "Competición"
+        }
+      },
+      "refresh_confirm": {
+        "title": "Confirmar actualización de competición",
+        "description": "Grupo: {group}. Actualización manual de clasificación y partidos. La descarga de plantillas es opcional y está desactivada inicialmente.",
+        "data": {
+          "confirmar": "Confirmar actualización",
+          "incluir_plantillas": "Descargar también plantillas y estadísticas disponibles"
+        }
+      },
+      "automatic": {
+        "title": "Actualizar competiciones automáticamente",
+        "description": "Solo las competiciones que sigues. Clasificación y calendario cada 4 horas (un grupo por ciclo); estadísticas individuales en lotes de 5 cada 2 horas y pausa de 24 horas al completar una ronda. No descarga plantillas nuevas. Las dos opciones están desactivadas por defecto.",
+        "data": {
+          "auto_groups": "Actualizar resultados y clasificación automáticamente",
+          "auto_players": "Actualizar también estadísticas de jugadores ya archivados"
+        }
+      }
+    },
+    "error": {
+      "invalid_search": "Introduce al menos tres caracteres",
+      "no_teams": "No se encontraron equipos",
+      "cannot_connect": "No se pudo consultar FBM",
+      "invalid_selection": "Selección no válida",
+      "cannot_verify": "No se pudo verificar la competición",
+      "season_unverified": "Temporada todavía no verificada; no se guardan datos",
+      "not_followed": "La competición ya no está seguida",
+      "competition_changed": "La fase, el grupo o la temporada han cambiado. Selecciona la nueva competición desde el buscador.",
+      "rosters_pending": "Se guardaron la clasificación, los partidos y las plantillas disponibles. Quedan plantillas pendientes. Confirma de nuevo para reintentar.",
+      "rosters_pending_named": "Se guardaron la clasificación, los partidos y las plantillas disponibles. Plantillas pendientes: {pending_rosters}. Confirma de nuevo para reintentar.",
+      "cannot_refresh": "No se pudo actualizar la competición",
+      "auto_requires_groups": "Para actualizar jugadores, activa también la actualización de resultados."
+    },
+    "abort": {
+      "none_followed": "No hay competiciones seguidas",
+      "no_refreshable_groups": "No hay competiciones con equipo de referencia verificable; vuelve a seleccionarlas"
+    }
   }
 }

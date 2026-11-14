@@ -53,6 +53,43 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call.await_args_list[1].args[1]['accion'], 'horariosJornadas')
         self.assertEqual(result['partidos'][0]['marcador'], {'local': 32, 'visitante': 57})
 
+    async def test_verify_group_season_requires_two_matching_official_details(self):
+        identity = GuestIdentity.from_response("secret", "device", datetime.now(timezone.utc))
+        adapter = AficionFBMAdapter(identity)
+        rosters = [{"jugadores": [{"id": "p1"}]}, {"jugadores": [{"id": "p2"}]}]
+        def detail(player, team, season):
+            return {"error": "", "jugador": {"Id": player},
+                    "equipo": {"Id": team}, "idComponenteClub": "c",
+                    "idTemporadaActual": season,
+                    "key": "private-session", "Foto": "private-photo"}
+        with (patch.object(adapter, "team_roster", new=AsyncMock(side_effect=rosters)),
+              patch("fbm_adapter_test_pkg.aficion_adapter.asyncio.to_thread",
+                    new=AsyncMock(side_effect=[
+                        detail("p1", "a", "s26"), detail("p2", "b", "s26")
+                    ]))):
+            confirmed = await adapter.verify_group_season(["a", "b"])
+        self.assertEqual(confirmed["season_id"], "s26")
+        self.assertTrue(confirmed["season_verified"])
+        self.assertNotIn("private", repr(confirmed))
+
+        with (patch.object(adapter, "team_roster", new=AsyncMock(side_effect=rosters)),
+              patch("fbm_adapter_test_pkg.aficion_adapter.asyncio.to_thread",
+                    new=AsyncMock(side_effect=[
+                        detail("p1", "a", "s26"), detail("p2", "b", "s27")
+                    ]))):
+            conflict = await adapter.verify_group_season(["a", "b"])
+        self.assertFalse(conflict["season_verified"])
+        self.assertNotIn("season_id", conflict)
+
+        with (patch.object(adapter, "team_roster", new=AsyncMock(side_effect=rosters)),
+              patch("fbm_adapter_test_pkg.aficion_adapter.asyncio.to_thread",
+                    new=AsyncMock(side_effect=[
+                        detail("p1", "a", "s26"), detail("p2", "wrong", "s26")
+                    ]))):
+            mismatch = await adapter.verify_group_season(["a", "b"])
+        self.assertEqual(mismatch["season_evidence_status"], "unverified_player_binding")
+        self.assertFalse(mismatch["season_verified"])
+
     async def test_schedule_invalid_dates_never_contact_server(self):
         identity = GuestIdentity.from_response('secret', 'device', datetime.now(timezone.utc))
         with patch('fbm_adapter_test_pkg.aficion_adapter.asyncio.to_thread', new=AsyncMock()) as call:
