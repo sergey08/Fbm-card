@@ -1,19 +1,35 @@
-# FBM Card — Madrid Basketball Federation
+# FBM Card — Madrid Basketball in Home Assistant
 
-Unofficial Home Assistant integration and Lovelace card using FBM/Afición FBM data. **Current stable version: 0.2.1.** It is not an official FBM product.
+> **Unofficial community project.** Not affiliated with, endorsed by, or maintained by the Federación de Baloncesto de Madrid (FBM).
+
+**Stable release:** v0.2.1 · **Development beta:** v0.2.2b28 (tested on Home Assistant, not a stable release).
+
+FBM Card combines a custom Home Assistant integration with Lovelace cards for exploring public FBM basketball data: teams, competitions, fixtures, results, standings, rosters and available player match statistics. It is designed for following multiple competitions without repeatedly downloading unchanged data.
 
 ## Features
-- Search FBM teams and save multiple favorites.
-- Independent search and fixed-team cards; each fixed card retains its own team.
-- Official group standings, rounds and match schedules (including date in the round selector), fixtures and available results.
-- Team rosters and the sporting statistics returned by FBM. Missing statistics are hidden instead of guessed.
-- Official team crests in headers and fixture lists, when a valid image reference is available.
-- Small player photographs retrieved from the APK-verified official FBM image endpoint or validated inline images; real photographs were visually verified on 0.2.0b15.
 
-## Installing or updating
-Install **FBM para Home Assistant** from Home Assistant Marketplace (formerly HACS), then restart Home Assistant if requested. The integration registers the `/fbm_static/fbm-card.js` Lovelace resource; do not register a duplicate JavaScript resource. Refresh the browser if the card is cached. Keep your existing FBM guest identity and configuration; do not re-register the device after updating.
+- Search FBM teams and save favorites; use separate search, team and competition cards.
+- Follow multiple competition groups and browse official standings, matchdays, fixtures and results.
+- View team crests and player photographs when verified official images are available.
+- Use a visual card editor for supported settings; advanced configuration remains available in YAML.
+- Archive competition data locally and refresh group and player information incrementally.
+- Inspect data coverage for followed groups: teams, archived rosters, players with complete statistics, pending players and percentage.
+- Avoid inventing scores, statistics, photographs or missing data. Availability depends on what FBM publishes.
 
-### Team search card
+## Installation
+
+1. Add/install **FBM para Home Assistant** through Home Assistant Marketplace/HACS using this repository if necessary.
+2. Configure the FBM integration in **Settings → Devices & services** and follow the teams or competitions you need.
+3. Restart Home Assistant if prompted. The integration registers `/fbm_static/fbm-card.js` automatically: **do not add a duplicate Lovelace resource**.
+4. Add a **FBM Card** from the dashboard card picker and configure it in the visual editor, or use YAML.
+5. Refresh the browser if an older card remains cached.
+
+**Updating:** Preserve the existing guest identity and configuration. Do not remove/re-add the integration or re-register the device merely to update a card.
+
+## Cards and example configuration
+
+**Search card** — find a team and copy its official identifiers for a fixed card:
+
 ```yaml
 type: custom:fbm-card
 modo_experimental: true
@@ -21,9 +37,9 @@ tipo_tarjeta: busqueda
 title: Search FBM teams
 id_tarjeta: buscador_fbm
 ```
-Select a team and use the card's **copy fixed team configuration** action to create independent cards. The generated YAML contains the official identifiers and avoids creating additional guest identities.
 
-### Fixed team card
+**Fixed team card** — use the official values copied from the search card:
+
 ```yaml
 type: custom:fbm-card
 modo_experimental: true
@@ -37,40 +53,63 @@ equipo_fijo:
   categoria: "Category"
   temporada: "26/27"
 ```
-Replace the sample fields using the configuration copied by the search card. Teams saved only in browser storage may not sync between devices.
 
-## Version 0.2.1 — stable Marketplace update fix
-- Stable maintenance release with no runtime or card behavior changes from the validated 0.2.0 build.
-- Uses a version number above the entire 0.2.0 beta series so Marketplace can identify the newest stable release.
+The competition card is best configured through the visual editor using a followed competition. Exact available options can vary between stable and beta versions. Avoid guessing competition identifiers.
 
-## Version 0.2.0 — first stable release
-- Includes team search, favorites, independent fixed-team cards, group standings, match schedules, rosters, statistics and team crests.
-- Player photographs use the official image endpoint verified against Afición FBM 5.0.42 APK bytecode. **Real photographs were visually verified in Home Assistant on 0.2.0b15 across multiple teams.**
-- Preserves the existing guest identity and card configuration; no device re-registration is required.
-- Missing statistics are hidden rather than invented.
-- Future updates will use stable GitHub/Marketplace releases; development changes continue to be validated before merging.
+## Synchronization and coverage (0.2.2 beta)
 
-## Security and development
-Photos and account/device secrets must not be posted in issues or diagnostics. The integration handles the guest identity separately and does not create a new identity per card. See [GitHub Actions](https://github.com/sergey08/Fbm-card/actions) for automated tests. Functional validation in Home Assistant is separate from automated CI. The project is experimental, unofficial and unaffiliated with FBM.
+FBM Card stores the latest archived competition snapshots and supports bounded player-statistics refreshes. Previously complete player data can be skipped when the number of archived match records matches the official appearance count and points are present. Players with zero appearances do not require a match-statistics request.
+
+The `sensor.competiciones` entity exposes a `coverage` attribute with per-group and total counts (`teams`, `rosters`, `players`, `complete`, `pending`, `missing_rosters`, `coverage_percent`). A percentage measures **coverage of the currently archived and reported appearances**, not proof that FBM has published all future statistics.
+
+**Real installation validation (14 Nov 2026):** five followed groups, 30 teams, 30 rosters and 321/321 eligible players complete (100%) after an explicit incremental recovery. This is a single installation's snapshot, **not a guaranteed result for other users**. Automatic post-match refresh must still be checked after the next matchday.
+
+## Releases
+
+- **v0.2.2b28 (beta):** competition/player coverage diagnostics, persisted group/player refresh information and regression tests. Development build, not stable.
+- **v0.2.1 (stable):** Marketplace update/versioning maintenance release.
+- **v0.2.0 (stable):** initial team search, favorites, standings, fixtures, rosters, player statistics and verified official images.
+
+See [GitHub Actions](https://github.com/sergey08/Fbm-card/actions) for CI. Automated tests do not replace functional validation on a running Home Assistant installation.
+
+## Privacy, limitations and support
+
+This project uses publicly accessible sporting data and a shared FBM guest identity. Do not post tokens, device registration details, personal information or player photographs in public issues. Public availability, endpoints, image URLs and statistics may change without notice. For bugs, open a [GitHub issue](https://github.com/sergey08/Fbm-card/issues) with the Home Assistant version, FBM Card version, anonymized logs and reproduction steps.
 
 ---
 
-# FBM Card — Federación de Baloncesto de Madrid
+# FBM Card — Baloncesto madrileño en Home Assistant
 
-Integración no oficial de Home Assistant y tarjeta Lovelace que consulta datos de FBM/Afición FBM. **Versión estable actual: 0.2.1.** No es un producto oficial de la Federación.
+> **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
+
+**Versión estable:** v0.2.1 · **Beta de desarrollo:** v0.2.2b28 (probada en Home Assistant; no es una versión estable).
+
+FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
 ## Funciones
-- Búsqueda de equipos FBM y varios favoritos.
-- Tarjetas independientes de búsqueda y equipos fijos, con selección de equipo propia.
-- Clasificaciones, jornadas con fecha en el selector, enfrentamientos y resultados oficiales disponibles.
-- Plantillas y estadísticas deportivas devueltas por FBM; se ocultan las estadísticas que no existan, sin inventarlas.
-- Escudos oficiales en cabeceras y partidos cuando exista una referencia de imagen válida.
-- Fotografías pequeñas de jugadores obtenidas del servicio oficial de imágenes identificado en la APK o de imágenes inline validadas; las fotografías reales se comprobaron visualmente en 0.2.0b15.
 
-## Instalación y actualización
-Instala **FBM para Home Assistant** desde Marketplace (antes HACS) y reinicia Home Assistant si lo solicita. La integración registra el recurso Lovelace `/fbm_static/fbm-card.js`; no añadas otro recurso JavaScript duplicado. Recarga el navegador si mantiene la tarjeta anterior en caché. Conserva tu identidad invitada y configuración FBM: no vuelvas a registrar el dispositivo después de actualizar.
+- Buscar equipos FBM y guardar favoritos; tarjetas independientes de búsqueda, equipo y competición.
+- Seguir varios grupos y consultar clasificaciones, jornadas, enfrentamientos y resultados oficiales.
+- Mostrar escudos de equipos y fotografías de jugadores cuando existan imágenes oficiales verificadas.
+- Configurar los ajustes compatibles mediante un editor visual; YAML para opciones avanzadas.
+- Archivar datos localmente y actualizar grupos y jugadores de manera incremental.
+- Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
+- No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-### Tarjeta de búsqueda
+## Instalación
+
+1. Instala **FBM para Home Assistant** mediante Marketplace/HACS; añade este repositorio si es necesario.
+2. Configura la integración FBM en **Ajustes → Dispositivos y servicios** y sigue los equipos o competiciones deseados.
+3. Reinicia Home Assistant si se solicita. La integración registra automáticamente `/fbm_static/fbm-card.js`: **no dupliques el recurso Lovelace**.
+4. Añade una **FBM Card** desde el selector de tarjetas y utiliza el editor visual o YAML.
+5. Recarga el navegador si sigue mostrando una tarjeta antigua en caché.
+
+**Actualizaciones:** conserva la identidad invitada y la configuración existente. No elimines ni vuelvas a añadir la integración, ni registres otra vez el dispositivo, solo por actualizar la tarjeta.
+
+## Tarjetas y ejemplos de configuración
+
+**Tarjeta de búsqueda** — encuentra un equipo y copia sus identificadores oficiales:
+
 ```yaml
 type: custom:fbm-card
 modo_experimental: true
@@ -78,9 +117,9 @@ tipo_tarjeta: busqueda
 title: Buscar equipos FBM
 id_tarjeta: buscador_fbm
 ```
-Selecciona un equipo y utiliza la opción **copiar configuración de tarjeta fija** para crear tarjetas independientes. El YAML generado contiene los identificadores oficiales y no crea identidades invitadas adicionales.
 
-### Tarjeta de equipo fijo
+**Tarjeta de equipo fijo** — utiliza los valores oficiales copiados del buscador:
+
 ```yaml
 type: custom:fbm-card
 modo_experimental: true
@@ -89,23 +128,30 @@ title: Mi equipo
 id_tarjeta: mi_equipo
 equipo_fijo:
   id: "ID_OFICIAL_DEL_EQUIPO"
-  nombre: "Nombre oficial"
+  nombre: "Nombre oficial del equipo"
   club: "Club"
   categoria: "Categoría"
   temporada: "26/27"
 ```
-Sustituye los valores del ejemplo con la configuración copiada desde el buscador. Las selecciones guardadas solo en el navegador pueden no sincronizarse entre dispositivos.
 
-## Versión 0.2.1 — mantenimiento de actualizaciones Marketplace
-- Versión estable de mantenimiento, sin cambios de funcionamiento respecto a 0.2.0.
-- La numeración supera toda la serie beta 0.2.0 y permite identificar la versión estable más reciente.
+Es preferible configurar la tarjeta de competición desde el editor visual, seleccionando una competición seguida. Las opciones pueden variar entre la versión estable y la beta. No inventes identificadores de competición.
 
-## Version 0.2.0 — primera versión estable
-- Incluye la búsqueda, favoritos, equipos fijos independientes, clasificación, calendario de partidos, plantillas, estadísticas y escudos.
-- Las fotografías de jugadores usan la ruta oficial verificada mediante análisis de la APK Afición FBM 5.0.42. **Visualización confirmada en Home Assistant con varios equipos en la beta 0.2.0b15.**
-- Mantiene la identidad invitada existente y las tarjetas configuradas; no hace falta volver a registrar dispositivos.
-- Las estadísticas que FBM no proporciona se ocultan, sin inventar valores.
-- Las actualizaciones futuras se distribuirán mediante releases estables de GitHub/Marketplace; los cambios de desarrollo seguirán probándose antes de fusionar.
+## Sincronización y cobertura (beta 0.2.2)
 
-## Seguridad y desarrollo
-No publiques fotos ni secretos de la cuenta/dispositivo en incidencias ni diagnósticos. La integración gestiona una sola identidad invitada compartida, sin crear otra por tarjeta. Consulta las [pruebas de GitHub Actions](https://github.com/sergey08/Fbm-card/actions). La validación funcional real en Home Assistant es distinta de las pruebas automáticas. Proyecto experimental, no oficial y sin afiliación con FBM.
+FBM Card guarda los últimos datos archivados y permite actualizar estadísticas de jugadores en lotes limitados. Omite registros completos cuando el número de partidos archivados coincide con las apariciones oficiales y existen puntos por partido. Los jugadores sin apariciones no necesitan consultas de estadísticas de partidos.
+
+La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por grupo y totales (`teams`, `rosters`, `players`, `complete`, `pending`, `missing_rosters`, `coverage_percent`). El porcentaje mide la **cobertura de las apariciones registradas y archivadas hasta ese momento**, no garantiza que FBM haya publicado estadísticas futuras.
+
+**Validación real (14/11/2026):** cinco grupos seguidos, 30 equipos, 30 plantillas y 321/321 jugadores evaluables completos (100 %) tras una recuperación incremental explícita. Es una fotografía de una instalación concreta, **no un resultado garantizado para todos los usuarios**. La actualización automática tras nuevos partidos sigue pendiente de comprobación.
+
+## Versiones
+
+- **v0.2.2b28 (beta):** diagnóstico de cobertura de competiciones y jugadores, información persistida de sincronización y pruebas de regresión. No es estable.
+- **v0.2.1 (estable):** mantenimiento de numeración y actualización desde Marketplace.
+- **v0.2.0 (estable):** búsqueda, favoritos, clasificaciones, calendarios, plantillas, estadísticas e imágenes oficiales verificadas.
+
+Consulta las [pruebas de GitHub Actions](https://github.com/sergey08/Fbm-card/actions). Las pruebas automáticas no sustituyen la validación funcional en Home Assistant.
+
+## Privacidad, limitaciones y soporte
+
+Este proyecto usa datos deportivos públicos y una identidad invitada FBM compartida. No publiques tokens, datos de registro del dispositivo, información personal ni fotografías de jugadores en incidencias públicas. La disponibilidad de datos, rutas e imágenes oficiales puede cambiar. Para comunicar errores, abre una [incidencia en GitHub](https://github.com/sergey08/Fbm-card/issues) indicando versión de Home Assistant, versión de FBM Card, registros anonimizados y pasos para reproducir el problema.
