@@ -1,4 +1,5 @@
 {
   "name": "FBM para Home Assistant",
-  "render_readme": true
+  "render_readme": true,
+  "country": "ES"
 }
