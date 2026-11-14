@@ -90,8 +90,8 @@ jobs:
           # Once a stable release exists, its previous bN candidates must no
           # longer be advertised as stable by the GitHub Releases API/HACS.
           # The test beta is preserved for rollback, only its release flag changes.
-          if [[ "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
-            version_regex="${TAG//./\\.}"
+          if [[ "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            version_regex="${TAG//./[.]}";
             while IFS= read -r beta_tag; do
               [[ -n "$beta_tag" ]] || continue
               gh release edit "$beta_tag" --prerelease
