@@ -1,0 +1,57 @@
+name: Publish FBM Card 0.2.5 stable
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate unofficial identity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          base=Path("custom_components/fbm")
+          manifest=json.loads((base/"manifest.json").read_text())
+          assert manifest["version"] == "0.2.5"
+          assert manifest["name"] == "FBM Card (no oficial)"
+          for name in ("strings.json","translations/es.json"):
+              d=json.loads((base/name).read_text())
+              u=d["config"]["step"]["user"]
+              assert "no oficial" in u["title"].lower()
+              assert "no oficial" in u["description"].lower()
+              assert "Federación de Baloncesto de Madrid" in u["description"]
+          readme=Path("README.md").read_text()
+          assert "**Versión estable:** v0.2.5" in readme
+          assert "Proyecto comunitario no oficial" in readme
+          PY
+          cmp fbm-card.js custom_components/fbm/www/fbm-card.js
+      - name: Regression tests
+        run: |
+          python -m compileall -q custom_components/fbm tests
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          node --check fbm-card.js
+          node --test tests/*.test.cjs
+  publish:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish release after tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.2.5 >/dev/null 2>&1; then exit 0; fi
+          gh release create v0.2.5 --target "$GITHUB_SHA" --title "FBM Card 0.2.5 — No oficial" --notes-file RELEASE_0.2.5_NOTES.md --latest
