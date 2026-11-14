@@ -1026,7 +1026,10 @@ class FBMCard extends HTMLElement {
             if (name === "clasificacion" && !Array.isArray(state.standings))
               void this._experimentalAction("standings");
             if (name === "partidos") {
-              if (!this._fixedMatchesAvailable(state, pinned.id)) void this._experimentalAction("fixed_schedule");
+              const cached = this._fixedMatchesAvailable(state, pinned.id);
+              const stale = !state.lastScheduleUpdate || Date.now() - state.lastScheduleUpdate >= 15 * 60 * 1000;
+              if (!cached) void this._experimentalAction("fixed_schedule");
+              else if (!state.archivedData && stale) void this._experimentalAction("refresh_schedule");
               else if (state.partidosTab === "jornadas") void this._loadFixedFixtureCrests(state, pinned);
             }
             if (name === "jugadores") {
@@ -1067,14 +1070,11 @@ class FBMCard extends HTMLElement {
             picker.addEventListener("change", event => { state[key] = event.target.value; });
             field.append(picker); controls.append(field);
           }
-          const load = this._element("button", "Actualizar partidos", "fbm-action fbm-action-primary");
-          load.type = "button"; load.disabled = state.busy || !connected;
-          load.addEventListener("click", () => this._experimentalAction("fixed_schedule"));
-          controls.append(load); card.append(controls);
+          card.append(controls);
           const hasSchedule = this._fixedMatchesAvailable(state, pinned.id);
           if (!hasSchedule) {
             card.append(this._element("p", state.busy ? "Consultando los partidos oficiales..." :
-              "Pulsa Actualizar partidos para consultar el calendario del grupo.", "fbm-player-caption"));
+              "El calendario se consulta automáticamente al abrir Partidos.", "fbm-player-caption"));
           } else {
             const all = state.schedule.partidos;
             const rounds = [...new Set(all.map(match => match.jornada)

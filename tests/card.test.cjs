@@ -204,7 +204,8 @@ test("las pestañas de un equipo son independientes y no filtran partidos de gru
   cardB._renderExperimental(b);
   assert.ok(flatten(a).some(el=>el.textContent==="Clasificación del grupo actual"));
   assert.ok(!flatten(b).some(el=>el.textContent==="Clasificación del grupo actual"));
-  assert.ok(flatten(b).some(el=>el.textContent==="Actualizar partidos"));
+  assert.ok(!flatten(b).some(el=>el.textContent==="Actualizar partidos"));
+  assert.ok(flatten(b).some(el=>el.textContent==="El calendario se consulta automáticamente al abrir Partidos."));
   const buttons=flatten(b).filter(el=>el.tag==="button");
   const players=buttons.find(el=>el.textContent==="Jugadores");
   players.listeners.click();
