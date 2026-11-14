@@ -4,7 +4,7 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.1 · **Beta de desarrollo:** v0.2.2b28 (probada en Home Assistant; no es una versión estable).
+**Versión estable:** v0.2.2 (validada en Home Assistant).
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
@@ -56,9 +56,9 @@ equipo_fijo:
   temporada: "26/27"
 ```
 
-Es preferible configurar la tarjeta de competición desde el editor visual, seleccionando una competición seguida. Las opciones pueden variar entre la versión estable y la beta. No inventes identificadores de competición.
+Es preferible configurar la tarjeta de competición desde el editor visual, seleccionando una competición seguida. Las opciones disponibles dependen de la versión instalada. No inventes identificadores de competición.
 
-## Sincronización y cobertura (beta 0.2.2)
+## Sincronización y cobertura
 
 FBM Card guarda los últimos datos archivados y permite actualizar estadísticas de jugadores en lotes limitados. Omite registros completos cuando el número de partidos archivados coincide con las apariciones oficiales y existen puntos por partido. Los jugadores sin apariciones no necesitan consultas de estadísticas de partidos.
 
@@ -68,7 +68,7 @@ La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por gr
 
 ## Versiones
 
-- **v0.2.2b28 (beta):** diagnóstico de cobertura de competiciones y jugadores, información persistida de sincronización y pruebas de regresión. No es estable.
+- **v0.2.2 (estable):** sincronización incremental de competiciones y estadísticas de jugadores, diagnóstico de cobertura, tarjetas y editor visual, README en español y logo propio. La validación automática tras la próxima jornada sigue pendiente.
 - **v0.2.1 (estable):** mantenimiento de numeración y actualización desde Marketplace.
 - **v0.2.0 (estable):** búsqueda, favoritos, clasificaciones, calendarios, plantillas, estadísticas e imágenes oficiales verificadas.
 
