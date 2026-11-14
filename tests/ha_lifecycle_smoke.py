@@ -10,6 +10,7 @@ import sys
 import tempfile
 from unittest.mock import patch
 
+from homeassistant import loader
 from homeassistant.bootstrap import async_from_config_dict
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
@@ -20,6 +21,7 @@ DOMAIN = "fbm"
 
 async def run(folder, phase):
     hass = HomeAssistant(str(folder))
+    loader.async_setup(hass)
     sys.path.insert(0, str(folder))
     from custom_components.fbm import aficion_adapter, independent_client
     from custom_components.fbm import guest_session
@@ -121,9 +123,10 @@ async def run(folder, phase):
             snapshot = [entry.entry_id, entity_id, unique_id, identity.uid, matching[0]["id"]]
             marker = folder / "lifecycle-test.json"
             if phase == "install":
-                marker.write_text(json.dumps(snapshot), encoding="utf-8")
+                await hass.async_add_executor_job(marker.write_text, json.dumps(snapshot), "utf-8")
             else:
-                assert json.loads(marker.read_text(encoding="utf-8")) == snapshot
+                saved = await hass.async_add_executor_job(marker.read_text, "utf-8")
+                assert json.loads(saved) == snapshot
             print(f"PASS: isolated Home Assistant Core {phase}")
         finally:
             await hass.async_stop()
