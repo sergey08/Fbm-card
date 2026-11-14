@@ -25,3 +25,12 @@ Categoría prevista: `integration` (incluye `custom_components/fbm`, además de 
 - Mantener el aviso de proyecto **no oficial** respecto a la Federación de Baloncesto de Madrid.
 - Conservar el mecanismo de repositorio personalizado en README hasta que la inclusión se confirme realmente. Después, actualizar la guía para instalación directa.
 - Consultar https://hacs.dev/docs/publish/include/ y https://www.hacs.dev/docs/publish/integration/ para los requisitos vigentes.
+
+## Resultados de la primera ejecución de los validadores (14/11/2026)
+
+- [HACS/Hassfest run #43635599340](https://github.com/sergey08/Fbm-card/actions/runs/43635599340): inicialmente fallaron ambas comprobaciones.
+- **Hassfest:** error de orden de claves en `manifest.json`, corregido en la rama. Aviso no bloqueante sobre ausencia de `CONFIG_SCHEMA` para `async_setup` (revisar posteriormente sin romper la integración).
+- **HACS:** faltan un archivo `LICENSE` en el repositorio y temas válidos (*repository topics*) en los metadatos de GitHub. El resto de las validaciones pasó; el comprobador de marca local pasó. Aviso de categorías de integración no bloqueante.
+- La elección de una licencia de código requiere decisión del propietario y revisar la procedencia de las fuentes. No suprimir la validación `license` con `ignore` para simular cumplimiento.
+- Los temas del repositorio se deben añadir desde **GitHub → About → Edit (engranaje) → Topics**; por ejemplo `home-assistant`, `hacs` y `basketball`, comprobando los requisitos exactos del catálogo. Este conector no permite escribir temas.
+- Después de corregir estos dos bloqueos y obtener ambas validaciones verdes, emitir nueva release estable y preparar una PR a `hacs/default`.
