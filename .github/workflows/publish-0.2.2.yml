@@ -1,0 +1,69 @@
+name: Publish FBM Card 0.2.2 stable
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.repository == 'sergey08/Fbm-card'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate stable version and Spanish README
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest=json.loads(Path("custom_components/fbm/manifest.json").read_text())
+          assert manifest["version"]=="0.2.2"
+          readme=Path("README.md").read_text()
+          assert readme.startswith("# FBM Card — Baloncesto madrileño")
+          assert "assets/fbm-card-logo.svg" in readme
+          assert "Versión estable:** v0.2.2" in readme
+          assert "## Instalación" in readme and "## Sincronización" in readme
+          PY
+          cmp fbm-card.js custom_components/fbm/www/fbm-card.js
+      - name: Regression tests
+        run: |
+          python -m compileall -q custom_components/fbm tests
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          node --check fbm-card.js
+          node --test tests/*.test.cjs
+  real-ha:
+    if: github.repository == 'sergey08/Fbm-card'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install --disable-pip-version-check 'homeassistant==2026.11.0'
+      - run: python tests/ha_real_api_smoke.py
+  publish:
+    needs: [validate, real-ha]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish stable release only after successful tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.2.2 >/dev/null 2>&1; then
+            echo "v0.2.2 already published; leaving it unchanged"
+            exit 0
+          fi
+          gh release create v0.2.2 --target "$GITHUB_SHA" --title "FBM Card 0.2.2" --notes-file RELEASE_0.2.2_NOTES.md --latest
