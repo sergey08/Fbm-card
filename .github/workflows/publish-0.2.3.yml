@@ -1,0 +1,52 @@
+name: Publish FBM Card 0.2.3 stable
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate icon and version
+        run: |
+          python - <<'PY'
+          import json, struct
+          from pathlib import Path
+          assert json.loads(Path("custom_components/fbm/manifest.json").read_text())["version"] == "0.2.3"
+          data=Path("custom_components/fbm/brand/icon.png").read_bytes()
+          assert data[:8] == b"\x89PNG\r\n\x1a\n"
+          assert struct.unpack(">II", data[16:24]) == (128,128)
+          assert "assets/fbm-card-logo.svg" in Path("README.md").read_text()
+          PY
+          cmp fbm-card.js custom_components/fbm/www/fbm-card.js
+      - name: Regression tests
+        run: |
+          python -m compileall -q custom_components/fbm tests
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          node --check fbm-card.js
+          node --test tests/*.test.cjs
+  publish:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish stable release after tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.2.3 >/dev/null 2>&1; then
+            echo "Already published"
+            exit 0
+          fi
+          gh release create v0.2.3 --target "$GITHUB_SHA" --title "FBM Card 0.2.3" --notes-file RELEASE_0.2.3_NOTES.md --latest
