@@ -24,11 +24,27 @@ FBM Card combina una integración de Home Assistant y tarjetas Lovelace para con
 
 ## Instalación
 
-1. Instala **FBM para Home Assistant** mediante Marketplace/HACS; añade este repositorio si es necesario.
-2. Añade **FBM Card** en **Ajustes → Dispositivos y servicios**. En **Configurar → Buscar equipo para seguir su competición**, confirma el acceso de invitado si se solicita, busca el primer equipo y selecciona su grupo.
-3. Reinicia Home Assistant si se solicita. La integración registra automáticamente `/fbm_static/fbm-card.js`: **no dupliques el recurso Lovelace**.
-4. Añade una **FBM Card** desde el selector de tarjetas y utiliza el editor visual o YAML.
-5. Recarga el navegador si sigue mostrando una tarjeta antigua en caché.
+**Importante: FBM Card todavía no forma parte del catálogo oficial de HACS/Marketplace.** Para instalarla por primera vez debes añadir este repositorio de GitHub como **repositorio personalizado**, de tipo **Integración**.
+
+### Añadir repositorio con un botón
+
+[![Añadir FBM Card a Home Assistant](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=sergey08&repository=Fbm-card&category=integration)
+
+Pulsa el botón, selecciona tu instancia de Home Assistant y sigue el diálogo para añadir el repositorio personalizado. Este enlace está dirigido a **Home Assistant 2026.11 o posterior**. Si utilizas HACS clásico, [abre el repositorio desde HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=sergey08&repository=Fbm-card&category=integration).
+
+### Instalación manual alternativa
+
+1. Abre **Marketplace/HACS** en Home Assistant.
+2. En el menú de los **tres puntos**, selecciona **Repositorios personalizados** (el nombre puede variar según la versión).
+3. Añade la URL `https://github.com/sergey08/Fbm-card` y selecciona el tipo **Integración**. Pulsa **Añadir**.
+4. Busca **FBM para Home Assistant** entre los repositorios añadidos, descarga la versión estable y reinicia Home Assistant si lo solicita.
+5. Ve a **Ajustes → Dispositivos y servicios**, añade **FBM Card (no oficial)**. En **Configurar → Buscar equipo para seguir su competición**, confirma el acceso de invitado si se solicita, busca el primer equipo y selecciona su grupo.
+6. La integración registra automáticamente `/fbm_static/fbm-card.js`: **no dupliques el recurso Lovelace**. Añade una tarjeta FBM desde el selector y configúrala con su editor visual o YAML.
+7. Recarga el navegador si sigue mostrando una tarjeta antigua en caché.
+
+### Capturas de pantalla
+
+Queremos mostrar capturas reales de la pantalla de añadir repositorio personalizado, la tarjeta de equipo, la clasificación y los resultados. Estas imágenes se incorporarán cuando estén validadas y anonimizadas; **el logotipo del proyecto no sustituye una captura de funcionamiento**.
 
 **Actualizaciones:** conserva la identidad invitada y la configuración existente. No elimines ni vuelvas a añadir la integración, ni registres otra vez el dispositivo, solo por actualizar la tarjeta.
 
