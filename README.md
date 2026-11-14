@@ -45,7 +45,23 @@ Pulsa el botón, selecciona tu instancia de Home Assistant y sigue el diálogo p
 
 ### Capturas de pantalla
 
-Queremos mostrar capturas reales de la pantalla de añadir repositorio personalizado, la tarjeta de equipo, la clasificación y los resultados. Estas imágenes se incorporarán cuando estén validadas y anonimizadas; **el logotipo del proyecto no sustituye una captura de funcionamiento**.
+Imágenes reales de FBM Card funcionando en Home Assistant. El aspecto puede variar según el tema y la versión instalada.
+
+**Añadir una tarjeta desde el panel de control**, sin escribir YAML:
+
+<img src="assets/screenshots/selector-tarjetas.webp" alt="Selector visual de Home Assistant con FBM Card y FBM Competition Card" width="650">
+
+**Buscar un equipo FBM** y crear una tarjeta independiente:
+
+<img src="assets/screenshots/buscador-equipos.webp" alt="Buscador de equipos de FBM Card" width="350">
+
+**Tarjeta de equipo**, con las pestañas Partidos, Clasificación y Jugadores:
+
+<img src="assets/screenshots/tarjeta-equipo.webp" alt="Tarjeta del equipo Grupo Egido Pintobasket Negro mostrando su clasificación" width="350">
+
+**Tarjeta de competición**, con la temporada, jornadas y clasificación archivada:
+
+<img src="assets/screenshots/tarjeta-competicion.webp" alt="Tarjeta de competición FBM con equipos y clasificación" width="350">
 
 **Actualizaciones:** conserva la identidad invitada y la configuración existente. No elimines ni vuelvas a añadir la integración, ni registres otra vez el dispositivo, solo por actualizar la tarjeta.
 
