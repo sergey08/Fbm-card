@@ -4,7 +4,7 @@
 
 Las tarjetas FBM necesitan consultas WebSocket con la sesión autenticada de Home Assistant, pero **no** necesitan privilegios de administrador para consultar los datos deportivos. Anteriormente, el puente exigía `require_admin` incluso para listar la integración y consultar clasificaciones; un usuario normal veía «Reintentar conexión».
 
-Esta corrección permite a usuarios autenticados consultar la entrada FBM, su estado seguro (sin credenciales), equipos, calendario, fases, clasificación, detalles y estadísticas deportivas, competiciones archivadas seguidas y sus plantillas/estadísticas. Se mantiene la validación de cada identificador y el tratamiento genérico de errores.
+Esta corrección permite a usuarios autenticados consultar la entrada FBM, su estado seguro (sin credenciales), equipos, calendario, fases, clasificación, detalles y estadísticas deportivas, competiciones archivadas seguidas y sus plantillas/estadísticas. Los informes previos archivados de partidos siguen reservados a administradores. Se mantiene la validación de cada identificador y el tratamiento genérico de errores.
 
 Siguen reservados al administrador el alta/registro/recuperación/conexión de identidades, sincronización manual, operaciones de diagnóstico y las consultas de archivo amplias que no son necesarias para mostrar las tarjetas. No se amplían permisos de Home Assistant ni se facilitan tokens de FBM.
 
