@@ -104,6 +104,37 @@ class GuestFlowTests(unittest.TestCase):
         self.assertEqual(result["step_id"], "search_ready")
         self.assertEqual(client.calls, [("connect", "16")])
 
+    def test_no_consent_does_not_touch_identity(self):
+        client = FakeClient({"identidad_creada": False, "candidato_guardado": False,
+                             "registro_pendiente": False, "sesion_vigente": False})
+        result = asyncio.run(self.flow(client).async_step_guest({"autorizar": False}))
+        self.assertEqual(result["step_id"], "guest")
+        self.assertEqual(client.calls, [])
+
+    def test_registration_error_does_not_connect(self):
+        client = FakeClient({"identidad_creada": True, "candidato_guardado": False,
+                             "registro_pendiente": False, "sesion_vigente": False})
+
+        async def failed_register(release):
+            client.calls.append(("register", release))
+            raise RuntimeError("simulated network outage")
+
+        client.async_register = failed_register
+        result = asyncio.run(self.flow(client).async_step_guest({"autorizar": True}))
+        self.assertEqual(result["errors"]["base"], "guest_setup_failed")
+        self.assertEqual(client.calls, [("register", "16")])
+
+    def test_status_error_does_not_create_identity(self):
+        client = FakeClient({})
+
+        async def failed_status():
+            raise RuntimeError("simulated corrupt storage")
+
+        client.async_status = failed_status
+        result = asyncio.run(self.flow(client).async_step_guest({"autorizar": True}))
+        self.assertEqual(result["errors"]["base"], "identity_corrupt")
+        self.assertEqual(client.calls, [])
+
     def test_active_session_does_not_register(self):
         client = FakeClient({"identidad_creada": True, "candidato_guardado": True,
                              "registro_pendiente": False, "sesion_vigente": True})
