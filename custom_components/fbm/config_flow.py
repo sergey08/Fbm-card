@@ -84,8 +84,55 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                                   default=saved.get("auto_players") is True): bool,
             }))
 
+    async def async_step_guest(self, user_input=None):
+        """Set up guest access on first use, with explicit user consent."""
+        import probatio
+        client = self._entry()["cliente_independiente"]
+        schema = probatio.Schema({probatio.Required("autorizar", default=False): bool})
+        try:
+            status = await client.async_status()
+        except Exception:
+            return self.async_show_form(step_id="guest", data_schema=schema,
+                                        errors={"base": "identity_corrupt"})
+        if status["sesion_vigente"]:
+            return await self.async_step_search()
+        if user_input is not None and user_input.get("autorizar") is True:
+            try:
+                # A retry uses the existing UID and the dedicated recovery API.
+                if not status["identidad_creada"]:
+                    await client.async_create_identity()
+                if status["registro_pendiente"]:
+                    await client.async_recover_registration("16")
+                elif not status["candidato_guardado"]:
+                    await client.async_register("16")
+                await client.async_connect("16")
+                return await self.async_step_search()
+            except Exception:
+                return self.async_show_form(step_id="guest", data_schema=schema,
+                                            errors={"base": "guest_setup_failed"})
+        return self.async_show_form(step_id="guest", data_schema=schema,
+                                    errors={"base": "registration_pending"}
+                                    if status["registro_pendiente"] else {})
+
     async def async_step_search(self, user_input=None):
         import probatio
+        # Reject malformed input before accessing HA state or attempting onboarding.
+        if user_input is not None:
+            query = str(user_input.get("texto", "")).strip()
+            if not 3 <= len(query) <= 80:
+                return self.async_show_form(
+                    step_id="search",
+                    data_schema=probatio.Schema({probatio.Required("texto"): str}),
+                    errors={"base": "invalid_search"})
+        try:
+            status = await self._entry()["cliente_independiente"].async_status()
+        except Exception:
+            return self.async_show_form(
+                step_id="search",
+                data_schema=probatio.Schema({probatio.Required("texto"): str}),
+                errors={"base": "identity_corrupt"})
+        if not status["sesion_vigente"]:
+            return await self.async_step_guest()
         errors = {}
         if user_input is not None:
             query = user_input["texto"].strip()

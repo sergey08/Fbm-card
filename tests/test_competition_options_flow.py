@@ -80,6 +80,10 @@ class FakeClient:
         self.verified = verified
         self.calls = []
 
+    async def async_status(self):
+        return {"sesion_vigente": True, "identidad_creada": True,
+                "candidato_guardado": True, "registro_pendiente": False}
+
     async def async_search_teams(self, query, skip):
         self.calls.append("search")
         return [{"id": "team-A", "nombre": "Pinto Basket", "categoria": "Alevin", "temporada": "26/27"}]
