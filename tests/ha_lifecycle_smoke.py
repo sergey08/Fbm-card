@@ -1,7 +1,8 @@
-"""Boot isolated HA Core twice and verify first-team onboarding and persistence."""
+"""Verify clean onboarding, restart and upgrade in isolated HA Core processes."""
 import asyncio
 from datetime import date
 import json
+from time import monotonic
 from pathlib import Path
 import shutil
 import socket
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from unittest.mock import patch
+from urllib.error import URLError
 
 from homeassistant import loader
 from homeassistant.bootstrap import async_from_config_dict
@@ -27,15 +29,18 @@ async def run(folder, phase):
     from custom_components.fbm import guest_session
 
     calls = []
+    offline = phase == "upgrade"
 
     def device_response(fields):
         action = fields["accion"]
         calls.append(action)
         if action == "registrar":
-            assert phase == "install", "unexpected registration after restart"
+            assert phase in ("install", "stable"), "unexpected second registration"
         else:
             assert action == "acceso"
             assert fields["id_dispositivo"] == "isolated-fbm-device"
+        if offline:
+            raise URLError("simulated connection outage")
         return {"error": "", "key": "fixture-key", "id_dispositivo": "isolated-fbm-device"}
 
     async def search(adapter, query, skip):
@@ -75,7 +80,7 @@ async def run(folder, phase):
         await hass.async_start()
         try:
             entries = hass.config_entries
-            if phase == "install":
+            if phase in ("install", "stable"):
                 assert not entries.async_entries(DOMAIN)
                 form = await entries.flow.async_init(DOMAIN, context={"source": "user"})
                 assert form["step_id"] == "user", form
@@ -84,16 +89,26 @@ async def run(folder, phase):
                 await hass.async_block_till_done()
             entry, = entries.async_entries(DOMAIN)
             assert entry.state.value == "loaded", entry.state
-            if phase == "install":
+            if phase in ("install", "stable"):
                 options = entries.options
                 result = await options.async_init(entry.entry_id)
                 flow_id = result["flow_id"]
-                for expected, data in (
-                    ("guest", {"next_step_id": "search"}),
-                    ("search", {"autorizar": True}),
+                steps = [
+                    ("search", {"next_step_id": "search"}),
                     ("select", {"texto": "Test Team"}),
                     ("confirm", {"equipo": "test-team"}),
-                ):
+                ]
+                if phase == "stable":
+                    client = hass.data[DOMAIN][entry.entry_id]["cliente_independiente"]
+                    await client.async_create_identity()
+                    await client.async_register("16")
+                    await client.async_connect("16")
+                else:
+                    steps[:1] = [
+                        ("guest", {"next_step_id": "search"}),
+                        ("search", {"autorizar": True}),
+                    ]
+                for expected, data in steps:
                     result = await options.async_configure(flow_id, data)
                     assert result["step_id"] == expected, result
                     if expected == "guest":
@@ -119,10 +134,24 @@ async def run(folder, phase):
                         if item["url"].split("?")[0] == "/fbm_static/fbm-card.js"]
             assert len(matching) == 1, matching
             archive = hass.data[DOMAIN][entry.entry_id]
+            if phase == "upgrade":
+                client = archive["cliente_independiente"]
+                assert not (await client.async_status())["sesion_vigente"]
+                try:
+                    await client.async_search_teams("Test Team")
+                except aficion_adapter.FBMAccessNotValidated:
+                    pass
+                else:
+                    raise AssertionError("search unexpectedly succeeded during outage")
+                assert calls == ["acceso"], calls
+                offline = False
+                with patch.object(independent_client, "monotonic", return_value=monotonic() + 31):
+                    assert (await client.async_search_teams("Test Team"))[0]["id"] == "test-team"
+                assert calls == ["acceso", "acceso"], calls
             identity = await archive["identidad_independiente"].async_load()
             snapshot = [entry.entry_id, entity_id, unique_id, identity.uid, matching[0]["id"]]
             marker = folder / "lifecycle-test.json"
-            if phase == "install":
+            if phase in ("install", "stable"):
                 await hass.async_add_executor_job(marker.write_text, json.dumps(snapshot), "utf-8")
             else:
                 saved = await hass.async_add_executor_job(marker.read_text, "utf-8")
@@ -136,10 +165,18 @@ if __name__ == "__main__":
     if len(sys.argv) == 3:
         asyncio.run(run(Path(sys.argv[1]), sys.argv[2]))
     else:
-        with tempfile.TemporaryDirectory() as temp:
-            folder = Path(temp)
-            shutil.copytree(ROOT / "custom_components" / DOMAIN,
-                            folder / "custom_components" / DOMAIN)
-            for phase in ("install", "restart"):
-                subprocess.run([sys.executable, __file__, temp, phase],
-                               check=True, timeout=180)
+        stable = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else None
+        candidate = ROOT / "custom_components" / DOMAIN
+        scenarios = [[(candidate, "install"), (candidate, "restart")]]
+        if stable is not None:
+            scenarios.append([(stable, "stable"), (candidate, "upgrade")])
+        for scenario in scenarios:
+            with tempfile.TemporaryDirectory() as temp:
+                folder = Path(temp)
+                destination = folder / "custom_components" / DOMAIN
+                for source, phase in scenario:
+                    if destination.exists():
+                        shutil.rmtree(destination)
+                    shutil.copytree(source, destination)
+                    subprocess.run([sys.executable, __file__, temp, phase],
+                                   check=True, timeout=180)
