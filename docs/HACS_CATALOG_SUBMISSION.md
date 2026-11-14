@@ -14,7 +14,7 @@ Categoría prevista: `integration` (incluye `custom_components/fbm`, además de 
 3. Marca local en `custom_components/fbm/brand/`: presente.
 4. Workflow `hacs/action@main` para categoría `integration` sin exclusiones: añadido; resultado pendiente.
 5. Workflow `home-assistant/actions/hassfest@master`: añadido; resultado pendiente.
-6. **Licencia del código**: no hay archivo `LICENSE` en la raíz; pendiente resolver con el propietario. No elegir ni aplicar una licencia sin autorización.
+6. **Licencia del código**: propietario eligió MIT el 14/11/2026; archivo `LICENSE` incorporado y aclaración de atribuciones/terceros en README. La titularidad y procedencia de todos los componentes externos no se acreditan por esta declaración.
 7. Crear una **nueva release posterior a las validaciones aprobadas**.
 8. Presentar PR desde un fork personal de `hacs/default` (rama `master`) añadiendo la entrada exacta `sergey08/Fbm-card` en `integration`.
 9. Esperar revisión/CI y merge del equipo HACS. No afirmar inclusión oficial antes de su aceptación.
@@ -34,3 +34,12 @@ Categoría prevista: `integration` (incluye `custom_components/fbm`, además de 
 - La elección de una licencia de código requiere decisión del propietario y revisar la procedencia de las fuentes. No suprimir la validación `license` con `ignore` para simular cumplimiento.
 - Los temas del repositorio se deben añadir desde **GitHub → About → Edit (engranaje) → Topics**; por ejemplo `home-assistant`, `hacs` y `basketball`, comprobando los requisitos exactos del catálogo. Este conector no permite escribir temas.
 - Después de corregir estos dos bloqueos y obtener ambas validaciones verdes, emitir nueva release estable y preparar una PR a `hacs/default`.
+
+## Auditoría inicial de procedencia (14/11/2026)
+
+- Archivos inspeccionados: estructura completa de repositorio (Python, JS, pruebas, scripts, assets y docs), `fbm-card.js`, `custom_components/fbm/__init__.py`, `device_protocol.py`, `image_references.py`, `docs/fuente-unica-aficion-fbm.md`, `docs/analisis-inicializacion-invitado-apk.md`, `docs/escudos-oficiales-dev.md` y `docs/solicitud-acceso-fbm.md`.
+- Implementación específica de Home Assistant en `custom_components/fbm`, frontend `fbm-card.js` empaquetado en `www/` y pruebas propias. **No se ha demostrado procedencia ajena del código inspeccionado**, pero esta revisión es inicial y **no constituye una auditoría exhaustiva de cada línea ni una garantía de titularidad**.
+- La documentación describe inspección estática de la APK Afición FBM 5.0.42 para identificar endpoints, nombres de campos y secuencias de comunicación. No confundir la interoperabilidad ni los contratos observados con autorización del proveedor, titularidad del protocolo o derecho a copiar código de la APK. No se ha acreditado permiso expreso de la FBM/Gesdeportiva para reutilización por terceros.
+- Los escudos, fotografías y datos de equipos se obtienen o referencian en el servicio oficial y **no quedan licenciados por el MIT** del proyecto. Capturas de pantalla pueden mostrar esos recursos, que mantienen los derechos de sus propietarios.
+- La licencia MIT incorporada tiene `Copyright (c) 2026 sergey08` para el código propio. No agregar copyright a recursos ajenos. La publicación bajo MIT fue solicitada expresamente por el propietario en esta conversación.
+- Pendiente legal/técnico separado de HACS: confirmar condiciones de API, límites, uso de imágenes y datos con los titulares si no existe licencia pública aplicable.
