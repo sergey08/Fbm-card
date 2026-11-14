@@ -116,6 +116,14 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_search(self, user_input=None):
         import probatio
+        # Reject malformed input before accessing HA state or attempting onboarding.
+        if user_input is not None:
+            query = str(user_input.get("texto", "")).strip()
+            if not 3 <= len(query) <= 80:
+                return self.async_show_form(
+                    step_id="search",
+                    data_schema=probatio.Schema({probatio.Required("texto"): str}),
+                    errors={"base": "invalid_search"})
         try:
             status = await self._entry()["cliente_independiente"].async_status()
         except Exception:
