@@ -71,7 +71,7 @@
       },
       "automatic": {
         "title": "Automatically refresh competitions",
-        "description": "Only explicitly followed competitions. Standings and fixtures every 4 hours (one group per tick); individual statistics in batches of five every 2 hours, with a 24-hour pause after a complete cycle. No new roster downloads. Both choices are off by default.",
+        "description": "Only followed competitions. Groups with recent pending scores can be checked after 30 minutes, at most one group per five minutes. Individual statistics are checked in batches of five every 30 minutes, with a 24-hour pause after each cycle.",
         "data": {
           "auto_groups": "Auto-refresh results and standings",
           "auto_players": "Also refresh already archived players' statistics"

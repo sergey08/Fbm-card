@@ -71,7 +71,7 @@
       },
       "automatic": {
         "title": "Actualizar competiciones automáticamente",
-        "description": "Solo las competiciones que sigues. Clasificación y calendario cada 4 horas (un grupo por ciclo); estadísticas individuales en lotes de 5 cada 2 horas y pausa de 24 horas al completar una ronda. No descarga plantillas nuevas. Las dos opciones están desactivadas por defecto.",
+        "description": "Solo las competiciones que sigues. Los grupos con marcadores recientes pendientes pueden consultarse desde los 30 minutos. Se actualiza como máximo un grupo cada 5 minutos. Las estadísticas individuales se consultan en lotes de cinco cada 30 minutos, con una pausa de 24 horas tras completar el ciclo.",
         "data": {
           "auto_groups": "Actualizar resultados y clasificación automáticamente",
           "auto_players": "Actualizar también estadísticas de jugadores ya archivados"

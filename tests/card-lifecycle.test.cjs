@@ -58,3 +58,27 @@ test("technical photo diagnostics are hidden unless explicitly configured", () =
   assert.match(source, /this\._config\.mostrar_diagnostico === true/);
   assert.match(source, /button\("Diagnosticar fotos"/);
 });
+
+test("archived results repaint after a change even with no live FBM session", async () => {
+  const card = makeCard();
+  card._config = { modo_experimental: true, tipo_tarjeta: "equipo" };
+  const state = card._experimentalState();
+  Object.assign(state, { entry: "entry", selected: "team", archivedData: true,
+    status: { sesion_vigente: false }, lastArchiveCheck: 0 });
+  card._restoreExperimentalTeam = () => ({ id: "team" });
+  const requests = [];
+  card._hass = { callWS: async request => {
+    requests.push(request.type);
+    return { found: true, standings: { clasificacion: [] },
+      fixtures: { partidos: [{ marcador: { local: 44, visitante: 84 } }] } };
+  }};
+  let paints = 0;
+  card._render = () => { paints++; };
+  await card._autoRefresh();
+  assert.equal(state.schedule.partidos[0].marcador.visitante, 84);
+  assert.equal(paints, 1);
+  state.lastArchiveCheck = 0;
+  await card._autoRefresh();
+  assert.equal(paints, 1);
+  assert.deepEqual(requests, ["fbm/competition/team_snapshot", "fbm/competition/team_snapshot"]);
+});

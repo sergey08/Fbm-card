@@ -266,15 +266,19 @@ class FBMCard extends HTMLElement {
         !this._hass?.callWS || (typeof document !== "undefined" && document.visibilityState === "hidden"))
       return;
     const state = this._experimentalState();
-    if (state.busy || !state.entry || !state.selected || state.status?.sesion_vigente !== true) return;
+    if (state.busy || !state.entry || !state.selected) return;
     const selected = this._restoreExperimentalTeam(state.entry);
     if (!selected || selected.id !== state.selected) return;
     if (state.archivedData) {
       // Re-read the local archive; never fan out remote FBM calls per card.
-      if (!state.lastArchiveCheck || Date.now() - state.lastArchiveCheck >= 5 * 60 * 1000)
-        await this._loadArchivedFixed();
+      if (!state.lastArchiveCheck || Date.now() - state.lastArchiveCheck >= 5 * 60 * 1000) {
+        const previous = JSON.stringify([state.standings, state.schedule]);
+        if (await this._loadArchivedFixed() &&
+            previous !== JSON.stringify([state.standings, state.schedule])) this._render();
+      }
       return;
     }
+    if (state.status?.sesion_vigente !== true) return;
     const stale = timestamp => timestamp > 0 && Date.now() - timestamp >= 15 * 60 * 1000;
     if (state.tab === "partidos" && this._fixedMatchesAvailable(state, selected.id) &&
         stale(state.lastScheduleUpdate)) {
