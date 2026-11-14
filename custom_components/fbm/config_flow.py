@@ -98,6 +98,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_search()
         if user_input is not None and user_input.get("autorizar") is True:
             try:
+                # A retry uses the existing UID and the dedicated recovery API.
                 if not status["identidad_creada"]:
                     await client.async_create_identity()
                 if status["registro_pendiente"]:
