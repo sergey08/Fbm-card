@@ -1,5 +1,7 @@
 # FBM Card — Madrid Basketball in Home Assistant
 
+![FBM Card logo](assets/fbm-card-logo.svg)
+
 > **Unofficial community project.** Not affiliated with, endorsed by, or maintained by the Federación de Baloncesto de Madrid (FBM).
 
 **Stable release:** v0.2.1 · **Development beta:** v0.2.2b28 (tested on Home Assistant, not a stable release).
