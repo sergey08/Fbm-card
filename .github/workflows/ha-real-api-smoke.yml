@@ -5,6 +5,7 @@ on:
     paths:
       - 'custom_components/fbm/**'
       - 'tests/ha_real_api_smoke.py'
+      - 'tests/ha_lifecycle_smoke.py'
       - '.github/workflows/ha-real-api-smoke.yml'
   workflow_dispatch:
 permissions:
@@ -24,3 +25,5 @@ jobs:
         run: python -m pip install --disable-pip-version-check 'homeassistant==2026.11.0'
       - name: Test actual Home Assistant 2026.11 options API without a server
         run: python tests/ha_real_api_smoke.py
+      - name: Boot and restart an isolated Home Assistant instance
+        run: python tests/ha_lifecycle_smoke.py
