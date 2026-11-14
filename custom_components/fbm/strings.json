@@ -76,6 +76,13 @@
           "auto_groups": "Auto-refresh results and standings",
           "auto_players": "Also refresh already archived players' statistics"
         }
+      },
+      "guest": {
+        "title": "Configurar acceso de invitado",
+        "description": "Para buscar equipos, FBM Card necesita registrar una identidad local de invitado y conectarse al servicio FBM. Solo se realizará el registro al confirmar. No se requieren credenciales.",
+        "data": {
+          "autorizar": "Autorizo la configuración del acceso de invitado"
+        }
       }
     },
     "error": {
@@ -90,7 +97,10 @@
       "rosters_pending": "Standings, fixtures and available rosters were saved. Some rosters are pending. Confirm again to retry.",
       "rosters_pending_named": "Standings, fixtures and available rosters were saved. Pending rosters: {pending_rosters}. Confirm again to retry.",
       "cannot_refresh": "Could not refresh competition",
-      "auto_requires_groups": "Enable group updates before enabling player statistics."
+      "auto_requires_groups": "Enable group updates before enabling player statistics.",
+      "identity_corrupt": "La identidad FBM almacenada no se puede leer. No se creará otra automáticamente.",
+      "registration_pending": "Existe un registro de dispositivo pendiente. Para evitar duplicados, no se volverá a registrar automáticamente.",
+      "guest_setup_failed": "No se pudo completar el acceso de invitado. Comprueba la conexión y consulta los registros de Home Assistant."
     },
     "abort": {
       "none_followed": "No followed competitions",
