@@ -2,12 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "FBM Card (no oficial)",
-        "description": "Integración comunitaria no oficial para Home Assistant. No está desarrollada, respaldada ni mantenida por la Federación de Baloncesto de Madrid (FBM). Configura el acceso a los datos públicos en modo invitado."
+        "title": "FBM Card (unofficial)",
+        "description": "Unofficial community integration for Home Assistant. Set up guest access to public basketball data from the Federación de Baloncesto de Madrid (FBM)."
       }
     },
     "abort": {
-      "already_configured": "La integración FBM ya está configurada."
+      "already_configured": "The FBM integration is already configured."
     }
   },
   "options": {
@@ -76,6 +76,13 @@
           "auto_groups": "Auto-refresh results and standings",
           "auto_players": "Also refresh already archived players' statistics"
         }
+      },
+      "guest": {
+        "title": "Set up guest access",
+        "description": "To search for teams, FBM Card needs a guest device identity and a connection to FBM. Registration runs only after you confirm. No credentials are required.",
+        "data": {
+          "autorizar": "Allow guest access setup"
+        }
       }
     },
     "error": {
@@ -90,7 +97,10 @@
       "rosters_pending": "Standings, fixtures and available rosters were saved. Some rosters are pending. Confirm again to retry.",
       "rosters_pending_named": "Standings, fixtures and available rosters were saved. Pending rosters: {pending_rosters}. Confirm again to retry.",
       "cannot_refresh": "Could not refresh competition",
-      "auto_requires_groups": "Enable group updates before enabling player statistics."
+      "auto_requires_groups": "Enable group updates before enabling player statistics.",
+      "identity_corrupt": "The saved FBM identity could not be read. Check Home Assistant storage before trying again.",
+      "registration_pending": "A previous device registration is pending. Confirm to try recovering it with the same identity.",
+      "guest_setup_failed": "Guest access could not be established. Check the connection and try again."
     },
     "abort": {
       "none_followed": "No followed competitions",
