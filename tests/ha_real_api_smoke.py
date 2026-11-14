@@ -73,10 +73,27 @@ async def run():
     class FakeClient:
         def __init__(self):
             self.calls = []
+            self.connected = False
+            self.created = False
+            self.registered = False
 
         async def async_status(self):
-            return {"sesion_vigente": True, "identidad_creada": True,
-                    "candidato_guardado": True, "registro_pendiente": False}
+            return {"sesion_vigente": self.connected, "identidad_creada": self.created,
+                    "candidato_guardado": self.registered, "registro_pendiente": False}
+
+        async def async_create_identity(self):
+            self.calls.append("create")
+            self.created = True
+
+        async def async_register(self, release):
+            assert self.created
+            self.calls.append("register")
+            self.registered = True
+
+        async def async_connect(self, release):
+            assert self.registered
+            self.calls.append("connect")
+            self.connected = True
 
         async def async_search_teams(self, query, skip):
             self.calls.append("search")
@@ -139,6 +156,13 @@ async def run():
         # HA 2026.11 exposes config_entry as a read-only property resolved
         # through hass.config_entries and the flow's handler entry ID.
         flow.handler = "test-entry"
+        guest = await flow.async_step_search()
+        assert guest["step_id"] == "guest", guest
+        assert isinstance(guest["data_schema"], probatio.Schema)
+        assert not client.calls and not db.exists()
+        ready = await flow.async_step_guest({"autorizar": True})
+        assert ready["step_id"] == "search", ready
+        assert client.calls == ["create", "register", "connect"]
         search = await flow.async_step_search({"texto": "pinto"})
         assert search["step_id"] == "select", search
         select = await flow.async_step_select({"equipo": "pinto"})
@@ -196,6 +220,14 @@ async def run():
         assert issubclass(sensor_module.FBMCompetitionsSensor, SensorEntity)
         summary = sensor_module._read_competition_summary(str(db))
         assert summary["count"] == 1
+        entry = flow.config_entry
+        first_sensor = sensor_module.FBMCompetitionsSensor(flow.hass, entry)
+        restarted_hass = FakeHass(db, FakeClient())
+        restarted_sensor = sensor_module.FBMCompetitionsSensor(
+            restarted_hass, restarted_hass.config_entries.entry)
+        await restarted_sensor.async_update()
+        assert first_sensor.unique_id == restarted_sensor.unique_id
+        assert restarted_sensor.native_value == 1
         assert len(summary["groups"][0]["ranking"]) == 2
         assert summary["groups"][0]["recent_results"][0]["marcador"] == {
             "local": 35, "visitante": 31}

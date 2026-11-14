@@ -15,7 +15,7 @@ def load_guest_method():
     method = next(node for node in cls.body if isinstance(node, ast.AsyncFunctionDef)
                   and node.name == "async_step_guest")
     code = compile(ast.Module(body=[method], type_ignores=[]), str(path), "exec")
-    namespace = {}
+    namespace = {"GUEST_ANDROID_RELEASE": "16"}
     exec(code, namespace)
     return namespace["async_step_guest"]
 

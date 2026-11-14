@@ -135,6 +135,27 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.flow.hass = FakeHass(self.path, self.client)
         self.flow.config_entry = types.SimpleNamespace(entry_id="entry-1", options={})
 
+    async def test_competition_verification_retries_before_accepting_consent(self):
+        original = self.client.async_team_group_identity
+
+        async def unavailable(team):
+            raise OSError("offline")
+
+        self.client.async_team_group_identity = unavailable
+        await self.flow.async_step_search({"texto": "pinto"})
+        failed = await self.flow.async_step_select({"equipo": "team-A"})
+        self.assertEqual(failed["errors"]["base"], "cannot_verify")
+
+        self.client.async_team_group_identity = original
+        preview = await self.flow.async_step_confirm({"confirmar": True})
+        self.assertEqual(preview["type"], "form")
+        self.assertEqual(preview["errors"], {})
+        self.assertFalse(self.path.exists())
+
+        followed = await self.flow.async_step_confirm({"confirmar": True})
+        self.assertEqual(followed["type"], "create_entry")
+        self.assertEqual(len(Archive(str(self.path)).followed()), 1)
+
     async def test_search_confirm_then_manage_and_unfollow_preserves_archive(self):
         self.assertEqual((await self.flow.async_step_init())["type"], "menu")
         result = await self.flow.async_step_search({"texto": "pinto"})

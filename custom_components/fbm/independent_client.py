@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
+from time import monotonic
 
 from .aficion_adapter import AficionFBMAdapter, FBMAccessNotValidated
 from .guest_session import DeviceProfile
@@ -19,6 +20,7 @@ class IndependentClient:
         self._recovery_store = recovery_store
         self._adapter = None
         self._lock = asyncio.Lock()
+        self._restore_after = 0.0
         self._cache = QueryCache(ttl_seconds=300, max_entries=128)
 
     async def async_create_identity(self) -> None:
@@ -83,29 +85,34 @@ class IndependentClient:
         if not isinstance(android_release, str) or not android_release.strip():
             raise ValueError("Se requiere una version de perfil Android")
         async with self._lock:
-            self._adapter = None
-            self._cache.clear()
-            identity = await self._store.async_load()
-            if identity is None or not identity.candidate_device_id:
-                raise IdentityError("Falta una identidad con candidato de dispositivo")
-            profile = DeviceProfile(uid=identity.uid, plataforma="Android " + android_release.strip(),
-                                    tipo_dispositivo="mobile", version="5.0.42")
-            self._adapter = await AficionFBMAdapter.access_with_profile(profile, identity.candidate_device_id)
-            # Save only the Android release, never UID, token or device identity.
-            # A failure here must not invalidate a successful connection.
-            if self._recovery_store is not None:
-                try:
-                    await self._recovery_store.async_save({"format": 1, "android_release": android_release.strip()})
-                except Exception:
-                    pass
+            await self._connect_locked(android_release)
+            self._restore_after = 0.0
+
+    async def _connect_locked(self, android_release: str) -> None:
+        self._adapter = None
+        self._cache.clear()
+        identity = await self._store.async_load()
+        if identity is None or not identity.candidate_device_id:
+            raise IdentityError("Falta una identidad con candidato de dispositivo")
+        release = android_release.strip()
+        profile = DeviceProfile(uid=identity.uid, plataforma="Android " + release,
+                                tipo_dispositivo="mobile", version="5.0.42")
+        self._adapter = await AficionFBMAdapter.access_with_profile(profile, identity.candidate_device_id)
+        if self._recovery_store is not None:
+            try:
+                await self._recovery_store.async_save({"format": 1, "android_release": release})
+            except Exception:
+                pass
 
     async def async_restore(self) -> bool:
-        """Restore existing device access only; never create/register identities.
+        """Reuse existing device access; initial registration stays explicit."""
+        async with self._lock:
+            return await self._restore_locked()
 
-        No stored Android release means no automatic traffic. Access failures
-        are nonfatal; the next explicit connect remains available.
-        """
-        if self._recovery_store is None:
+    async def _restore_locked(self) -> bool:
+        if self._adapter is not None and self._adapter.session_is_usable():
+            return True
+        if self._recovery_store is None or monotonic() < self._restore_after:
             return False
         try:
             saved = await self._recovery_store.async_load()
@@ -114,9 +121,11 @@ class IndependentClient:
             release = saved["android_release"]
             if not isinstance(release, str) or not release.strip() or len(release) > 32:
                 return False
-            await self.async_connect(release)
+            await self._connect_locked(release)
             return True
         except Exception:
+            # Sync and dashboards can share a client during an outage.
+            self._restore_after = monotonic() + 30
             return False
 
     async def async_disconnect(self) -> None:
@@ -128,13 +137,12 @@ class IndependentClient:
     async def _cached_query(self, key, operation, *, ttl):
         """Serializa consultas y conserva solo resultados normalizados en memoria."""
         async with self._lock:
-            adapter = self._adapter
-            if adapter is None or not adapter.session_is_usable():
-                raise FBMAccessNotValidated("Se requiere una conexion explicita vigente")
+            if not await self._restore_locked():
+                raise FBMAccessNotValidated("Se requiere una conexion vigente")
             cached = self._cache.get(key)
             if cached is not None:
                 return cached
-            result = await operation(adapter)
+            result = await operation(self._adapter)
             self._cache.put(key, result, ttl_seconds=ttl)
             return result
 
@@ -194,7 +202,7 @@ class IndependentClient:
         # No query cache here: this verification must never look fresher
         # than it is, particularly before enabling persistent following.
         async with self._lock:
-            if self._adapter is None or not self._adapter.session_is_usable():
+            if not await self._restore_locked():
                 raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
             return await self._adapter.team_group_identity(team_id)
 
@@ -208,7 +216,7 @@ class IndependentClient:
                        for x in team_ids)):
             raise ValueError("Equipos no válidos")
         async with self._lock:
-            if self._adapter is None or not self._adapter.session_is_usable():
+            if not await self._restore_locked():
                 raise FBMAccessNotValidated("Se requiere sesión FBM vigente")
             return await self._adapter.verify_group_season(team_ids)
 
