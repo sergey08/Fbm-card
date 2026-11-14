@@ -1,4 +1,4 @@
-"""Puente experimental WebSocket para administradores de Home Assistant."""
+"""Comandos WebSocket FBM: lecturas autenticadas y operaciones administrativas."""
 from __future__ import annotations
 
 from datetime import date
@@ -174,7 +174,6 @@ async def _schedule_round(client, msg):
 
 
 @websocket_api.websocket_command({"type": "fbm/client/entries"})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_entries(hass, connection, msg):
     entries = hass.data.get(DOMAIN, {})
@@ -186,7 +185,6 @@ async def ws_entries(hass, connection, msg):
 
 
 @websocket_api.websocket_command({"type": "fbm/client/status", probatio.Required("entry_id"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_status(hass, connection, msg):
     await _dispatch(hass, connection, msg, _status)
@@ -221,14 +219,12 @@ async def ws_connect(hass, connection, msg):
 
 
 @websocket_api.websocket_command({"type": "fbm/team/search", probatio.Required("entry_id"): str, probatio.Required("texto"): str, probatio.Required("skip"): int})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_search(hass, connection, msg):
     await _dispatch(hass, connection, msg, _search)
 
 
 @websocket_api.websocket_command({"type": "fbm/team/schedule", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("desde"): str, probatio.Required("hasta"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_schedule(hass, connection, msg):
     await _dispatch(hass, connection, msg, _schedule)
@@ -242,35 +238,30 @@ async def ws_schedule_probe(hass, connection, msg):
 
 
 @websocket_api.websocket_command({"type": "fbm/team/phases", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_phases(hass, connection, msg):
     await _dispatch(hass, connection, msg, _phases)
 
 
 @websocket_api.websocket_command({"type": "fbm/team/schedule_round", probatio.Required("entry_id"): str, probatio.Required("equipo"): str, probatio.Required("ronda"): str, probatio.Required("desde"): str, probatio.Required("hasta"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_schedule_round(hass, connection, msg):
     await _dispatch(hass, connection, msg, _schedule_round)
 
 
 @websocket_api.websocket_command({"type": "fbm/team/group_identity", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_group_identity(hass, connection, msg):
     await _dispatch(hass, connection, msg, _group_identity)
 
 
 @websocket_api.websocket_command({"type": "fbm/team/players", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_roster(hass, connection, msg):
     await _dispatch(hass, connection, msg, _roster)
 
 
 @websocket_api.websocket_command({"type": "fbm/player/detail", probatio.Required("entry_id"): str, probatio.Required("jugador"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_player_detail(hass, connection, msg):
     await _dispatch(hass, connection, msg, _player_detail)
@@ -284,7 +275,6 @@ async def ws_player_detail_diagnostic(hass, connection, msg):
 
 
 @websocket_api.websocket_command({"type": "fbm/player/stats", probatio.Required("entry_id"): str, probatio.Required("jugador"): str, probatio.Required("equipo"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_player_stats(hass, connection, msg):
     await _dispatch(hass, connection, msg, _player_statistics)
@@ -305,7 +295,6 @@ async def ws_diagnostic(hass, connection, msg):
 
 
 @websocket_api.websocket_command({"type": "fbm/team/standings", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_standings(hass, connection, msg):
     await _dispatch(hass, connection, msg, _standings)
@@ -372,7 +361,6 @@ async def ws_competition_sync(hass, connection, msg):
     "type": "fbm/competition/list",
     probatio.Required("entry_id"): str,
 })
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_competition_list(hass, connection, msg):
     try:
@@ -427,7 +415,6 @@ def _offline_team_summary(archive_path, archive_factory, team_id):
     probatio.Required("entry_id"): str,
     probatio.Required("equipo"): str,
 })
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_competition_team_snapshot(hass, connection, msg):
     """Read public group results from SQLite without network or player data."""
@@ -456,7 +443,6 @@ async def ws_competition_team_snapshot(hass, connection, msg):
     probatio.Required("group_id"): str,
     probatio.Required("equipo"): str,
 })
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_competition_team_roster(hass, connection, msg):
     """Read an explicitly followed group's archived roster, without network."""
@@ -524,7 +510,6 @@ async def ws_competition_team_roster(hass, connection, msg):
     probatio.Required("equipo"): str,
     probatio.Required("jugador"): str,
 })
-@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_competition_team_player_stats(hass, connection, msg):
     """Read stored stats only for a player belonging to the requested team."""
