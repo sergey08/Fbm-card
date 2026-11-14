@@ -300,7 +300,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         await self.flow.async_step_search({"texto": "pinto"})
         self.flow._results["team-A"]["temporada"] = "26/29"
         result = await self.flow.async_step_select({"equipo": "team-A"})
-        self.assertEqual(result["errors"]["base"], "cannot_verify")
+        self.assertEqual(result["errors"]["base"], "season_unverified")
         result = await self.flow.async_step_confirm({"confirmar": True})
         self.assertEqual(result["errors"]["base"], "season_unverified")
         self.assertFalse(self.path.exists())

@@ -188,11 +188,18 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_confirm(self, user_input=None):
         import probatio
-        from .competition_manager import identify_competition, group_selection
+        from .competition_manager import identify_competition, group_selection, official_season_label
         candidate = self._candidate
         if not candidate:
             return await self.async_step_search()
-        if user_input is None or "verified" not in candidate:
+        if "verified" not in candidate:
+            try:
+                official_season_label(candidate["season"])
+            except ValueError:
+                return self.async_show_form(
+                    step_id="confirm", errors={"base": "season_unverified"},
+                    description_placeholders={"team": candidate["name"], "group": "Temporada no verificada"},
+                    data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}))
             try:
                 client = self._entry()["cliente_independiente"]
                 candidate["verified"] = await identify_competition(
