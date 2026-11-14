@@ -47,6 +47,28 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "TAG=v$version" >> "$GITHUB_ENV"
 
+      - name: Comprobar documentación de la versión estable
+        if: env.RELEASE_CURRENT == 'true'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+
+          version = json.loads(pathlib.Path("custom_components/fbm/manifest.json").read_text(encoding="utf-8"))["version"]
+          if re.fullmatch(r"\d+\.\d+\.\d+", version):
+              readme = pathlib.Path("README.md").read_text(encoding="utf-8")
+              expected = f"**Versión estable:** v{version}."
+              notes = pathlib.Path(f"RELEASE_{version}_NOTES.md")
+              assert expected in readme, f"README no anuncia la versión {version}"
+              assert notes.is_file(), f"Faltan las notas {notes}"
+              assert f"[Novedades de v{version}]({notes.name})" in readme, "README no enlaza las notas actuales"
+              text = notes.read_text(encoding="utf-8")
+              assert "## English" in text and "## Español" in text, "Notas no bilingües"
+              print(f"Documentación comprobada para v{version}")
+          PY
+
       - name: Publicar release con versión legible para HACS
         if: env.RELEASE_CURRENT == 'true'
         env:

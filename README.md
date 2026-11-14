@@ -4,11 +4,11 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.7.
+**Versión estable:** v0.2.8.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
-**Actualización de partidos:** al abrir la pestaña «Partidos» se consultan automáticamente los datos si faltan o necesitan refrescarse; no existe un botón de actualización manual. Se conservan filtros y archivo local.
+**Actualización de partidos:** al abrir la pestaña «Partidos» se consultan automáticamente los datos si faltan o necesitan refrescarse; no existe un botón de actualización manual. Se conservan filtros y archivo local. Los marcadores se actualizan en pantalla cuando cambia el archivo local, incluso si la sesión FBM ha caducado. Los grupos con resultados recientes pendientes pueden reconsultarse tras 30 minutos, con un máximo de un grupo por turno de cinco minutos.
 
 ## Funciones
 
@@ -20,7 +20,7 @@ FBM Card combina una integración de Home Assistant y tarjetas Lovelace para con
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.7](RELEASE_0.2.7_NOTES.md)
+[Novedades de v0.2.8](RELEASE_0.2.8_NOTES.md)
 
 ## Instalación
 
@@ -71,6 +71,10 @@ La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por gr
 **Validación real (14/11/2026):** cinco grupos seguidos, 30 equipos, 30 plantillas y 321/321 jugadores evaluables completos (100 %) tras una recuperación incremental explícita. Es una fotografía de una instalación concreta, **no un resultado garantizado para todos los usuarios**. La actualización automática tras nuevos partidos sigue pendiente de comprobación.
 
 ## Versiones
+
+- **v0.2.8 (estable):** actualización en pantalla de marcadores archivados, incluso con sesión FBM caducada, y reintentos automáticos limitados para partidos recientes sin resultado.
+- **v0.2.7 (estable):** alta y reconexión de identidad invitada y recuperación de búsquedas de competición tras cortes de conexión.
+- **v0.2.6 (estable):** refresco automático al abrir «Partidos» sin botón manual.
 
 - **v0.2.5 (estable):** identifica claramente la integración como «FBM Card (no oficial)» en Home Assistant y en su configuración, sin cambios funcionales.
 
