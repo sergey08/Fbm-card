@@ -648,6 +648,7 @@ async def ws_competition_analysis(hass, connection, msg):
     probatio.Required("group_id"): str,
     probatio.Required("equipo"): str,
 })
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_competition_match_preview(hass, connection, msg):
     """Admin-only next match and recent form from followed SQLite archive."""
