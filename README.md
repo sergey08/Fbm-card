@@ -4,7 +4,7 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.4 (validada en Home Assistant).
+**Versión estable:** v0.2.5.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
@@ -67,6 +67,8 @@ La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por gr
 **Validación real (14/11/2026):** cinco grupos seguidos, 30 equipos, 30 plantillas y 321/321 jugadores evaluables completos (100 %) tras una recuperación incremental explícita. Es una fotografía de una instalación concreta, **no un resultado garantizado para todos los usuarios**. La actualización automática tras nuevos partidos sigue pendiente de comprobación.
 
 ## Versiones
+
+- **v0.2.5 (estable):** identifica claramente la integración como «FBM Card (no oficial)» en Home Assistant y en su configuración, sin cambios funcionales.
 
 - **v0.2.4 (estable):** añade el logotipo para la ficha de detalles de Home Assistant y variantes de alta densidad, sin cambios funcionales.
 
