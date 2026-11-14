@@ -57,10 +57,35 @@ class BridgeTests(unittest.TestCase):
         self.hass = types.SimpleNamespace(data={'fbm': {'entry': {'cliente_independiente': self.client}}})
         self.connection = types.SimpleNamespace(user=types.SimpleNamespace(is_admin=True), send_result=MagicMock(), send_error=MagicMock())
 
-    def test_admin_required_for_all_commands(self):
+    def test_non_admin_can_read_fbm_without_changing_integration(self):
         self.connection.user.is_admin = False
-        for command in (module.ws_entries, module.ws_status, module.ws_create, module.ws_register, module.ws_recover, module.ws_connect, module.ws_search, module.ws_schedule, module.ws_phases, module.ws_schedule_round, module.ws_standings, module.ws_group_identity, module.ws_schedule_probe, module.ws_roster, module.ws_player_detail, module.ws_player_stats, module.ws_diagnostic, module.ws_player_detail_diagnostic, module.ws_player_stats_diagnostic):
-            with self.subTest(command=command), self.assertRaises(PermissionError):
+        cases = [
+            (module.ws_entries, {'id': 1}),
+            (module.ws_search, {'id': 2, 'entry_id': 'entry', 'texto': 'Equipo', 'skip': 0}),
+            (module.ws_standings, {'id': 3, 'entry_id': 'entry', 'equipo': 'team'}),
+            (module.ws_schedule, {'id': 4, 'entry_id': 'entry', 'equipo': 'team', 'desde': '2026-11-01', 'hasta': '2026-12-31'}),
+            (module.ws_roster, {'id': 5, 'entry_id': 'entry', 'equipo': 'team'}),
+            (module.ws_player_detail, {'id': 6, 'entry_id': 'entry', 'jugador': 'p1'}),
+            (module.ws_player_stats, {'id': 7, 'entry_id': 'entry', 'equipo': 'team', 'jugador': 'p1'}),
+        ]
+        for command, message in cases:
+            with self.subTest(command=command.__name__):
+                run_immediate(command(self.hass, self.connection, message))
+        self.assertEqual(self.connection.send_result.call_count, len(cases))
+        self.connection.send_error.assert_not_called()
+
+    def test_non_admin_cannot_change_identity_or_read_diagnostics(self):
+        self.connection.user.is_admin = False
+        commands = (module.ws_create, module.ws_register, module.ws_recover,
+                    module.ws_connect, module.ws_schedule_probe,
+                    module.ws_diagnostic, module.ws_player_detail_diagnostic,
+                    module.ws_player_stats_diagnostic,
+                    module.ws_competition_sync, module.ws_competition_preview,
+                    module.ws_competition_analysis, module.ws_competition_latest,
+                    module.ws_competition_verify_season,
+                    module.ws_competition_player_stats_batch)
+        for command in commands:
+            with self.subTest(command=command.__name__), self.assertRaises(PermissionError):
                 run_immediate(command(self.hass, self.connection, {'id': 1, 'entry_id': 'entry'}))
         self.client.async_register.assert_not_awaited()
 
