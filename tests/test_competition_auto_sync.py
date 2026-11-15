@@ -91,6 +91,16 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
 
+    async def test_missing_fixtures_bootstrap_ignores_stale_check_timestamp(self):
+        from datetime import datetime, timezone
+        await self.updater._save_state({
+            "group_checked_at": {"group": datetime.now(timezone.utc).isoformat()}})
+        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok"}
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 1)
+            self.assertEqual(sync.await_args.args[2], "anchor")
+
     async def test_bootstrap_prefers_group_with_missing_player_snapshots(self):
         archive = Archive(self.path)
         other = {**IDENT, "group_id": "group-new"}
