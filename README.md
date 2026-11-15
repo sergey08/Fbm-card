@@ -8,6 +8,8 @@
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
+Al confirmar el seguimiento de una competición, se activa su sincronización automática, incluidas las estadísticas. Si la primera descarga es parcial, las siguientes pasadas continúan en segundo plano.
+
 **Actualización de partidos:** al abrir la pestaña «Partidos» se consultan automáticamente los datos si faltan o necesitan refrescarse; no existe un botón de actualización manual. Se conservan filtros y archivo local. Los marcadores se actualizan en pantalla cuando cambia el archivo local, incluso si la sesión FBM ha caducado. Los grupos con resultados recientes pendientes pueden reconsultarse tras 30 minutos, con un máximo de un grupo por turno de cinco minutos.
 
 ## Funciones

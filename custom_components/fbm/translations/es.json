@@ -37,7 +37,7 @@
         "title": "Seguir competición completa",
         "description": "Equipo: {team}. Grupo oficial: {group}. Al confirmar se descargan la clasificación, los partidos y las plantillas de todos los equipos.",
         "data": {
-          "confirmar": "Confirmo que deseo seguir esta competición"
+          "confirmar": "Seguir y sincronizar automáticamente esta competición"
         }
       },
       "manage": {
