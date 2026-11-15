@@ -115,6 +115,56 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             await self.updater._run_players()
             self.assertEqual(sync.await_args.args[3], "a")
 
+    async def test_pending_cycle_resumes_after_six_hours(self):
+        from datetime import datetime, timedelta, timezone
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "pending-player", "partidos_jugados": 1}]},
+            subject="a")
+        completed = (datetime.now(timezone.utc) -
+                     timedelta(hours=7)).isoformat()
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": completed,
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_count, 1)
+
+    async def test_pending_cycle_waits_before_six_hours(self):
+        from datetime import datetime, timedelta, timezone
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "pending-player", "partidos_jugados": 1}]},
+            subject="a")
+        completed = (datetime.now(timezone.utc) -
+                     timedelta(hours=1)).isoformat()
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": completed,
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            await self.updater._run_players()
+            sync.assert_not_awaited()
+
+    async def test_complete_cycle_keeps_daily_delay(self):
+        from datetime import datetime, timedelta, timezone
+        completed = (datetime.now(timezone.utc) -
+                     timedelta(hours=7)).isoformat()
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": completed,
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            await self.updater._run_players()
+            sync.assert_not_awaited()
+
     async def test_unchanged_followed_groups_preserve_cooldown(self):
         await self.updater._save_state({
             "player_followed_groups": ["group"],
