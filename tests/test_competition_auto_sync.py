@@ -101,12 +101,6 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sync.await_count, 1)
             self.assertEqual(sync.await_args.args[2], "anchor")
 
-    async def test_group_reports_partial_when_rosters_fail(self):
-        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync:
-            sync.return_value = {"status": "partial", "roster_errors": 1}
-            await self.updater._run_group()
-        self.assertEqual(self.updater.health["groups"]["status"], "partial")
-
     async def test_group_without_standings_does_not_block_other_groups(self):
         archive = Archive(self.path)
         archive.follow({**IDENT, "group_id": "aaa-missing"}, "missing")
@@ -636,11 +630,11 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.updater.health["players"]["status"], "failed")
         self.assertNotIn("private", str(self.updater.health))
 
-    async def test_partial_group_refresh_is_not_reported_as_failure(self):
+    async def test_partial_group_refresh_reports_partial(self):
         with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
             sync.return_value={"status":"partial"}
             await self.updater._run_group()
-        self.assertEqual(self.updater.health["groups"]["status"],"ok")
+        self.assertEqual(self.updater.health["groups"]["status"],"partial")
 
     async def test_unfollow_blocks_group_and_player_requests(self):
         archive=Archive(self.path)

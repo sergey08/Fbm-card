@@ -124,6 +124,25 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(self.client.calls.count("roster"), 2)
         self.assertFalse(second["fixture_results_changed"])
 
+    def test_incremental_rosters_retry_only_missing_teams(self):
+        self.select()
+        self.run_sync(fetch_rosters=False)
+        fetched = []
+        original = self.client.async_team_roster
+
+        async def flaky(team):
+            fetched.append(team)
+            if team == "b" and fetched.count("b") == 1:
+                raise RuntimeError("temporary failure")
+            if team == "b":
+                self.assertIsNotNone(self.archive.latest(identity(), "roster", "a"))
+            return await original(team)
+
+        self.client.async_team_roster = flaky
+        self.assertEqual(self.run_sync(fetch_rosters="on_change")["status"], "partial")
+        self.assertEqual(self.run_sync(fetch_rosters="on_change")["status"], "ok")
+        self.assertEqual(fetched, ["a", "b", "b"])
+
     def test_incremental_rosters_refresh_on_new_completed_result(self):
         self.select()
         self.run_sync(fetch_rosters="on_change")
