@@ -31,11 +31,14 @@ class CoverageTests(unittest.TestCase):
                     db.execute("INSERT INTO snapshots VALUES (?,?,?,?,?,?,?)",
                                ("26/27", "p", group, source, subject, "2026-11-14T00:00:00Z", json.dumps(payload)))
                 insert("followed", "standings", "", {"clasificacion": [{"id": "team"}]})
+                insert("followed", "fixtures", "", {"partidos": [
+                    {"jornada": 1}, {"jornada": 1}, {"jornada": 2}]})
                 insert("followed", "roster", "team", {"jugadores": [
                     {"id": "complete", "partidos_jugados": 1},
                     {"id": "duplicate", "partidos_jugados": 2},
                     {"id": "pending", "partidos_jugados": 1},
-                    {"id": "unplayed", "partidos_jugados": 0}]})
+                    {"id": "unplayed", "partidos_jugados": 0},
+                    {"id": "unknown"}]})
                 insert("followed", "player_stats", "complete", {"partidos": [{"id_partido": "m1", "puntos": 0}]})
                 insert("followed", "player_stats", "duplicate", {"partidos": [
                     {"id_partido": "m1", "puntos": 5}, {"id_partido": "m1", "puntos": 5}]})
@@ -45,6 +48,12 @@ class CoverageTests(unittest.TestCase):
             self.assertEqual(result["totals"], {"teams": 1, "rosters": 1,
                                                   "players": 3, "complete": 1, "pending": 2,
                                                   "missing_rosters": 0, "coverage_percent": 33.3})
+            self.assertEqual(result["groups"][0]["archive"], {
+                "standings_archived": True, "calendar_archived": True,
+                "fixtures_archived": 3, "rounds_archived": 2, "roster_entries": 5,
+                "zero_appearances": 1, "unknown_appearances": 1,
+                "stats_not_archived": 1, "stats_empty": 0, "stats_incomplete": 1,
+            })
 
 
     def test_five_competitions_and_missing_rosters(self):
