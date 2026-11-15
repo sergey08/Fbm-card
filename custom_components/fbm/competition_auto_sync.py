@@ -208,8 +208,8 @@ class CompetitionAutoUpdater:
                         "season_verified": True}
             snapshot = await self.hass.async_add_executor_job(
                 archive.latest, identity, "fixtures")
-            if should_poll_group((snapshot or {}).get("payload"),
-                                 checks.get(group_id), now_utc):
+            if (snapshot is None or should_poll_group(
+                    snapshot.get("payload"), checks.get(group_id), now_utc)):
                 index = candidate_index
                 break
         else:
