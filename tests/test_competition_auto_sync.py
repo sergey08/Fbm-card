@@ -436,7 +436,7 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
     async def test_incremental_player_poll_keeps_five_player_cap(self):
         await self.updater.async_start(True, True)
         self.assertEqual(len(listeners), 2)
-        self.assertEqual(listeners[1]["interval"], mod.timedelta(minutes=30))
+        self.assertEqual(listeners[1]["interval"], mod.timedelta(minutes=10))
         await self.updater.async_stop()
 
     async def test_initial_player_pass_rechecks_cached_records(self):
