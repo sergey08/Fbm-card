@@ -636,6 +636,24 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             await self.updater._run_group()
         self.assertEqual(self.updater.health["groups"]["status"],"partial")
 
+    async def test_partial_group_retries_during_a_quiet_week(self):
+        from datetime import datetime, timedelta, timezone
+        archive = Archive(self.path)
+        archive.record(IDENT, "fixtures", {"partidos": []})
+        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "partial"}
+            await self.updater._run_group()
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 1)
+            prior = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            await self.updater._save_state({
+                "group_checked_at": {"group": prior},
+                "group_partial_at": {"group": prior}})
+            sync.return_value = {"status": "ok"}
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 2)
+            self.assertEqual((await self.updater._read_state())["group_partial_at"], {})
+
     async def test_unfollow_blocks_group_and_player_requests(self):
         archive=Archive(self.path)
         archive.unfollow(IDENT)

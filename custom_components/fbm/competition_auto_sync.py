@@ -24,6 +24,7 @@ PLAYER_CYCLE_DELAY = timedelta(hours=24)
 PLAYER_PENDING_RECHECK_DELAY = timedelta(hours=6)
 PLAYER_FULL_RECHECK_INTERVAL = timedelta(days=7)
 ROSTER_FULL_RECHECK_INTERVAL = timedelta(days=7)
+GROUP_PARTIAL_RETRY_INTERVAL = timedelta(minutes=30)
 
 
 class CompetitionAutoUpdater:
@@ -197,6 +198,9 @@ class CompetitionAutoUpdater:
         checks = state.get("group_checked_at", {})
         if type(checks) is not dict:
             checks = {}
+        partial_groups = state.get("group_partial_at", {})
+        if type(partial_groups) is not dict:
+            partial_groups = {}
         now_utc = datetime.now(timezone.utc)
         # Skip quiet groups without spending a network turn on them.
         for offset in range(len(groups)):
@@ -208,6 +212,16 @@ class CompetitionAutoUpdater:
                         "season_verified": True}
             snapshot = await self.hass.async_add_executor_job(
                 archive.latest, identity, "fixtures")
+            retry_at = partial_groups.get(group_id)
+            if type(retry_at) is str:
+                try:
+                    partial_age = now_utc - datetime.fromisoformat(retry_at)
+                except (ValueError, TypeError):
+                    partial_age = GROUP_PARTIAL_RETRY_INTERVAL
+                if timedelta(0) <= partial_age < GROUP_PARTIAL_RETRY_INTERVAL:
+                    continue
+                index = candidate_index
+                break
             if (snapshot is None or should_poll_group(
                     snapshot.get("payload"), checks.get(group_id), now_utc)):
                 index = candidate_index
@@ -251,7 +265,14 @@ class CompetitionAutoUpdater:
                 checks = {key: val for key, val in checks.items()
                           if key in {item["group_id"] for item in groups}}
                 checks[group_id] = datetime.now(timezone.utc).isoformat()
-                await self._save_state({"group_checked_at": checks})
+                partial_groups = {key: value for key, value in partial_groups.items()
+                                  if key in checks}
+                if status == "partial":
+                    partial_groups[group_id] = checks[group_id]
+                else:
+                    partial_groups.pop(group_id, None)
+                await self._save_state({"group_checked_at": checks,
+                                        "group_partial_at": partial_groups})
                 self.group_checked_at = checks
             await self._mark("groups", status if status in ("ok", "partial") else "failed")
         except Exception:
