@@ -101,6 +101,26 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sync.await_count, 1)
             self.assertEqual(sync.await_args.args[2], "anchor")
 
+    async def test_group_reports_partial_when_rosters_fail(self):
+        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "partial", "roster_errors": 1}
+            await self.updater._run_group()
+        self.assertEqual(self.updater.health["groups"]["status"], "partial")
+
+    async def test_group_without_standings_does_not_block_other_groups(self):
+        archive = Archive(self.path)
+        archive.follow({**IDENT, "group_id": "aaa-missing"}, "missing")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(self.updater.health["players"]["status"], "no_standings")
+            sync.assert_not_awaited()
+            restarted = mod.CompetitionAutoUpdater(
+                self.hass, "test", FakeClient(), self.path, Archive)
+            await restarted._run_players()
+            self.assertEqual(sync.await_args.args[3], "a")
+
     async def test_bootstrap_prefers_group_with_missing_player_snapshots(self):
         archive = Archive(self.path)
         other = {**IDENT, "group_id": "group-new"}

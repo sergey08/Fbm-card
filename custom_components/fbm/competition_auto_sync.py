@@ -253,7 +253,7 @@ class CompetitionAutoUpdater:
                 checks[group_id] = datetime.now(timezone.utc).isoformat()
                 await self._save_state({"group_checked_at": checks})
                 self.group_checked_at = checks
-            await self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
+            await self._mark("groups", status if status in ("ok", "partial") else "failed")
         except Exception:
             # Never leak service errors, IDs or player details into HA state.
             # The archive retains the last successful snapshot.
@@ -370,6 +370,12 @@ class CompetitionAutoUpdater:
         team_ids = [row.get("id") for row in rows if type(row) is dict
                     and type(row.get("id")) is str][:20]
         if not team_ids:
+            # Keep other competitions moving even when this group cannot
+            # enumerate its teams yet. Revisit it on the next pass.
+            next_group = (group_index + 1) % len(groups)
+            await self._save_state({"players": {
+                "group_index": next_group, "team_index": 0, "offset": 0,
+                "priority_group_id": priority_id}})
             await self._mark("players", "no_standings")
             return
         team_index = int(cursor.get("team_index", 0)) % len(team_ids)
