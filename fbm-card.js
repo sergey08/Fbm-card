@@ -1494,6 +1494,9 @@ class FBMCompetitionCard extends HTMLElement {
     if (!Number.isInteger(this._config.group_index) ||
         this._config.group_index < 0 || this._config.group_index > 49)
       throw new Error("Índice de competición inválido");
+    this._competitionTab = this._config.initial_tab === "upcoming" ? "upcoming" : "ranking";
+    this._allUpcomingGroups = true;
+    this._upcomingTeam = "";
     this._groupIndex = this._config.group_index;
     this._selectedGroup = null;
     this._pickerFocused = this._pickerRefreshPending = false;
@@ -1718,6 +1721,71 @@ class FBMCompetitionCard extends HTMLElement {
     }
     this._render();
   }
+  _renderUpcoming(card, groups) {
+    const matches = new Map();
+    const teams = new Set();
+    for (const group of groups) {
+      const ranking = new Map((group.ranking || []).map(team => [team.equipo, team]));
+      for (const match of group.upcoming || []) {
+        if (matches.has(match.id)) continue;
+        matches.set(match.id, {match, group, ranking});
+        teams.add(match.local);
+        teams.add(match.visitante);
+      }
+    }
+    if (!matches.size) {
+      card.append(this._el("p", "No hay próximos partidos archivados.", "muted"));
+      return;
+    }
+    const filter = this._el("select");
+    filter.setAttribute("aria-label", "Filtrar por equipo");
+    for (const name of ["", ...[...teams].sort((a, b) => a.localeCompare(b, "es"))]) {
+      const option = this._el("option", name || "Todos los equipos");
+      option.value = name;
+      filter.append(option);
+    }
+    filter.value = this._upcomingTeam;
+    filter.addEventListener("change", () => {
+      this._upcomingTeam = filter.value;
+      this._render();
+    });
+    card.append(filter);
+    const ordered = [...matches.values()].sort((a, b) =>
+      a.match.fecha.localeCompare(b.match.fecha) ||
+      (a.match.hora || "24:00").localeCompare(b.match.hora || "24:00"));
+    let currentDay = "";
+    for (const {match, group, ranking} of ordered) {
+      if (this._upcomingTeam && ![match.local, match.visitante].includes(this._upcomingTeam)) continue;
+      if (match.fecha !== currentDay) {
+        currentDay = match.fecha;
+        const date = new Date(currentDay + "T12:00:00");
+        card.append(this._el("h4", date.toLocaleDateString("es-ES",
+          {weekday: "long", day: "numeric", month: "long"})));
+      }
+      const row = this._el("div", undefined, "upcoming-match");
+      const sides = this._el("div", undefined, "upcoming-sides");
+      for (const side of [match.local, match.visitante]) {
+        const team = ranking.get(side);
+        if (!team?.id) {
+          sides.append(this._el("span", side));
+          continue;
+        }
+        const button = this._teamButton(team);
+        button.addEventListener("click", () => {
+          this._competitionTab = "ranking";
+          this._selectedGroup = this._groupKey(group);
+        }, {capture: true});
+        sides.append(button);
+      }
+      row.append(sides, this._el("div", [
+        match.hora || "Hora por confirmar", this._groupLabel(group), group.group_name,
+        match.jornada != null ? "Jornada " + match.jornada : null,
+        match.campo, match.direccion
+      ].filter(Boolean).join(" · "), "muted"));
+      card.append(row);
+    }
+  }
+
   _render() {
     if (this._pickerFocused) {
       this._pickerRefreshPending = true;
@@ -1752,6 +1820,9 @@ class FBMCompetitionCard extends HTMLElement {
       .team-logo,.team-logo-placeholder{width:52px;height:52px;flex:0 0 52px;object-fit:contain;border-radius:12px;background:var(--secondary-background-color,#eee)}
       .team-logo-placeholder{display:flex;align-items:center;justify-content:center;font-size:1.65rem}
       .fixture-group{margin-top:12px}
+      .upcoming-match{padding:8px 0;border-bottom:1px solid var(--divider-color,#ddd)}
+      .upcoming-match .muted{margin:4px 0 0}
+      .upcoming-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
       .tabs{display:flex;gap:4px;overflow-x:auto;margin:12px 0;max-width:100%}
       .tabs button{flex:1 0 auto;padding:8px 10px;border:0;border-radius:9px;background:var(--secondary-background-color,#eee);color:var(--primary-text-color,#222)}
       .tabs button[aria-pressed="true"]{background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);font-weight:700}
@@ -1766,6 +1837,7 @@ class FBMCompetitionCard extends HTMLElement {
       this.shadowRoot.replaceChildren(style,card);
       return;
     }
+    const upcoming = this._competitionTab === "upcoming";
     if (groups.length > 1) {
       const select = this._el("select");
       select.setAttribute("aria-label", "Cambiar competición");
@@ -1777,13 +1849,24 @@ class FBMCompetitionCard extends HTMLElement {
           this._render();
         }
       });
+      if (upcoming) {
+        const all = this._el("option", "Todas las competiciones");
+        all.value = "all";
+        select.append(all);
+      }
       for (let i=0;i<groups.length;i++) {
         const option = this._el("option", [...new Set([this._groupLabel(groups[i]), groups[i].group_name, groups[i].season_id].filter(Boolean))].join(" · "));
         option.value = String(i); select.append(option);
       }
-      select.value = String(index);
+      select.value = upcoming && this._allUpcomingGroups ? "all" : String(index);
       select.addEventListener("change", event => {
         this._pickerFocused = this._pickerRefreshPending = false;
+        this._upcomingTeam = "";
+        if (upcoming) this._allUpcomingGroups = event.target.value === "all";
+        if (this._allUpcomingGroups && upcoming) {
+          this._render();
+          return;
+        }
         this._groupIndex = Number(event.target.value);
         this._selectedGroup = this._groupKey(groups[this._groupIndex]);
         this._teamRequest = this._playerRequest = null;
@@ -1792,6 +1875,25 @@ class FBMCompetitionCard extends HTMLElement {
         this._render();
       });
       card.append(select);
+    }
+    const tabs = this._el("div", undefined, "tabs");
+    for (const [key, title] of [["ranking", "Clasificación"], ["upcoming", "Próximos partidos"]]) {
+      const button = this._el("button", title);
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(this._competitionTab === key));
+      button.addEventListener("click", () => {
+        this._competitionTab = key;
+        this._teamRequest = this._playerRequest = null;
+        this._teamId = null;
+        this._render();
+      });
+      tabs.append(button);
+    }
+    card.append(tabs);
+    if (upcoming) {
+      this._renderUpcoming(card, this._allUpcomingGroups ? groups : [group]);
+      this.shadowRoot.replaceChildren(style, card);
+      return;
     }
     card.append(this._el("h3", this._groupLabel(group)));
     const ranking = Array.isArray(group.ranking) ? group.ranking : [];
@@ -2010,6 +2112,9 @@ class FBMCardEditor extends HTMLElement {
     if (this._competition) {
       edit(form, "Sensor de competiciones", "entity", {
         default: "sensor.competiciones", redraw: true, pattern: "sensor\\.[a-z0-9_]+"
+      });
+      edit(form, "Pestaña inicial", "initial_tab", {
+        default: "ranking", options: [["ranking", "Clasificación"], ["upcoming", "Próximos partidos"]]
       });
       const index = config.group_index ?? 0;
       const options = groups.map((group, position) => [String(position),

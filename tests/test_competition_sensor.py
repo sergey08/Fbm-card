@@ -1,5 +1,5 @@
 """Offline tests for the minimal FBM competition HA sensor."""
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 import importlib.util
 import sys
@@ -44,6 +44,19 @@ Archive = sys.modules[pkg_name + ".competition_archive"].CompetitionArchive
 
 
 class SensorTests(unittest.IsolatedAsyncioTestCase):
+    def test_upcoming_excludes_past_started_and_duplicate_fixtures(self):
+        now = datetime(2026, 11, 16, 12)
+        base = {"id": "m1", "local": "A", "visitante": "B", "estado": "scheduled",
+                "fecha": "16/11/2026", "hora": "13:00", "campo": "Pabellón"}
+        fixtures = [base, base, {**base, "id": "past", "hora": "11:00"},
+                    {**base, "id": "finished", "estado": "finished"},
+                    {**base, "id": "m2", "fecha": "2026-11-17", "hora": None}]
+        upcoming = Sensor._upcoming_fixtures(fixtures, now)
+        self.assertEqual([row["id"] for row in upcoming], ["m1", "m2"])
+        self.assertEqual(upcoming[0]["fecha"], "2026-11-16")
+        self.assertEqual(upcoming[0]["campo"], "Pabellón")
+        self.assertIsNone(upcoming[1]["hora"])
+
     def test_round_status_ignores_postponements_and_calendar_gaps(self):
         fixtures = [
             {"jornada": 1, "fecha": "2026-11-01", "estado": "finished"},

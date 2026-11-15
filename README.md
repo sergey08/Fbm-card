@@ -153,3 +153,5 @@ FBM Card es un proyecto comunitario **no oficial**, independiente de la Federaci
 ## Privacidad, limitaciones y soporte
 
 Este proyecto usa datos deportivos públicos y una identidad invitada FBM compartida. No publiques tokens, datos de registro del dispositivo, información personal ni fotografías de jugadores en incidencias públicas. La disponibilidad de datos, rutas e imágenes oficiales puede cambiar. Para comunicar errores, abre una [incidencia en GitHub](https://github.com/sergey08/Fbm-card/issues) indicando versión de Home Assistant, versión de FBM Card, registros anonimizados y pasos para reproducir el problema.
+
+La tarjeta `custom:fbm-competition-card` incluye **Clasificación** y **Próximos partidos**. Para abrir directamente la segunda pestaña, usa `initial_tab: upcoming` en YAML o elige **Pestaña inicial** en el editor visual. La agenda usa los partidos archivados en `sensor.competiciones` durante los próximos 60 días, con un máximo de 60 encuentros por grupo.

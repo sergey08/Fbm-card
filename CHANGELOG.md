@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an upcoming games tab to the competition card using archived fixtures.
+
 - Compare archived final scores with the games played in official standings by team.
 
 - Automatic calendar refresh queries the entire sporting year of the followed group.
@@ -13,6 +15,8 @@
 - Roster downloads save each completed team immediately. When the results are unchanged, subsequent incremental passes request only missing rosters.
 
 ## Sin publicar
+
+- La tarjeta de competiciones incluye una pestaña de próximos partidos basada en el calendario archivado.
 
 - Se comparan los marcadores finales archivados con los partidos jugados de cada equipo según la clasificación oficial.
 
