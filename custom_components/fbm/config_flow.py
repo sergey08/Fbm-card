@@ -238,7 +238,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                 await sync_group(
                     entry["cliente_independiente"], archive, candidate["team_id"],
                     today - timedelta(days=45), today + timedelta(days=60),
-                    fetch_rosters=True, expected_competition=identity)
+                    fetch_rosters=True, expected_competition=identity, whole_season=True)
             except Exception:
                 # A transient first request must not discard the confirmed follow.
                 pass

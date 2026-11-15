@@ -8,13 +8,16 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
+from .competition_manager import official_season_label
+
 
 MAX_TEAMS = 20
 MAX_RANGE_DAYS = 125
 
 
 async def sync_group(client, archive, team_id: str, start: date, end: date,
-                     *, fetch_rosters: bool = True, expected_competition: dict | None = None) -> dict:
+                     *, fetch_rosters: bool | str = True, expected_competition: dict | None = None,
+                     whole_season: bool = False) -> dict:
     """Fetch all opponents of the selected team's *official current group*.
 
     Called only on explicit administrator request. If season identity has
@@ -78,6 +81,12 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     if not await asyncio.to_thread(archive.is_followed, group):
         return {"status": "not_followed", "saved": False}
 
+    if whole_season:
+        # The saved official season selects the group. Widen the query to the
+        # full sporting year rather than losing matches beyond a rolling window.
+        season = official_season_label(group["season_id"])
+        year = 2000 + int(season[:2])
+        start, end = date(year, 7, 1), date(year + 1, 6, 30)
     fixtures = await client.async_team_schedule(team_id, start, end)
     if type(fixtures) is not dict or type(fixtures.get("partidos")) is not list:
         raise ValueError("Calendario oficial no válido")

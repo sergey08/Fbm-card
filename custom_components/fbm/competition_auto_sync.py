@@ -252,6 +252,7 @@ class CompetitionAutoUpdater:
                 self.client, archive, group["anchor_team_id"],
                 now - timedelta(days=45), now + timedelta(days=60),
                 fetch_rosters=True if full_rosters_due else "on_change",
+                whole_season=True,
                 expected_competition={k: group[k] for k in
                                       ("season_id", "phase_id", "group_id")})
             status = response.get("status") if isinstance(response, dict) else None

@@ -107,6 +107,19 @@ class GroupTests(unittest.TestCase):
         return {"phase_id": "phase1", "group_id": "group1",
                 "phase_name": "Primera fase", "group_name": "Grupo 16"}
 
+    def test_whole_season_queries_both_ends_of_official_season(self):
+        self.select()
+        query = []
+        original = self.client.async_team_schedule
+
+        async def capture(team, start, end):
+            query.append((start, end))
+            return await original(team, start, end)
+
+        self.client.async_team_schedule = capture
+        self.assertEqual(self.run_sync(fetch_rosters=False, whole_season=True)["status"], "ok")
+        self.assertEqual(query, [(date(2026, 7, 1), date(2027, 6, 30))])
+
     def test_refresh_only_fixtures_without_rosters(self):
         self.select()
         result=self.run_sync(fetch_rosters=False)

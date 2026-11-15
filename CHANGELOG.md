@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Automatic calendar refresh queries the entire sporting year of the followed group.
+
 - Confirming a new competition enables background synchronization and retries automatically.
 
 - Competition refresh reports partial progress when a roster download fails.
@@ -9,6 +11,8 @@
 - Roster downloads save each completed team immediately. When the results are unchanged, subsequent incremental passes request only missing rosters.
 
 ## Sin publicar
+
+- La actualización automática del calendario consulta todo el año deportivo del grupo seguido.
 
 - Confirmar una competición nueva activa automáticamente la sincronización en segundo plano y sus reintentos.
 
