@@ -19,8 +19,9 @@ from .competition_player_stats import sync_player_stats_batch
 from .competition_refresh_policy import should_poll_group
 
 GROUP_INTERVAL = timedelta(minutes=5)
-PLAYER_INTERVAL = timedelta(minutes=30)
+PLAYER_INTERVAL = timedelta(minutes=10)
 PLAYER_CYCLE_DELAY = timedelta(hours=24)
+PLAYER_PENDING_RECHECK_DELAY = timedelta(hours=6)
 PLAYER_FULL_RECHECK_INTERVAL = timedelta(days=7)
 ROSTER_FULL_RECHECK_INTERVAL = timedelta(days=7)
 
@@ -306,6 +307,11 @@ class CompetitionAutoUpdater:
                 best_id, best_missing = group["group_id"], missing
         return best_id
 
+    @staticmethod
+    def _pending_player_snapshots(archive, groups):
+        """True if any followed group has missing or incomplete player snapshots."""
+        return CompetitionAutoUpdater._bootstrap_priority(archive, groups) is not None
+
     async def _run_players_impl(self):
         archive, groups = await self._archive_and_groups()
         if not groups:
@@ -330,8 +336,15 @@ class CompetitionAutoUpdater:
         if type(last) is str:
             try:
                 completed = datetime.fromisoformat(last)
-                if completed.tzinfo and datetime.now(timezone.utc) - completed < PLAYER_CYCLE_DELAY:
-                    return
+                if completed.tzinfo:
+                    # Incomplete official snapshots require another bounded pass.
+                    # Fully covered groups retain the daily quiet period.
+                    coverage = await self.hass.async_add_executor_job(
+                        self._pending_player_snapshots, archive, groups)
+                    delay = (PLAYER_PENDING_RECHECK_DELAY if coverage
+                             else PLAYER_CYCLE_DELAY)
+                    if datetime.now(timezone.utc) - completed < delay:
+                        return
             except ValueError:
                 pass
         priority_id = cursor.get("priority_group_id")
