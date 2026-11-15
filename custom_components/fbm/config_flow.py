@@ -250,7 +250,7 @@ class FBMCompetitionOptionsFlow(config_entries.OptionsFlow):
                                 "auto_groups": True, "auto_players": True})
 
         return self.async_show_form(
-            step_id="confirm",
+            step_id="confirm", errors={},
             data_schema=probatio.Schema({probatio.Required("confirmar", default=False): bool}),
             description_placeholders={
                 "team": candidate["name"],
