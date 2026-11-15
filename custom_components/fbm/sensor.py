@@ -75,12 +75,13 @@ def _round_status(fixtures: list[dict], today: date) -> dict:
     }
 
 
-def _upcoming_fixtures(fixtures: list[dict], now: datetime) -> list[dict]:
+def _upcoming_fixtures(fixtures: list[dict], now: datetime, *, past: bool = False) -> list[dict]:
     today = now.date()
-    horizon = today + timedelta(days=60)
+    window = timedelta(days=60)
+    states = ("finished",) if past else ("scheduled", "unknown")
     candidates = {}
     for match in fixtures:
-        if match.get("estado") not in ("scheduled", "unknown"):
+        if match.get("estado") not in states:
             continue
         match_id, day, hour = (match.get(key) for key in ("id", "fecha", "hora"))
         if not isinstance(match_id, str) or not match_id or not isinstance(day, str):
@@ -90,13 +91,13 @@ def _upcoming_fixtures(fixtures: list[dict], now: datetime) -> list[dict]:
                    if "/" in day else date.fromisoformat(day))
         except ValueError:
             continue
-        if not today <= day <= horizon:
+        if not (today - window <= day <= today if past else today <= day <= today + window):
             continue
         try:
             clock = datetime.strptime(hour, "%H:%M").time()
         except (TypeError, ValueError):
             clock = None
-        if day == today and clock is not None and clock < now.time().replace(second=0, microsecond=0):
+        if not past and day == today and clock is not None and clock < now.time().replace(second=0, microsecond=0):
             continue
         if any(not isinstance(match.get(side), str) or not match[side]
                for side in ("local", "visitante")):
@@ -105,11 +106,12 @@ def _upcoming_fixtures(fixtures: list[dict], now: datetime) -> list[dict]:
             **{key: match[key] for key in ("id", "local", "visitante", "campo", "direccion")
                if isinstance(match.get(key), str)},
             "jornada": match.get("jornada"),
+            "marcador": match.get("marcador") if past else None,
             "fecha": day.isoformat(),
             "hora": clock.strftime("%H:%M") if clock is not None else None,
         }
     return sorted(candidates.values(),
-                  key=lambda match: (match["fecha"], match["hora"] or "24:00", match["id"]))[:60]
+                  key=lambda match: (match["fecha"], match["hora"] or "24:00", match["id"]), reverse=past)[:60]
 
 
 def _read_competition_summary(path: str) -> dict:
@@ -188,6 +190,7 @@ def _read_competition_summary(path: str) -> dict:
                 "ranking": ranking,
                 "recent_results": recent_results,
                 "upcoming": _upcoming_fixtures(matches, now),
+                "past_fixtures": _upcoming_fixtures(matches, now, past=True),
                 "round_status": _round_status(matches, today),
             })
     return {"count": len(groups), "groups": result}

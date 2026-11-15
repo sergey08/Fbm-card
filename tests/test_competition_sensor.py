@@ -56,6 +56,10 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(upcoming[0]["fecha"], "2026-11-16")
         self.assertEqual(upcoming[0]["campo"], "Pabellón")
         self.assertIsNone(upcoming[1]["hora"])
+        past = Sensor._upcoming_fixtures([
+            {**base, "estado": "finished", "fecha": "2026-11-09",
+             "marcador": {"local": 40, "visitante": 32}}], now, past=True)
+        self.assertEqual(past[0]["marcador"], {"local": 40, "visitante": 32})
 
     def test_round_status_ignores_postponements_and_calendar_gaps(self):
         fixtures = [
@@ -105,15 +109,16 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             identity = {"season_verified": True, "season_id": "season",
                         "phase_id": "phase", "group_id": "group"}
             archive.follow(identity, display={"team_name": "Team", "competition_name": "Alevín Plata"})
+            fixture_day = datetime.now(Sensor.ZoneInfo("Europe/Madrid")).date().isoformat()
             crest = "data:image/png;base64,iVBORw0KGgo="
             archive.record(identity, "standings", {"clasificacion": [
                 {"id": "team1", "equipo": "Team", "posicion": 1,
                  "ganados": 4, "perdidos": 0, "escudo": "PRIVATE_IMAGE"}]})
             archive.record(identity, "fixtures", {"partidos": [
                 {"id": "game1", "local": "Team", "visitante": "Other",
-                 "estado": "finished", "fecha": "2026-11-01",
+                 "estado": "finished", "fecha": fixture_day,
                  "marcador": {"local": 45, "visitante": 38},
-                 "direccion": "PRIVATE_VENUE", "img_local": crest, "img_visitante": "PRIVATE_IMAGE"},
+                 "direccion": "Pabellón municipal", "img_local": crest, "img_visitante": "PRIVATE_IMAGE"},
             ]})
             archive.record(identity, "roster", {"jugadores": [
                 {"id": "player", "nombre": "PRIVATE_CHILD", "foto": "PRIVATE_IMAGE"}]},
@@ -127,12 +132,12 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(crest, str(summary))
             self.assertNotIn("PRIVATE_CHILD", str(summary))
             self.assertNotIn("PRIVATE_IMAGE", str(summary))
-            self.assertNotIn("PRIVATE_VENUE", str(summary))
+            self.assertEqual(summary["groups"][0]["past_fixtures"][0]["direccion"], "Pabellón municipal")
             self.assertEqual(summary["groups"][0]["ranking"], [{
                 "id": "team1", "equipo": "Team", "posicion": 1, "ganados": 4, "perdidos": 0
             }])
             self.assertEqual(summary["groups"][0]["recent_results"], [{
-                "local": "Team", "visitante": "Other", "fecha": "2026-11-01",
+                "local": "Team", "visitante": "Other", "fecha": fixture_day,
                 "marcador": {"local": 45, "visitante": 38},
             }])
 
