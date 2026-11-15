@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Compare archived final scores with the games played in official standings by team.
+
 - Automatic calendar refresh queries the entire sporting year of the followed group.
 
 - Confirming a new competition enables background synchronization and retries automatically.
@@ -11,6 +13,8 @@
 - Roster downloads save each completed team immediately. When the results are unchanged, subsequent incremental passes request only missing rosters.
 
 ## Sin publicar
+
+- Se comparan los marcadores finales archivados con los partidos jugados de cada equipo según la clasificación oficial.
 
 - La actualización automática del calendario consulta todo el año deportivo del grupo seguido.
 

@@ -7,8 +7,52 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections import Counter
 from pathlib import Path
 from urllib.parse import quote
+
+
+def compare_played_counts(teams: list, fixtures: list) -> dict | None:
+    """Compare archived final scores with the standings' played counts."""
+    expected = {}
+    for team in teams:
+        name, played = team.get("equipo"), team.get("jugados")
+        if (not isinstance(name, str) or not name.strip()
+                or type(played) is not int or played < 0):
+            return None
+        key = " ".join(name.casefold().split())
+        if key in expected:
+            return None
+        expected[key] = played
+    if not expected:
+        return None
+
+    finished = {}
+    for game in fixtures:
+        if game.get("estado") != "finished":
+            continue
+        match_id, score = game.get("id"), game.get("marcador")
+        if (not isinstance(match_id, str) or not match_id
+                or not isinstance(score, dict)
+                or any(type(score.get(side)) is not int for side in ("local", "visitante"))):
+            continue
+        sides = [game.get("local"), game.get("visitante")]
+        if any(not isinstance(name, str) for name in sides):
+            return None
+        pair = tuple(" ".join(name.casefold().split()) for name in sides)
+        if pair[0] == pair[1] or any(name not in expected for name in pair):
+            return None
+        if match_id in finished and finished[match_id] != pair:
+            return None
+        finished[match_id] = pair
+
+    archived = Counter(name for pair in finished.values() for name in pair)
+    return {
+        "teams_compared": len(expected),
+        "teams_with_deficit": sum(archived[name] < count for name, count in expected.items()),
+        "teams_with_surplus": sum(archived[name] > count for name, count in expected.items()),
+        "final_scores_archived": len(finished),
+    }
 
 
 def read_coverage(path: str) -> dict:
@@ -66,6 +110,7 @@ def read_coverage(path: str) -> dict:
                 "fixtures_archived": len(fixtures),
                 "rounds_archived": len({game["jornada"] for game in fixtures
                                         if type(game.get("jornada")) is int}),
+                "played_count_check": compare_played_counts(teams, fixtures) if fixtures_raw else None,
                 "roster_entries": 0,
                 "zero_appearances": 0,
                 "unknown_appearances": 0,

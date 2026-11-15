@@ -13,6 +13,17 @@ spec.loader.exec_module(coverage)
 
 
 class CoverageTests(unittest.TestCase):
+    def test_played_counts_detect_a_deficit_without_counting_duplicate_or_future_matches(self):
+        teams = [{"equipo": "Equipo A", "jugados": 2}, {"equipo": "Equipo B", "jugados": 1}]
+        match = {"id": "1", "local": " EQUIPO  A ", "visitante": "Equipo B",
+                 "estado": "finished", "marcador": {"local": 20, "visitante": 0}}
+        booked = {**match, "id": "2", "estado": "scheduled"}
+        self.assertEqual(coverage.compare_played_counts(teams, [match, match, booked]), {
+            "teams_compared": 2, "teams_with_deficit": 1, "teams_with_surplus": 0,
+            "final_scores_archived": 1,
+        })
+        self.assertIsNone(coverage.compare_played_counts(teams, [{**match, "local": "Otro equipo"}]))
+
     def test_missing_database_does_not_create_file(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "absent.db")
@@ -51,6 +62,7 @@ class CoverageTests(unittest.TestCase):
             self.assertEqual(result["groups"][0]["archive"], {
                 "standings_archived": True, "calendar_archived": True,
                 "fixtures_archived": 3, "rounds_archived": 2, "roster_entries": 5,
+                "played_count_check": None,
                 "zero_appearances": 1, "unknown_appearances": 1,
                 "stats_not_archived": 1, "stats_empty": 0, "stats_incomplete": 1,
                 "stats_last_attempt_failed": 0,
