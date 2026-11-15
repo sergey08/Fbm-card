@@ -89,6 +89,7 @@ async def sync_player_stats_batch(client, archive, competition: dict,
                 archive.record, competition, "player_stats",
                 {"partidos": matches, "globales": globales},
                 subject=player_id)
+            await asyncio.to_thread(archive.set_player_stats_failure, competition, player_id, False)
             saved += int(was_written)
             if not matches:
                 missing += 1
@@ -97,6 +98,7 @@ async def sync_player_stats_batch(client, archive, competition: dict,
                 missing_points += 1
         except Exception:
             errors += 1
+            await asyncio.to_thread(archive.set_player_stats_failure, competition, player_id, True)
         await asyncio.sleep(0.5)
     return {"status": "partial" if errors else "ok",
             "processed": len(subset), "saved": saved, "skipped_unchanged": skipped,

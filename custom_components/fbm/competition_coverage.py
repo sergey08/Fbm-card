@@ -26,7 +26,17 @@ def read_coverage(path: str) -> dict:
         ).fetchall()
         if len(selected) > 50:
             raise ValueError("Too many followed competitions")
+        tracks_failures = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='player_stats_failures'"
+        ).fetchone() is not None
         for season, phase, group_id in selected:
+            failures = set()
+            if tracks_failures:
+                failures = {row[0] for row in db.execute(
+                    """SELECT subject FROM player_stats_failures
+                       WHERE season=? AND phase=? AND group_id=?""",
+                    (season, phase, group_id),
+                )}
             # Only the newest snapshot for each source/subject. Historical
             # versions must not inflate memory use as the archive grows.
             rows = db.execute(
@@ -62,6 +72,7 @@ def read_coverage(path: str) -> dict:
                 "stats_not_archived": 0,
                 "stats_empty": 0,
                 "stats_incomplete": 0,
+                "stats_last_attempt_failed": 0,
             }
             for team in teams:
                 raw = latest.get(("roster", team["id"]))
@@ -74,6 +85,8 @@ def read_coverage(path: str) -> dict:
                         continue
                     appearances = player.get("partidos_jugados")
                     details["roster_entries"] += 1
+                    if player["id"] in failures:
+                        details["stats_last_attempt_failed"] += 1
                     if type(appearances) is not int or appearances < 0:
                         details["unknown_appearances"] += 1
                         continue

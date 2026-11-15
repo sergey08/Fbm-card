@@ -53,6 +53,7 @@ class CoverageTests(unittest.TestCase):
                 "fixtures_archived": 3, "rounds_archived": 2, "roster_entries": 5,
                 "zero_appearances": 1, "unknown_appearances": 1,
                 "stats_not_archived": 1, "stats_empty": 0, "stats_incomplete": 1,
+                "stats_last_attempt_failed": 0,
             })
 
 
