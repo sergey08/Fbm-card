@@ -2,6 +2,7 @@
 
 No se consultan resultados hasta validar el acceso oficial a FBM.
 """
+import json
 import logging
 from pathlib import Path
 
@@ -33,9 +34,15 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
         return False
     try:
         await resources.async_load()
-        if any(item.get("url", "").split("?")[0] == CARD_URL for item in resources.async_items()):
+        version = hass.data.get(f"{DOMAIN}_card_version")
+        url = f"{CARD_URL}?v={version}" if version else CARD_URL
+        for item in resources.async_items():
+            if item.get("url", "").split("?", 1)[0] != CARD_URL:
+                continue
+            if version and item["url"] != url:
+                await resources.async_update_item(item["id"], {"url": url})
             return True
-        await resources.async_create_item({"res_type": "module", "url": CARD_URL})
+        await resources.async_create_item({"res_type": "module", "url": url})
         return True
     except (AttributeError, KeyError, TypeError, ValueError, OSError) as err:
         _LOGGER.warning("No se pudo registrar el recurso FBM automáticamente: %s", err)
@@ -52,6 +59,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
     )
+    manifest_path = Path(__file__).with_name("manifest.json")
+    manifest_text = await hass.async_add_executor_job(manifest_path.read_text, "utf-8")
+    hass.data[f"{DOMAIN}_card_version"] = json.loads(manifest_text)["version"]
     async_register_commands(hass)
     return True
 
