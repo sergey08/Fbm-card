@@ -76,10 +76,11 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = f
     const box = view._element("article", "", "fbm-fixture");
     const top = view._element("div", "", "fbm-match-header");
     if (!agenda) top.append(view._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
-    const timing = agenda ? match.hora || (match.played ? "" : "Hora por confirmar")
-      : [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente";
-    if (timing) top.append(view._element("span", timing, "fbm-player-caption"));
-    if (timing || !agenda) box.append(top);
+    if (!agenda) {
+      const timing = [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente";
+      top.append(view._element("span", timing, "fbm-player-caption"));
+      box.append(top);
+    }
     const teams = view._element("div", "", "fbm-fixture-teams");
     const teamLabel = (name, image, side) => {
       const team = resolveTeam?.(name);
@@ -105,8 +106,11 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = f
     teams.append(view._element("strong", score, "fbm-fixture-score"));
     teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante || view._apkCrestUrl(match.escudo_visitante), "away"));
     box.append(teams);
-    const venue = [match.campo, agenda && match.direccion].filter(Boolean).join(" · ");
-    if (venue) box.append(view._element("p", venue, "fbm-player-caption"));
+    const details = agenda
+      ? [match.hora || (match.played ? "" : "Hora por confirmar"), match.campo || match.direccion]
+          .filter(Boolean).join(" · ")
+      : match.campo;
+    if (details) box.append(view._element("p", details, "fbm-player-caption"));
     games.append(box);
   }
   card.append(games);

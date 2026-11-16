@@ -129,7 +129,7 @@ test("agenda opens on the next matchday and navigates past and future",()=>{
   const c=card();
   c.setConfig({entity:"sensor.competiciones",initial_tab:"upcoming"});
   const match=(jornada,fecha)=>({id:String(jornada),jornada,fecha,
-    local:"Equipo A",visitante:"Equipo B",hora:"10:30",campo:"Pabellón"});
+    local:"Equipo A",visitante:"Equipo B",hora:"10:30",campo:"Pabellón",direccion:"Calle 9"});
   c.hass={states:{"sensor.competiciones":{attributes:{groups:[{
     season_id:"26/27",phase_id:"phase",group_id:"group",
     past_fixtures:[{...match(5,"2026-11-15"),marcador:{local:42,visitante:39}}],
@@ -138,6 +138,8 @@ test("agenda opens on the next matchday and navigates past and future",()=>{
   const contains=text=>walk(c.shadowRoot,x=>x.textContent===text).length>0;
   const arrow=name=>walk(c.shadowRoot,x=>x.attributes["aria-label"]===name)[0];
   assert.ok(contains("Jornada 6"));
+  assert.ok(contains("10:30 · Pabellón"));
+  assert.equal(contains("10:30 · Pabellón · Calle 9"),false);
   assert.equal(contains("42 – 39"),false);
   arrow("Jornada anterior").listeners.click();
   assert.ok(contains("Jornada 5"));
