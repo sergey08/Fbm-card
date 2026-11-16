@@ -188,9 +188,12 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.hass.http.async_register_static_paths = AsyncMock()
         self.assertTrue(await fbm.async_setup(self.hass, {}))
         self.hass.http.async_register_static_paths.assert_awaited_once()
+        import json
+
+        version = json.loads((PKG / "manifest.json").read_text(encoding="utf-8"))["version"]
         paths = self.hass.http.async_register_static_paths.await_args.args[0]
         self.assertEqual([config[0][0] for config in paths],
-                         ["/fbm_static/fbm-card.js", "/fbm_static/fbm-card.0.2.13.js"])
+                         ["/fbm_static/fbm-card.js", f"/fbm_static/fbm-card.{version}.js"])
 
 
 
