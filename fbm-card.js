@@ -67,7 +67,7 @@ function fbmAddFixtureCrests(view, crests, matches) {
   }
 }
 
-function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
+function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = false} = {}) {
   const games = view._element("div", "", "fbm-fixture-list");
   const sorted = [...matches].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
     fbmFixtureDateKey(a.fecha).localeCompare(fbmFixtureDateKey(b.fecha)) ||
@@ -75,9 +75,11 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
   for (const match of sorted) {
     const box = view._element("article", "", "fbm-fixture");
     const top = view._element("div", "", "fbm-match-header");
-    top.append(view._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
-    top.append(view._element("span", [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente", "fbm-player-caption"));
-    box.append(top);
+    if (!agenda) top.append(view._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
+    const timing = agenda ? match.hora || (match.played ? "" : "Hora por confirmar")
+      : [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente";
+    if (timing) top.append(view._element("span", timing, "fbm-player-caption"));
+    if (timing || !agenda) box.append(top);
     const teams = view._element("div", "", "fbm-fixture-teams");
     const teamLabel = (name, image, side) => {
       const team = resolveTeam?.(name);
@@ -103,7 +105,8 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
     teams.append(view._element("strong", score, "fbm-fixture-score"));
     teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante || view._apkCrestUrl(match.escudo_visitante), "away"));
     box.append(teams);
-    if (match.campo) box.append(view._element("p", match.campo, "fbm-player-caption"));
+    const venue = [match.campo, agenda && match.direccion].filter(Boolean).join(" · ");
+    if (venue) box.append(view._element("p", venue, "fbm-player-caption"));
     games.append(box);
   }
   card.append(games);
@@ -1612,6 +1615,7 @@ class FBMCompetitionCard extends HTMLElement {
     if (!team || typeof team.id !== "string" || !team.id ||
         typeof team.equipo !== "string") return;
     if (this._teamId === team.id) return;
+    this._competitionTab = "ranking";
     this._playerRequest = null;
     this._photoRequest = null;
     this._fixtureCrests = null;
@@ -1722,7 +1726,7 @@ class FBMCompetitionCard extends HTMLElement {
     }
     this._render();
   }
-  async _loadAgendaCrests(group, teamId, key) {
+  async _loadAgendaCrests(teamId, key, fixtures, ranking) {
     if (!teamId || !this._hass?.callWS || this._agendaCrests?.key === key) return;
     const state = this._agendaCrests = {key, images: new Map()};
     try {
@@ -1731,12 +1735,28 @@ class FBMCompetitionCard extends HTMLElement {
       const data = await this._hass.callWS({
         type: "fbm/competition/team_snapshot", entry_id: entries[0], equipo: teamId
       });
-      if (this._agendaCrests !== state || data?.observed_at?.fixtures !== group.fixtures_at) return;
+      if (this._agendaCrests !== state || this._competitionTab !== "upcoming") return;
       for (const [name, value] of Object.entries(data.fixtures?.escudos || {})) {
         if (typeof value !== "string") continue;
         const inline = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(value);
         const crest = this._verifiedCrest(value) || (inline && value.length <= 90000 ? value : "");
         if (crest) state.images.set(fbmCrestKey(name), crest);
+      }
+      const missing = fixtures.some(match => [match.local, match.visitante].some(name => {
+        const team = fbmCrestKey(name);
+        return !state.images.has(team) && !this._verifiedCrest(ranking.get(team)?.escudo);
+      }));
+      const range = missing && fbmFixtureCrestRange(fixtures);
+      if (range) {
+        const live = await this._hass.callWS({
+          type: "fbm/team/schedule", entry_id: entries[0], equipo: teamId, ...range
+        });
+        if (this._agendaCrests !== state) return;
+        const found = Object.create(null);
+        fbmAddFixtureCrests(this, found, live?.partidos || []);
+        for (const [name, crest] of Object.entries(found)) {
+          if (!state.images.has(name)) state.images.set(name, crest);
+        }
       }
       if (state.images.size && this._competitionTab === "upcoming") this._render();
     } catch (_) {
@@ -1809,40 +1829,20 @@ class FBMCompetitionCard extends HTMLElement {
     if (group.fixtures_at && visibleTeams.some(name =>
       !this._verifiedCrest(ranking.get(fbmCrestKey(name))?.escudo))) {
       const anchor = [...ranking.values()].find(team => team.id);
-      void this._loadAgendaCrests(group, anchor?.id, crestKey);
+      void this._loadAgendaCrests(anchor?.id, crestKey, fixtures, ranking);
     }
-    const images = this._agendaCrests?.key === crestKey ? this._agendaCrests.images : new Map();
-    let currentDay = "";
+    const images = this._agendaCrests?.key === crestKey
+      ? Object.fromEntries(this._agendaCrests.images) : undefined;
+    const days = new Map();
     for (const match of fixtures) {
-      if (match.fecha !== currentDay) {
-        currentDay = match.fecha;
-        const date = new Date(currentDay + "T12:00:00");
-        card.append(this._el("h4", date.toLocaleDateString("es-ES",
-          {weekday: "long", day: "numeric", month: "long"})));
-      }
-      const row = this._el("div", undefined, "upcoming-match");
-      const sides = this._el("div", undefined, "upcoming-sides");
-      for (const side of [match.local, match.visitante]) {
-        const key = fbmCrestKey(side);
-        const team = ranking.get(key) || {equipo: side};
-        const button = this._teamButton(team, images.get(key));
-        button.addEventListener("click", () => {
-          this._competitionTab = "ranking";
-          this._selectedGroup = this._groupKey(group);
-        }, {capture: true});
-        sides.append(button);
-      }
-      row.append(sides);
-      const score = match.marcador;
-      if (match.played && Number.isInteger(score?.local) && Number.isInteger(score?.visitante)) {
-        row.append(this._el("strong", score.local + " – " + score.visitante));
-      }
-      row.append(this._el("div", [
-        match.hora || "Hora por confirmar", this._groupLabel(group), group.group_name,
-        match.jornada != null ? "Jornada " + match.jornada : null,
-        match.campo, match.direccion
-      ].filter(Boolean).join(" · "), "muted"));
-      card.append(row);
+      if (!days.has(match.fecha)) days.set(match.fecha, []);
+      days.get(match.fecha).push(match);
+    }
+    for (const [day, games] of days) {
+      const date = new Date(day + "T12:00:00");
+      card.append(this._el("h4", date.toLocaleDateString("es-ES",
+        {weekday: "long", day: "numeric", month: "long"})));
+      renderFBMFixtures(this, card, games, name => ranking.get(fbmCrestKey(name)), images, {agenda: true});
     }
   }
 
@@ -1884,7 +1884,6 @@ class FBMCompetitionCard extends HTMLElement {
       .agenda-navigation button{min-width:44px;min-height:44px;text-align:center;font-size:1.5rem}
       .upcoming-match{padding:8px 0;border-bottom:1px solid var(--divider-color,#ddd)}
       .upcoming-match .muted{margin:4px 0 0}
-      .upcoming-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
       .tabs{display:flex;gap:4px;overflow-x:auto;margin:12px 0;max-width:100%}
       .tabs button{flex:1 0 auto;padding:8px 10px;border:0;border-radius:9px;background:var(--secondary-background-color,#eee);color:var(--primary-text-color,#222)}
       .tabs button[aria-pressed="true"]{background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);font-weight:700}

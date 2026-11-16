@@ -56,6 +56,12 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(upcoming[0]["fecha"], "2026-11-16")
         self.assertEqual(upcoming[0]["campo"], "Pabellón")
         self.assertIsNone(upcoming[1]["hora"])
+        published = [
+            {**base, "id": "seconds", "hora": "13:30:00"},
+            {**base, "id": "utc", "hora": None, "fecha_hora_utc": "2026-11-16T14:15:00Z"},
+        ]
+        self.assertEqual([row["hora"] for row in Sensor._upcoming_fixtures(published, now)],
+                         ["13:30", "15:15"])
         past = Sensor._upcoming_fixtures([
             {**base, "estado": "finished", "fecha": "2026-11-09",
              "marcador": {"local": 40, "visitante": 32}}], now, past=True)

@@ -142,6 +142,7 @@ test("agenda opens on the next matchday and navigates past and future",()=>{
   arrow("Jornada anterior").listeners.click();
   assert.ok(contains("Jornada 5"));
   assert.ok(contains("42 – 39"));
+  assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-fixture-score" && x.textContent==="42 – 39").length);
   arrow("Jornada siguiente").listeners.click();
   arrow("Jornada siguiente").listeners.click();
   assert.ok(contains("Jornada 7"));

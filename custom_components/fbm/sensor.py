@@ -6,7 +6,7 @@ No FBM network access and no database creation during startup.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import quote
@@ -94,9 +94,25 @@ def _upcoming_fixtures(fixtures: list[dict], now: datetime, *, past: bool = Fals
         if not (today - window <= day <= today if past else today <= day <= today + window):
             continue
         try:
-            clock = datetime.strptime(hour, "%H:%M").time()
-        except (TypeError, ValueError):
-            clock = None
+            clock = time.fromisoformat(hour.strip()) if isinstance(hour, str) else None
+            if clock is not None and clock.tzinfo is not None:
+                clock = None
+        except ValueError:
+            try:
+                clock = datetime.strptime(hour.strip(), "%H:%M").time()
+            except ValueError:
+                clock = None
+        if clock is None:
+            utc = match.get("fecha_hora_utc")
+            if isinstance(utc, str) and ("T" in utc or " " in utc):
+                try:
+                    stamp = datetime.fromisoformat(utc.strip())
+                    madrid = ZoneInfo("Europe/Madrid")
+                    local = (stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)).astimezone(madrid)
+                    if local.date() == day:
+                        clock = local.time()
+                except ValueError:
+                    pass
         if not past and day == today and clock is not None and clock < now.time().replace(second=0, microsecond=0):
             continue
         if any(not isinstance(match.get(side), str) or not match[side]
