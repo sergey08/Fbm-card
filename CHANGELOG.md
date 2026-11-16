@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.13 · English
 
 - Add an upcoming games tab to the competition card using archived fixtures.
 
@@ -14,7 +14,7 @@
 - A group awaiting standings no longer blocks statistics downloads for other groups after a restart.
 - Roster downloads save each completed team immediately. When the results are unchanged, subsequent incremental passes request only missing rosters.
 
-## Sin publicar
+## v0.2.13 · Español
 
 - La tarjeta de competiciones incluye una pestaña de próximos partidos basada en el calendario archivado.
 

@@ -119,8 +119,10 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.resources = MagicMock()
         self.resources.async_load = AsyncMock()
         self.resources.async_create_item = AsyncMock()
+        self.resources.async_update_item = AsyncMock()
         self.hass = MagicMock()
         self.hass.data = {"lovelace": types.SimpleNamespace(resources=self.resources)}
+        self.hass.async_add_executor_job = AsyncMock(side_effect=lambda fn, *args: fn(*args))
 
     async def test_register_once(self):
         self.resources.async_items.return_value = []
@@ -131,7 +133,7 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_existing_resource_not_duplicated(self):
         self.resources.async_items.return_value = [
-            {"url": "/fbm_static/fbm-card.js?v=1", "type": "module"}
+            {"id": "fbm", "url": "/fbm_static/fbm-card.js?v=1", "type": "module"}
         ]
         self.assertTrue(await fbm._async_register_lovelace_resource(self.hass))
         self.resources.async_create_item.assert_not_awaited()
@@ -186,8 +188,9 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.hass.http.async_register_static_paths = AsyncMock()
         self.assertTrue(await fbm.async_setup(self.hass, {}))
         self.hass.http.async_register_static_paths.assert_awaited_once()
-        config = self.hass.http.async_register_static_paths.await_args.args[0][0]
-        self.assertEqual(config[0][0], "/fbm_static/fbm-card.js")
+        paths = self.hass.http.async_register_static_paths.await_args.args[0]
+        self.assertEqual([config[0][0] for config in paths],
+                         ["/fbm_static/fbm-card.js", "/fbm_static/fbm-card.0.2.13.js"])
 
 
 
