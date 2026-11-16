@@ -130,6 +130,42 @@ def _upcoming_fixtures(fixtures: list[dict], now: datetime, *, past: bool = Fals
                   key=lambda match: (match["fecha"], match["hora"] or "24:00", match["id"]), reverse=past)[:60]
 
 
+def _latest_round_results(matches: list[dict]) -> list[dict]:
+    """Return the published scores from the highest numbered archived round."""
+    scored = []
+    for match in matches:
+        score = match.get("marcador")
+        if (match.get("estado") != "finished" or not isinstance(score, dict)
+                or any(type(score.get(side)) is not int for side in ("local", "visitante"))):
+            continue
+        round_number = match.get("jornada")
+        if isinstance(round_number, str) and round_number.isdecimal() and len(round_number) < 5:
+            round_number = int(round_number)
+        row = {key: match.get(key) for key in ("local", "visitante", "fecha")}
+        row["marcador"] = {"local": score["local"], "visitante": score["visitante"]}
+        if type(round_number) is int and round_number > 0:
+            row["jornada"] = round_number
+        scored.append(row)
+
+    latest = max((row.get("jornada", 0) for row in scored), default=0)
+    if latest:
+        return [row for row in scored if row.get("jornada") == latest]
+
+    # Older archive rows may have no matchday. Use their latest dated results.
+    def date_key(row):
+        value = row.get("fecha")
+        if isinstance(value, str):
+            try:
+                return (datetime.strptime(value, "%d/%m/%Y").date()
+                        if "/" in value else date.fromisoformat(value))
+            except ValueError:
+                pass
+        return date.min
+
+    newest = max(map(date_key, scored), default=date.min)
+    return [row for row in scored if newest != date.min and date_key(row) == newest]
+
+
 def _read_competition_summary(path: str) -> dict:
     """Read existing SQLite in mode=ro; no migrations or file writes."""
     if not Path(path).is_file():
@@ -177,25 +213,7 @@ def _read_competition_summary(path: str) -> dict:
                             "ganados", "perdidos", "puntos", "escudo"
                         ) if key in item and type(item[key]) in (str, int)
                     })
-            recent_results = []
-            if fixtures:
-                for item in matches:
-                    if (type(item) is not dict
-                            or item.get("estado") != "finished"
-                            or type(item.get("marcador")) is not dict):
-                        continue
-                    score = item["marcador"]
-                    if (type(score.get("local")) is not int
-                            or type(score.get("visitante")) is not int):
-                        continue
-                    recent_results.append({
-                        "local": item.get("local"),
-                        "visitante": item.get("visitante"),
-                        "fecha": item.get("fecha"),
-                        "marcador": {"local": score["local"],
-                                    "visitante": score["visitante"]},
-                    })
-                recent_results = recent_results[-5:]
+            recent_results = _latest_round_results(matches)
             result.append({
                 "season_id": season, "phase_id": phase, "group_id": group_id,
                 "phase_name": phase_name, "group_name": group_name,
