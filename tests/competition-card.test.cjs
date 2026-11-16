@@ -172,3 +172,21 @@ test("agenda shows official standings and locally archived fixture crests",async
   const logos=walk(c.shadowRoot,x=>x.tagName==="img").map(x=>x.src);
   assert.deepEqual(logos,[inline,official]);
 });
+
+test("recent results share the blue scoreboard and archived crests",async()=>{
+  const c=card();
+  c.setConfig({entity:"sensor.competiciones"});
+  const crest="https://fbm.es/equipo-a.png";
+  c.hass={states:{"sensor.competiciones":{attributes:{groups:[{
+    season_id:"26/27",phase_id:"phase",group_id:"group",fixtures_at:"2026-11-16",
+    ranking:[{id:"a",equipo:"Equipo A"}],
+    recent_results:[{local:"Equipo A",visitante:"Equipo B",fecha:"14/11/2026",marcador:{local:0,visitante:8}}]
+  }]}}},callWS:async request=>{
+    if(request.type==="fbm/client/entries") return {entries:["entry"]};
+    if(request.type==="fbm/competition/team_snapshot") return {fixtures:{escudos:{"Equipo A":crest,"Equipo B":"https://fbm.es/equipo-b.png"}}};
+    throw Error("Unexpected call");
+  }};
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(walk(c.shadowRoot,x=>x.className==="fbm-fixture-score")[0].textContent,"0 – 8");
+  assert.equal(walk(c.shadowRoot,x=>x.className==="fbm-fixture-logo").length,2);
+});
