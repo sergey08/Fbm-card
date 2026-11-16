@@ -4,6 +4,7 @@ No se consultan resultados hasta validar el acceso oficial a FBM.
 """
 import json
 import logging
+import re
 from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
@@ -21,6 +22,8 @@ from .competition_archive import CompetitionArchive
 from .websocket import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
+_CARD_STEM = CARD_URL.removesuffix('.js')
+_VERSIONED_CARD_PATH = re.compile(re.escape(_CARD_STEM) + r'\.\d+\.\d+\.\d+(?:b\d+)?\.js')
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
@@ -34,12 +37,12 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> bool:
         return False
     try:
         await resources.async_load()
-        version = hass.data.get(f"{DOMAIN}_card_version")
-        url = f"{CARD_URL}?v={version}" if version else CARD_URL
+        url = hass.data.get(f"{DOMAIN}_card_url", CARD_URL)
         for item in resources.async_items():
-            if item.get("url", "").split("?", 1)[0] != CARD_URL:
+            previous = item.get("url", "").split("?", 1)[0]
+            if previous != CARD_URL and not _VERSIONED_CARD_PATH.fullmatch(previous):
                 continue
-            if version and item["url"] != url:
+            if item["url"] != url:
                 await resources.async_update_item(item["id"], {"url": url})
             return True
         await resources.async_create_item({"res_type": "module", "url": url})
@@ -56,12 +59,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     if not card_path.is_file():
         _LOGGER.error("Falta la tarjeta empaquetada FBM: %s", card_path)
         return False
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_URL, str(card_path), cache_headers=False)]
-    )
     manifest_path = Path(__file__).with_name("manifest.json")
     manifest_text = await hass.async_add_executor_job(manifest_path.read_text, "utf-8")
-    hass.data[f"{DOMAIN}_card_version"] = json.loads(manifest_text)["version"]
+    version = json.loads(manifest_text)["version"]
+    url = f"{_CARD_STEM}.{version}.js"
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(path, str(card_path), cache_headers=False)
+        for path in (CARD_URL, url)
+    ])
+    hass.data[f"{DOMAIN}_card_url"] = url
     async_register_commands(hass)
     return True
 
