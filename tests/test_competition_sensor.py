@@ -44,6 +44,17 @@ Archive = sys.modules[pkg_name + ".competition_archive"].CompetitionArchive
 
 
 class SensorTests(unittest.IsolatedAsyncioTestCase):
+    def test_recent_results_only_use_latest_round_with_a_score(self):
+        final = {"estado": "finished", "marcador": {"local": 0, "visitante": 8}}
+        matches = [
+            {**final, "jornada": 4, "fecha": "2026-11-16"},
+            {**final, "jornada": 5, "fecha": "2026-11-14"},
+            {**final, "jornada": "5", "fecha": "2026-11-15"},
+            {"estado": "scheduled", "jornada": 6},
+        ]
+        results = Sensor._latest_round_results(matches)
+        self.assertEqual([row["jornada"] for row in results], [5, 5])
+
     def test_upcoming_excludes_past_started_and_duplicate_fixtures(self):
         now = datetime(2026, 11, 16, 12)
         base = {"id": "m1", "local": "A", "visitante": "B", "estado": "scheduled",

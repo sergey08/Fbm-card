@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.14 · English
+
+- Recent results show the latest matchday with published scores, using the shared scoreboard and official crests.
+
+## v0.2.14 · Español
+
+- Últimos resultados muestra la jornada más reciente con marcadores publicados y utiliza el marcador compartido y los escudos oficiales disponibles.
+
 ## v0.2.13 · English
 
 - Add an upcoming games tab to the competition card using archived fixtures.
