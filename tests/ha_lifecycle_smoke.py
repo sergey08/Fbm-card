@@ -130,8 +130,9 @@ async def run(folder, phase):
             await hass.async_block_till_done()
             assert hass.states.get(entity_id).state == "1", hass.states.get(entity_id)
             resources = hass.data["lovelace"].resources
+            card_url = hass.data.get("fbm_card_url", "/fbm_static/fbm-card.js")
             matching = [item for item in resources.async_items()
-                        if item["url"].split("?")[0] == "/fbm_static/fbm-card.js"]
+                        if item["url"].split("?", 1)[0] == card_url]
             assert len(matching) == 1, matching
             archive = hass.data[DOMAIN][entry.entry_id]
             if phase == "upgrade":

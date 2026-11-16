@@ -91,6 +91,30 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
 
+    async def test_missing_fixtures_bootstrap_ignores_stale_check_timestamp(self):
+        from datetime import datetime, timezone
+        await self.updater._save_state({
+            "group_checked_at": {"group": datetime.now(timezone.utc).isoformat()}})
+        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok"}
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 1)
+            self.assertEqual(sync.await_args.args[2], "anchor")
+
+    async def test_group_without_standings_does_not_block_other_groups(self):
+        archive = Archive(self.path)
+        archive.follow({**IDENT, "group_id": "aaa-missing"}, "missing")
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(self.updater.health["players"]["status"], "no_standings")
+            sync.assert_not_awaited()
+            restarted = mod.CompetitionAutoUpdater(
+                self.hass, "test", FakeClient(), self.path, Archive)
+            await restarted._run_players()
+            self.assertEqual(sync.await_args.args[3], "a")
+
     async def test_bootstrap_prefers_group_with_missing_player_snapshots(self):
         archive = Archive(self.path)
         other = {**IDENT, "group_id": "group-new"}
@@ -114,6 +138,56 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cursor["priority_group_id"], "group-new")
             await self.updater._run_players()
             self.assertEqual(sync.await_args.args[3], "a")
+
+    async def test_pending_cycle_resumes_after_six_hours(self):
+        from datetime import datetime, timedelta, timezone
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "pending-player", "partidos_jugados": 1}]},
+            subject="a")
+        completed = (datetime.now(timezone.utc) -
+                     timedelta(hours=7)).isoformat()
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": completed,
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "ok", "processed": 1,
+                                 "saved": 1, "errors": 0,
+                                 "next_offset": None}
+            await self.updater._run_players()
+            self.assertEqual(sync.await_count, 1)
+
+    async def test_pending_cycle_waits_before_six_hours(self):
+        from datetime import datetime, timedelta, timezone
+        archive = Archive(self.path)
+        archive.record(IDENT, "roster", {"jugadores": [
+            {"id": "pending-player", "partidos_jugados": 1}]},
+            subject="a")
+        completed = (datetime.now(timezone.utc) -
+                     timedelta(hours=1)).isoformat()
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": completed,
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            await self.updater._run_players()
+            sync.assert_not_awaited()
+
+    async def test_complete_cycle_keeps_daily_delay(self):
+        from datetime import datetime, timedelta, timezone
+        completed = (datetime.now(timezone.utc) -
+                     timedelta(hours=7)).isoformat()
+        await self.updater._save_state({
+            "player_followed_groups": ["group"],
+            "players": {"cycle_finished_at": completed,
+                        "group_index": 0, "team_index": 0, "offset": 0}})
+        with patch.object(mod, "sync_player_stats_batch",
+                          new_callable=AsyncMock) as sync:
+            await self.updater._run_players()
+            sync.assert_not_awaited()
 
     async def test_unchanged_followed_groups_preserve_cooldown(self):
         await self.updater._save_state({
@@ -386,7 +460,7 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
     async def test_incremental_player_poll_keeps_five_player_cap(self):
         await self.updater.async_start(True, True)
         self.assertEqual(len(listeners), 2)
-        self.assertEqual(listeners[1]["interval"], mod.timedelta(minutes=30))
+        self.assertEqual(listeners[1]["interval"], mod.timedelta(minutes=10))
         await self.updater.async_stop()
 
     async def test_initial_player_pass_rechecks_cached_records(self):
@@ -556,11 +630,29 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.updater.health["players"]["status"], "failed")
         self.assertNotIn("private", str(self.updater.health))
 
-    async def test_partial_group_refresh_is_not_reported_as_failure(self):
+    async def test_partial_group_refresh_reports_partial(self):
         with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
             sync.return_value={"status":"partial"}
             await self.updater._run_group()
-        self.assertEqual(self.updater.health["groups"]["status"],"ok")
+        self.assertEqual(self.updater.health["groups"]["status"],"partial")
+
+    async def test_partial_group_retries_during_a_quiet_week(self):
+        from datetime import datetime, timedelta, timezone
+        archive = Archive(self.path)
+        archive.record(IDENT, "fixtures", {"partidos": []})
+        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync:
+            sync.return_value = {"status": "partial"}
+            await self.updater._run_group()
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 1)
+            prior = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            await self.updater._save_state({
+                "group_checked_at": {"group": prior},
+                "group_partial_at": {"group": prior}})
+            sync.return_value = {"status": "ok"}
+            await self.updater._run_group()
+            self.assertEqual(sync.await_count, 2)
+            self.assertEqual((await self.updater._read_state())["group_partial_at"], {})
 
     async def test_unfollow_blocks_group_and_player_requests(self):
         archive=Archive(self.path)

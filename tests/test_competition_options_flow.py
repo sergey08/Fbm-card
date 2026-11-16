@@ -193,7 +193,7 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(archive.latest(selection, "standings"))
         self.assertEqual(self.client.calls.count("roster"), 2)
 
-    async def test_initial_roster_failure_keeps_data_and_offers_retry(self):
+    async def test_initial_roster_failure_keeps_data_and_enables_retry(self):
         await self.flow.async_step_search({"texto": "pinto"})
         await self.flow.async_step_select({"equipo": "team-A"})
         original = self.client.async_team_roster
@@ -205,18 +205,15 @@ class OptionsTests(unittest.IsolatedAsyncioTestCase):
 
         self.client.async_team_roster = intermittent
         result = await self.flow.async_step_confirm({"confirmar": True})
-        self.assertEqual(result["errors"]["base"], "rosters_pending_named")
-        self.assertEqual(result["description_placeholders"]["pending_rosters"], "Rival")
+        self.assertEqual(result["type"], "create_entry")
+        self.assertTrue(result["data"]["auto_groups"])
+        self.assertTrue(result["data"]["auto_players"])
         archive = Archive(str(self.path))
         identity = archive.followed()[0] | {"season_verified": True}
         self.assertIsNotNone(archive.latest(identity, "fixtures"))
         self.assertIsNotNone(archive.latest(identity, "roster", "team-A"))
         self.assertIsNone(archive.latest(identity, "roster", "team-B"))
 
-        self.client.async_team_roster = original
-        result = await self.flow.async_step_confirm({"confirmar": True})
-        self.assertEqual(result["type"], "create_entry")
-        self.assertIsNotNone(archive.latest(identity, "roster", "team-B"))
 
     async def test_manual_refresh_requires_confirmation_and_no_rosters_by_default(self):
         await self.flow.async_step_search({"texto": "pinto"})

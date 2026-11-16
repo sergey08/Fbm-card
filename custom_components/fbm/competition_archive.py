@@ -79,6 +79,13 @@ class CompetitionArchive:
                     FOREIGN KEY (season, phase, group_id)
                       REFERENCES competitions (season, phase, group_id)
                 );
+                CREATE TABLE IF NOT EXISTS player_stats_failures (
+                    season TEXT NOT NULL,
+                    phase TEXT NOT NULL,
+                    group_id TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    PRIMARY KEY (season, phase, group_id, subject)
+                );
                 CREATE INDEX IF NOT EXISTS idx_fbm_recent
                   ON snapshots (season, phase, group_id, source, subject, observed_at DESC);
             """)
@@ -95,6 +102,24 @@ class CompetitionArchive:
                     db.execute(
                         f"ALTER TABLE competitions ADD COLUMN {label} TEXT NOT NULL DEFAULT ''"
                     )
+
+    def set_player_stats_failure(self, identity: dict, subject: str, failed: bool):
+        """Record whether the last attempted download failed, without error details."""
+        key = self._identity(identity)
+        with self._db() as db:
+            if failed:
+                db.execute(
+                    """INSERT OR REPLACE INTO player_stats_failures
+                       SELECT season, phase, group_id, ? FROM competitions
+                       WHERE season=? AND phase=? AND group_id=? AND followed=1""",
+                    (subject, *key),
+                )
+            else:
+                db.execute(
+                    """DELETE FROM player_stats_failures
+                       WHERE season=? AND phase=? AND group_id=? AND subject=?""",
+                    (*key, subject),
+                )
 
     def _db(self):
         db = sqlite3.connect(self.path)

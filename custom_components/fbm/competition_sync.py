@@ -8,13 +8,16 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
+from .competition_manager import official_season_label
+
 
 MAX_TEAMS = 20
 MAX_RANGE_DAYS = 125
 
 
 async def sync_group(client, archive, team_id: str, start: date, end: date,
-                     *, fetch_rosters: bool = True, expected_competition: dict | None = None) -> dict:
+                     *, fetch_rosters: bool | str = True, expected_competition: dict | None = None,
+                     whole_season: bool = False) -> dict:
     """Fetch all opponents of the selected team's *official current group*.
 
     Called only on explicit administrator request. If season identity has
@@ -78,6 +81,12 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     if not await asyncio.to_thread(archive.is_followed, group):
         return {"status": "not_followed", "saved": False}
 
+    if whole_season:
+        # The saved official season selects the group. Widen the query to the
+        # full sporting year rather than losing matches beyond a rolling window.
+        season = official_season_label(group["season_id"])
+        year = 2000 + int(season[:2])
+        start, end = date(year, 7, 1), date(year + 1, 6, 30)
     fixtures = await client.async_team_schedule(team_id, start, end)
     if type(fixtures) is not dict or type(fixtures.get("partidos")) is not list:
         raise ValueError("Calendario oficial no válido")
@@ -87,6 +96,7 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     # Missing initial rosters are also backfilled; no player stats are fetched
     # here and no unselected competition can be enrolled.
     fixture_results_changed = False
+    roster_targets = []
     if fetch_rosters == "on_change":
         previous = await asyncio.to_thread(
             archive.latest, group, "fixtures")
@@ -105,36 +115,39 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         old = finished_scores((previous or {}).get("payload"))
         new = finished_scores(fixtures)
         fixture_results_changed = old != new
-        missing_roster = False
-        for tid in team_ids:
-            if not await asyncio.to_thread(
-                    archive.latest, group, "roster", tid):
-                missing_roster = True
-                break
-        fetch_rosters = fixture_results_changed or missing_roster
+        if fixture_results_changed:
+            roster_targets = team_ids
+        else:
+            for tid in team_ids:
+                if not await asyncio.to_thread(archive.latest, group, "roster", tid):
+                    roster_targets.append(tid)
+    elif fetch_rosters is True:
+        roster_targets = team_ids
     elif type(fetch_rosters) is not bool:
         raise ValueError("Modo de plantillas no válido")
 
     # Fetch rosters sequentially, not concurrently, and keep a simple delay.
     # This limits pressure on the unofficial access to FBM.
-    rosters = {}
+    rosters_saved = roster_records_written = 0
     failed_rosters = []
-    team_names = {row['id']: row.get('equipo') for row in rows}
-    if fetch_rosters:
-        for tid in team_ids:
-            # The user may have stopped following while the earlier remote
-            # calls were running. Do not request another player's record.
-            if not await asyncio.to_thread(archive.is_followed, group):
-                return {"status": "not_followed", "saved": False}
-            try:
-                response = await client.async_team_roster(tid)
-                if type(response) is not dict or type(response.get("jugadores")) is not list:
-                    raise ValueError("Plantilla no válida")
-                rosters[tid] = response
-            except Exception:
-                name = team_names[tid]
-                failed_rosters.append(name.strip()[:120] if isinstance(name, str) else "")
-            await asyncio.sleep(0.3)
+    team_names = {row["id"]: row.get("equipo") for row in rows}
+    for tid in roster_targets:
+        if not await asyncio.to_thread(archive.is_followed, group):
+            return {"status": "not_followed", "saved": False}
+        try:
+            response = await client.async_team_roster(tid)
+            if type(response) is not dict or type(response.get("jugadores")) is not list:
+                raise ValueError("Plantilla no válida")
+            # Commit each completed team before requesting the next one.
+            # record() checks that the group is still followed in the transaction.
+            written = await asyncio.to_thread(
+                archive.record, group, "roster", response, subject=tid)
+            roster_records_written += int(written)
+            rosters_saved += 1
+        except Exception:
+            name = team_names[tid]
+            failed_rosters.append(name.strip()[:120] if isinstance(name, str) else "")
+        await asyncio.sleep(0.3)
 
     # The explicit follow can be revoked during the requests. Check again
     # immediately before persistence to honor a stop-following action.
@@ -144,8 +157,7 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
     # the last-good record rather than erasing it.
     results = {}
     for source, subject, data in (
-            ("standings", "", standings), ("fixtures", "", fixtures),
-            *((("roster", tid, response) for tid, response in rosters.items()))):
+            ("standings", "", standings), ("fixtures", "", fixtures)):
         results[source + (":" + subject if subject else "")] = await asyncio.to_thread(
             archive.record, group, source, data, subject=subject)
     # Backfill readable names for pre-existing beta archives after successful
@@ -181,9 +193,9 @@ async def sync_group(client, archive, team_id: str, start: date, end: date,
         "status": "partial" if failed_rosters else "ok",
         "saved": True, "team_count": len(team_ids),
         "fixture_count": len(fixtures["partidos"]),
-        "rosters_saved": len(rosters), "roster_errors": len(failed_rosters),
+        "rosters_saved": rosters_saved, "roster_errors": len(failed_rosters),
         "failed_roster_names": [name for name in failed_rosters if name],
-        "records_written": sum(bool(v) for v in results.values()),
+        "records_written": roster_records_written + sum(bool(v) for v in results.values()),
         "fixture_results_changed": fixture_results_changed,
         "competition": {k: group[k] for k in ("season_id", "phase_id", "group_id")},
     }

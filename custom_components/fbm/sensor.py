@@ -6,7 +6,7 @@ No FBM network access and no database creation during startup.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import quote
@@ -75,12 +75,68 @@ def _round_status(fixtures: list[dict], today: date) -> dict:
     }
 
 
+def _upcoming_fixtures(fixtures: list[dict], now: datetime, *, past: bool = False) -> list[dict]:
+    today = now.date()
+    window = timedelta(days=60)
+    states = ("finished",) if past else ("scheduled", "unknown")
+    candidates = {}
+    for match in fixtures:
+        if match.get("estado") not in states:
+            continue
+        match_id, day, hour = (match.get(key) for key in ("id", "fecha", "hora"))
+        if not isinstance(match_id, str) or not match_id or not isinstance(day, str):
+            continue
+        try:
+            day = (datetime.strptime(day, "%d/%m/%Y").date()
+                   if "/" in day else date.fromisoformat(day))
+        except ValueError:
+            continue
+        if not (today - window <= day <= today if past else today <= day <= today + window):
+            continue
+        try:
+            clock = time.fromisoformat(hour.strip()) if isinstance(hour, str) else None
+            if clock is not None and clock.tzinfo is not None:
+                clock = None
+        except ValueError:
+            try:
+                clock = datetime.strptime(hour.strip(), "%H:%M").time()
+            except ValueError:
+                clock = None
+        if clock is None:
+            utc = match.get("fecha_hora_utc")
+            if isinstance(utc, str) and ("T" in utc or " " in utc):
+                try:
+                    stamp = datetime.fromisoformat(utc.strip())
+                    madrid = ZoneInfo("Europe/Madrid")
+                    local = (stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)).astimezone(madrid)
+                    if local.date() == day:
+                        clock = local.time()
+                except ValueError:
+                    pass
+        if not past and day == today and clock is not None and clock < now.time().replace(second=0, microsecond=0):
+            continue
+        if any(not isinstance(match.get(side), str) or not match[side]
+               for side in ("local", "visitante")):
+            continue
+        candidates[match_id] = {
+            **{key: match[key] for key in ("id", "local", "visitante", "campo", "direccion")
+               if isinstance(match.get(key), str)},
+            "jornada": match.get("jornada"),
+            "marcador": match.get("marcador") if past else None,
+            "fecha": day.isoformat(),
+            "hora": clock.strftime("%H:%M") if clock is not None else None,
+        }
+    return sorted(candidates.values(),
+                  key=lambda match: (match["fecha"], match["hora"] or "24:00", match["id"]), reverse=past)[:60]
+
+
 def _read_competition_summary(path: str) -> dict:
     """Read existing SQLite in mode=ro; no migrations or file writes."""
     if not Path(path).is_file():
         return {"count": 0, "groups": []}
     uri = "file:" + quote(str(Path(path).resolve()), safe="/") + "?mode=ro"
-    today = datetime.now(ZoneInfo("Europe/Madrid")).date()
+    now = datetime.now(ZoneInfo("Europe/Madrid"))
+    today = now.date()
     with sqlite3.connect(uri, uri=True) as db:
         columns = {row[1] for row in db.execute("PRAGMA table_info(competitions)")}
         competition = "competition_name" if "competition_name" in columns else "''"
@@ -149,6 +205,8 @@ def _read_competition_summary(path: str) -> dict:
                 "fixtures_at": fixtures[0] if fixtures else None,
                 "ranking": ranking,
                 "recent_results": recent_results,
+                "upcoming": _upcoming_fixtures(matches, now),
+                "past_fixtures": _upcoming_fixtures(matches, now, past=True),
                 "round_status": _round_status(matches, today),
             })
     return {"count": len(groups), "groups": result}

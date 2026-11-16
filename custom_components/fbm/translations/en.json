@@ -37,7 +37,7 @@
         "title": "Follow entire competition",
         "description": "Team: {team}. Official group: {group}. Confirm to download standings, fixtures and every team roster.",
         "data": {
-          "confirmar": "I confirm following this competition"
+          "confirmar": "Follow and automatically sync this competition"
         }
       },
       "manage": {

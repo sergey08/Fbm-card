@@ -7,8 +7,52 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections import Counter
 from pathlib import Path
 from urllib.parse import quote
+
+
+def compare_played_counts(teams: list, fixtures: list) -> dict | None:
+    """Compare archived final scores with the standings' played counts."""
+    expected = {}
+    for team in teams:
+        name, played = team.get("equipo"), team.get("jugados")
+        if (not isinstance(name, str) or not name.strip()
+                or type(played) is not int or played < 0):
+            return None
+        key = " ".join(name.casefold().split())
+        if key in expected:
+            return None
+        expected[key] = played
+    if not expected:
+        return None
+
+    finished = {}
+    for game in fixtures:
+        if game.get("estado") != "finished":
+            continue
+        match_id, score = game.get("id"), game.get("marcador")
+        if (not isinstance(match_id, str) or not match_id
+                or not isinstance(score, dict)
+                or any(type(score.get(side)) is not int for side in ("local", "visitante"))):
+            continue
+        sides = [game.get("local"), game.get("visitante")]
+        if any(not isinstance(name, str) for name in sides):
+            return None
+        pair = tuple(" ".join(name.casefold().split()) for name in sides)
+        if pair[0] == pair[1] or any(name not in expected for name in pair):
+            return None
+        if match_id in finished and finished[match_id] != pair:
+            return None
+        finished[match_id] = pair
+
+    archived = Counter(name for pair in finished.values() for name in pair)
+    return {
+        "teams_compared": len(expected),
+        "teams_with_deficit": sum(archived[name] < count for name, count in expected.items()),
+        "teams_with_surplus": sum(archived[name] > count for name, count in expected.items()),
+        "final_scores_archived": len(finished),
+    }
 
 
 def read_coverage(path: str) -> dict:
@@ -26,13 +70,23 @@ def read_coverage(path: str) -> dict:
         ).fetchall()
         if len(selected) > 50:
             raise ValueError("Too many followed competitions")
+        tracks_failures = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='player_stats_failures'"
+        ).fetchone() is not None
         for season, phase, group_id in selected:
+            failures = set()
+            if tracks_failures:
+                failures = {row[0] for row in db.execute(
+                    """SELECT subject FROM player_stats_failures
+                       WHERE season=? AND phase=? AND group_id=?""",
+                    (season, phase, group_id),
+                )}
             # Only the newest snapshot for each source/subject. Historical
             # versions must not inflate memory use as the archive grows.
             rows = db.execute(
                 """SELECT s.source,s.subject,s.payload FROM snapshots AS s
                    WHERE s.season=? AND s.phase=? AND s.group_id=?
-                     AND s.source IN ('standings','roster','player_stats')
+                     AND s.source IN ('standings','fixtures','roster','player_stats')
                      AND s.observed_at=(
                        SELECT MAX(t.observed_at) FROM snapshots AS t
                        WHERE t.season=s.season AND t.phase=s.phase
@@ -48,6 +102,23 @@ def read_coverage(path: str) -> dict:
             teams = [r for r in standings[:20] if isinstance(r, dict) and isinstance(r.get("id"), str)]
             counter = {"teams": len(teams), "rosters": 0, "players": 0,
                        "complete": 0, "pending": 0}
+            fixtures_raw = latest.get(("fixtures", ""))
+            fixtures = json.loads(fixtures_raw).get("partidos", []) if fixtures_raw else []
+            details = {
+                "standings_archived": standings_raw is not None,
+                "calendar_archived": fixtures_raw is not None,
+                "fixtures_archived": len(fixtures),
+                "rounds_archived": len({game["jornada"] for game in fixtures
+                                        if type(game.get("jornada")) is int}),
+                "played_count_check": compare_played_counts(teams, fixtures) if fixtures_raw else None,
+                "roster_entries": 0,
+                "zero_appearances": 0,
+                "unknown_appearances": 0,
+                "stats_not_archived": 0,
+                "stats_empty": 0,
+                "stats_incomplete": 0,
+                "stats_last_attempt_failed": 0,
+            }
             for team in teams:
                 raw = latest.get(("roster", team["id"]))
                 if raw is None:
@@ -58,11 +129,19 @@ def read_coverage(path: str) -> dict:
                     if not isinstance(player, dict) or not isinstance(player.get("id"), str):
                         continue
                     appearances = player.get("partidos_jugados")
-                    if type(appearances) is not int or appearances < 1:
+                    details["roster_entries"] += 1
+                    if player["id"] in failures:
+                        details["stats_last_attempt_failed"] += 1
+                    if type(appearances) is not int or appearances < 0:
+                        details["unknown_appearances"] += 1
+                        continue
+                    if appearances == 0:
+                        details["zero_appearances"] += 1
                         continue
                     counter["players"] += 1
                     stats = latest.get(("player_stats", player["id"]))
                     if stats is None:
+                        details["stats_not_archived"] += 1
                         counter["pending"] += 1
                         continue
                     payload = json.loads(stats)
@@ -72,6 +151,8 @@ def read_coverage(path: str) -> dict:
                                     type(game.get("puntos")) is int for game in games)):
                         counter["complete"] += 1
                     else:
+                        key = "stats_empty" if games == [] else "stats_incomplete"
+                        details[key] += 1
                         counter["pending"] += 1
             counter["missing_rosters"] = counter["teams"] - counter["rosters"]
             counter["coverage_percent"] = (
@@ -82,7 +163,7 @@ def read_coverage(path: str) -> dict:
             for key in totals:
                 totals[key] += counter[key]
             groups.append({"season_id": season, "phase_id": phase,
-                           "group_id": group_id, **counter})
+                           "group_id": group_id, **counter, "archive": details})
     totals["missing_rosters"] = totals["teams"] - totals["rosters"]
     totals["coverage_percent"] = (
         round(100 * totals["complete"] / totals["players"], 1)

@@ -20,6 +20,7 @@ def load(name):
     return mod
 Archive=load("competition_archive").CompetitionArchive
 sync=load("competition_player_stats").sync_player_stats_batch
+read_coverage=load("competition_coverage").read_coverage
 
 IDENTITY={"season_verified":True,"season_id":"26/27",
           "phase_id":"phase","group_id":"group"}
@@ -196,6 +197,30 @@ class StatsTests(unittest.TestCase):
         result=self.run_batch()
         self.assertEqual(result["status"],"not_followed")
         self.assertEqual(self.client.calls,[])
+
+    def test_failed_attempt_is_distinct_from_successful_empty_response(self):
+        self.archive.record(IDENTITY, "standings", {"clasificacion": [
+            {"id": "team-A", "equipo": "A"}]})
+        self.archive.record(IDENTITY, "roster", {"jugadores": [
+            {"id": "0", "partidos_jugados": 1}]}, subject="team-A")
+
+        async def unavailable(player_id, team_id):
+            raise OSError("unavailable")
+
+        async def empty(player_id, team_id):
+            return {"jugador": player_id, "equipo": team_id,
+                    "globales": {"estadisticas": {}}, "partidos": {"partidos": []}}
+
+        self.client.async_player_statistics = unavailable
+        self.assertEqual(self.run_batch(limit=1)["errors"], 1)
+        archive = read_coverage(self.archive.path)["groups"][0]["archive"]
+        self.assertEqual(archive["stats_last_attempt_failed"], 1)
+        self.assertEqual(archive["stats_empty"], 0)
+        self.client.async_player_statistics = empty
+        self.assertEqual(self.run_batch(limit=1)["errors"], 0)
+        archive = read_coverage(self.archive.path)["groups"][0]["archive"]
+        self.assertEqual(archive["stats_last_attempt_failed"], 0)
+        self.assertEqual(archive["stats_empty"], 1)
 
     def test_invalid_batch_limit(self):
         for count in (0,6,-1):

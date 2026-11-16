@@ -1,0 +1,29 @@
+# Changelog
+
+## v0.2.13 · English
+
+- Add an upcoming games tab to the competition card using archived fixtures.
+
+- Compare archived final scores with the games played in official standings by team.
+
+- Automatic calendar refresh queries the entire sporting year of the followed group.
+
+- Confirming a new competition enables background synchronization and retries automatically.
+
+- Competition refresh reports partial progress when a roster download fails.
+- A group awaiting standings no longer blocks statistics downloads for other groups after a restart.
+- Roster downloads save each completed team immediately. When the results are unchanged, subsequent incremental passes request only missing rosters.
+
+## v0.2.13 · Español
+
+- La tarjeta de competiciones incluye una pestaña de próximos partidos basada en el calendario archivado.
+
+- Se comparan los marcadores finales archivados con los partidos jugados de cada equipo según la clasificación oficial.
+
+- La actualización automática del calendario consulta todo el año deportivo del grupo seguido.
+
+- Confirmar una competición nueva activa automáticamente la sincronización en segundo plano y sus reintentos.
+
+- La actualización de la competición indica un estado parcial si falla la descarga de alguna plantilla.
+- Un grupo pendiente de clasificación deja avanzar la descarga de estadísticas de los demás grupos después de un reinicio.
+- Se guarda cada plantilla al terminar su descarga. Si los resultados no cambian, las siguientes pasadas incrementales solo consultan las plantillas que faltan.

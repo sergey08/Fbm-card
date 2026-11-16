@@ -67,7 +67,7 @@ function fbmAddFixtureCrests(view, crests, matches) {
   }
 }
 
-function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
+function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = false} = {}) {
   const games = view._element("div", "", "fbm-fixture-list");
   const sorted = [...matches].sort((a, b) => (a.jornada ?? 999) - (b.jornada ?? 999) ||
     fbmFixtureDateKey(a.fecha).localeCompare(fbmFixtureDateKey(b.fecha)) ||
@@ -75,9 +75,12 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
   for (const match of sorted) {
     const box = view._element("article", "", "fbm-fixture");
     const top = view._element("div", "", "fbm-match-header");
-    top.append(view._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
-    top.append(view._element("span", [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente", "fbm-player-caption"));
-    box.append(top);
+    if (!agenda) top.append(view._element("strong", Number.isInteger(match.jornada) ? "Jornada " + match.jornada : "Jornada sin indicar"));
+    if (!agenda) {
+      const timing = [match.fecha, match.hora].filter(Boolean).join(" · ") || "Fecha pendiente";
+      top.append(view._element("span", timing, "fbm-player-caption"));
+      box.append(top);
+    }
     const teams = view._element("div", "", "fbm-fixture-teams");
     const teamLabel = (name, image, side) => {
       const team = resolveTeam?.(name);
@@ -103,7 +106,11 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests) {
     teams.append(view._element("strong", score, "fbm-fixture-score"));
     teams.append(teamLabel(match.visitante || "Visitante sin indicar", match.img_visitante || view._apkCrestUrl(match.escudo_visitante), "away"));
     box.append(teams);
-    if (match.campo) box.append(view._element("p", match.campo, "fbm-player-caption"));
+    const details = agenda
+      ? [match.hora || (match.played ? "" : "Hora por confirmar"), match.campo || match.direccion]
+          .filter(Boolean).join(" · ")
+      : match.campo;
+    if (details) box.append(view._element("p", details, "fbm-player-caption"));
     games.append(box);
   }
   card.append(games);
@@ -1494,6 +1501,10 @@ class FBMCompetitionCard extends HTMLElement {
     if (!Number.isInteger(this._config.group_index) ||
         this._config.group_index < 0 || this._config.group_index > 49)
       throw new Error("Índice de competición inválido");
+    this._competitionTab = this._config.initial_tab === "upcoming" ? "upcoming" : "ranking";
+    this._agendaRound = null;
+    this._agendaCrests = null;
+    this._upcomingTeam = "";
     this._groupIndex = this._config.group_index;
     this._selectedGroup = null;
     this._pickerFocused = this._pickerRefreshPending = false;
@@ -1569,10 +1580,10 @@ class FBMCompetitionCard extends HTMLElement {
   _groupLabel(group) {
     return group.competition_name || group.team_name || group.group_name || "Competición FBM";
   }
-  _teamButton(team) {
+  _teamButton(team, archivedCrest) {
     const button = this._el("button", undefined, "team");
     button.type = "button";
-    const crest = this._verifiedCrest(team.escudo);
+    const crest = this._verifiedCrest(team.escudo) || archivedCrest;
     if (crest) {
       const img = this._el("img");
       img.src = crest; img.alt = ""; img.className = "crest"; img.loading = "lazy";
@@ -1608,6 +1619,7 @@ class FBMCompetitionCard extends HTMLElement {
     if (!team || typeof team.id !== "string" || !team.id ||
         typeof team.equipo !== "string") return;
     if (this._teamId === team.id) return;
+    this._competitionTab = "ranking";
     this._playerRequest = null;
     this._photoRequest = null;
     this._fixtureCrests = null;
@@ -1718,6 +1730,126 @@ class FBMCompetitionCard extends HTMLElement {
     }
     this._render();
   }
+  async _loadAgendaCrests(teamId, key, fixtures, ranking) {
+    if (!teamId || !this._hass?.callWS || this._agendaCrests?.key === key) return;
+    const state = this._agendaCrests = {key, images: new Map()};
+    try {
+      const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
+      if (this._agendaCrests !== state || entries?.length !== 1) return;
+      const data = await this._hass.callWS({
+        type: "fbm/competition/team_snapshot", entry_id: entries[0], equipo: teamId
+      });
+      if (this._agendaCrests !== state || this._competitionTab !== "upcoming") return;
+      for (const [name, value] of Object.entries(data.fixtures?.escudos || {})) {
+        if (typeof value !== "string") continue;
+        const inline = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(value);
+        const crest = this._verifiedCrest(value) || (inline && value.length <= 90000 ? value : "");
+        if (crest) state.images.set(fbmCrestKey(name), crest);
+      }
+      const missing = fixtures.some(match => [match.local, match.visitante].some(name => {
+        const team = fbmCrestKey(name);
+        return !state.images.has(team) && !this._verifiedCrest(ranking.get(team)?.escudo);
+      }));
+      const range = missing && fbmFixtureCrestRange(fixtures);
+      if (range) {
+        const live = await this._hass.callWS({
+          type: "fbm/team/schedule", entry_id: entries[0], equipo: teamId, ...range
+        });
+        if (this._agendaCrests !== state) return;
+        const found = Object.create(null);
+        fbmAddFixtureCrests(this, found, live?.partidos || []);
+        for (const [name, crest] of Object.entries(found)) {
+          if (!state.images.has(name)) state.images.set(name, crest);
+        }
+      }
+      if (state.images.size && this._competitionTab === "upcoming") this._render();
+    } catch (_) {
+      // Keep the agenda usable when archived crests are unavailable.
+    }
+  }
+
+  _renderUpcoming(card, group) {
+    const ranking = new Map((group.ranking || []).map(team => [fbmCrestKey(team.equipo), team]));
+    const matches = new Map();
+    for (const match of group.upcoming || []) matches.set(match.id, match);
+    for (const match of group.past_fixtures || []) matches.set(match.id, {...match, played: true});
+    if (!matches.size) {
+      card.append(this._el("p", "No hay partidos archivados para esta competición.", "muted"));
+      return;
+    }
+    const teams = new Set([...matches.values()].flatMap(match => [match.local, match.visitante]));
+    const filter = this._el("select");
+    filter.setAttribute("aria-label", "Filtrar por equipo");
+    for (const name of ["", ...[...teams].sort((a, b) => a.localeCompare(b, "es"))]) {
+      const option = this._el("option", name || "Todos los equipos");
+      option.value = name;
+      filter.append(option);
+    }
+    filter.value = this._upcomingTeam;
+    filter.addEventListener("change", () => {
+      this._upcomingTeam = filter.value;
+      this._agendaRound = null;
+      this._render();
+    });
+    card.append(filter);
+    const ordered = [...matches.values()].sort((a, b) =>
+      a.fecha.localeCompare(b.fecha) || (a.hora || "24:00").localeCompare(b.hora || "24:00"));
+    const rounds = new Map();
+    let nextRound = null;
+    for (const match of ordered) {
+      if (this._upcomingTeam && ![match.local, match.visitante].includes(this._upcomingTeam)) continue;
+      const key = match.jornada == null ? "date:" + match.fecha : "round:" + match.jornada;
+      if (!rounds.has(key)) rounds.set(key, []);
+      rounds.get(key).push(match);
+      if (!match.played && nextRound == null) nextRound = key;
+    }
+    const entries = [...rounds.keys()];
+    if (entries.every(key => Number.isInteger(rounds.get(key)[0].jornada))) {
+      entries.sort((a, b) => rounds.get(a)[0].jornada - rounds.get(b)[0].jornada);
+    }
+    if (!entries.length) return;
+    const selected = rounds.has(this._agendaRound) ? this._agendaRound : nextRound || entries.at(-1);
+    const active = entries.indexOf(selected);
+    const fixtures = rounds.get(selected);
+    const navigation = this._el("div", undefined, "agenda-navigation");
+    const move = (step, arrow, title) => {
+      const button = this._el("button", arrow);
+      button.type = "button";
+      button.setAttribute("aria-label", title);
+      button.disabled = entries[active + step] == null;
+      button.addEventListener("click", () => {
+        this._agendaRound = entries[active + step];
+        this._render();
+      });
+      return button;
+    };
+    const round = fixtures[0].jornada;
+    navigation.append(move(-1, "‹", "Jornada anterior"),
+      this._el("strong", round == null ? "Partidos" : "Jornada " + round),
+      move(1, "›", "Jornada siguiente"));
+    card.append(navigation);
+    const crestKey = JSON.stringify([this._groupKey(group), group.fixtures_at]);
+    const visibleTeams = fixtures.flatMap(match => [match.local, match.visitante]);
+    if (group.fixtures_at && visibleTeams.some(name =>
+      !this._verifiedCrest(ranking.get(fbmCrestKey(name))?.escudo))) {
+      const anchor = [...ranking.values()].find(team => team.id);
+      void this._loadAgendaCrests(anchor?.id, crestKey, fixtures, ranking);
+    }
+    const images = this._agendaCrests?.key === crestKey
+      ? Object.fromEntries(this._agendaCrests.images) : undefined;
+    const days = new Map();
+    for (const match of fixtures) {
+      if (!days.has(match.fecha)) days.set(match.fecha, []);
+      days.get(match.fecha).push(match);
+    }
+    for (const [day, games] of days) {
+      const date = new Date(day + "T12:00:00");
+      card.append(this._el("h4", date.toLocaleDateString("es-ES",
+        {weekday: "long", day: "numeric", month: "long"})));
+      renderFBMFixtures(this, card, games, name => ranking.get(fbmCrestKey(name)), images, {agenda: true});
+    }
+  }
+
   _render() {
     if (this._pickerFocused) {
       this._pickerRefreshPending = true;
@@ -1752,6 +1884,10 @@ class FBMCompetitionCard extends HTMLElement {
       .team-logo,.team-logo-placeholder{width:52px;height:52px;flex:0 0 52px;object-fit:contain;border-radius:12px;background:var(--secondary-background-color,#eee)}
       .team-logo-placeholder{display:flex;align-items:center;justify-content:center;font-size:1.65rem}
       .fixture-group{margin-top:12px}
+      .agenda-navigation{display:flex;align-items:center;justify-content:space-between;gap:8px}
+      .agenda-navigation button{min-width:44px;min-height:44px;text-align:center;font-size:1.5rem}
+      .upcoming-match{padding:8px 0;border-bottom:1px solid var(--divider-color,#ddd)}
+      .upcoming-match .muted{margin:4px 0 0}
       .tabs{display:flex;gap:4px;overflow-x:auto;margin:12px 0;max-width:100%}
       .tabs button{flex:1 0 auto;padding:8px 10px;border:0;border-radius:9px;background:var(--secondary-background-color,#eee);color:var(--primary-text-color,#222)}
       .tabs button[aria-pressed="true"]{background:var(--primary-color,#1976d2);color:var(--text-primary-color,#fff);font-weight:700}
@@ -1766,6 +1902,7 @@ class FBMCompetitionCard extends HTMLElement {
       this.shadowRoot.replaceChildren(style,card);
       return;
     }
+    const upcoming = this._competitionTab === "upcoming";
     if (groups.length > 1) {
       const select = this._el("select");
       select.setAttribute("aria-label", "Cambiar competición");
@@ -1784,6 +1921,8 @@ class FBMCompetitionCard extends HTMLElement {
       select.value = String(index);
       select.addEventListener("change", event => {
         this._pickerFocused = this._pickerRefreshPending = false;
+        this._upcomingTeam = "";
+        this._agendaRound = null;
         this._groupIndex = Number(event.target.value);
         this._selectedGroup = this._groupKey(groups[this._groupIndex]);
         this._teamRequest = this._playerRequest = null;
@@ -1792,6 +1931,26 @@ class FBMCompetitionCard extends HTMLElement {
         this._render();
       });
       card.append(select);
+    }
+    const tabs = this._el("div", undefined, "tabs");
+    for (const [key, title] of [["ranking", "Clasificación"], ["upcoming", "Próximos partidos"]]) {
+      const button = this._el("button", title);
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(this._competitionTab === key));
+      button.addEventListener("click", () => {
+        this._competitionTab = key;
+        this._agendaRound = null;
+        this._teamRequest = this._playerRequest = null;
+        this._teamId = null;
+        this._render();
+      });
+      tabs.append(button);
+    }
+    card.append(tabs);
+    if (upcoming) {
+      this._renderUpcoming(card, group);
+      this.shadowRoot.replaceChildren(style, card);
+      return;
     }
     card.append(this._el("h3", this._groupLabel(group)));
     const ranking = Array.isArray(group.ranking) ? group.ranking : [];
@@ -1903,6 +2062,18 @@ class FBMCompetitionCard extends HTMLElement {
       if (ranking.length) card.append(this._rankingTable(ranking));
       else card.append(this._el("p", "Clasificación pendiente de sincronizar.", "muted"));
       if (group.standings_at) card.append(this._el("p","Clasificación archivada: "+group.standings_at,"muted"));
+      const results = Array.isArray(group.recent_results) ? group.recent_results : [];
+      if (results.length) {
+        card.append(this._el("h4", "Últimos resultados"));
+        for (const match of [...results].reverse()) {
+          const score = match.marcador;
+          if (!Number.isInteger(score?.local) || !Number.isInteger(score?.visitante)) continue;
+          const row = this._el("div", undefined, "upcoming-match");
+          row.append(this._el("strong", score.local + " – " + score.visitante),
+            this._el("div", [match.local, match.visitante, match.fecha].filter(Boolean).join(" · "), "muted"));
+          card.append(row);
+        }
+      }
     }
     this.shadowRoot.replaceChildren(style,card);
   }
@@ -2010,6 +2181,9 @@ class FBMCardEditor extends HTMLElement {
     if (this._competition) {
       edit(form, "Sensor de competiciones", "entity", {
         default: "sensor.competiciones", redraw: true, pattern: "sensor\\.[a-z0-9_]+"
+      });
+      edit(form, "Pestaña inicial", "initial_tab", {
+        default: "ranking", options: [["ranking", "Clasificación"], ["upcoming", "Próximos partidos"]]
       });
       const index = config.group_index ?? 0;
       const options = groups.map((group, position) => [String(position),

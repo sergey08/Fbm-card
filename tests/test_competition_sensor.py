@@ -1,5 +1,5 @@
 """Offline tests for the minimal FBM competition HA sensor."""
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 import importlib.util
 import sys
@@ -44,6 +44,29 @@ Archive = sys.modules[pkg_name + ".competition_archive"].CompetitionArchive
 
 
 class SensorTests(unittest.IsolatedAsyncioTestCase):
+    def test_upcoming_excludes_past_started_and_duplicate_fixtures(self):
+        now = datetime(2026, 11, 16, 12)
+        base = {"id": "m1", "local": "A", "visitante": "B", "estado": "scheduled",
+                "fecha": "16/11/2026", "hora": "13:00", "campo": "Pabellón"}
+        fixtures = [base, base, {**base, "id": "past", "hora": "11:00"},
+                    {**base, "id": "finished", "estado": "finished"},
+                    {**base, "id": "m2", "fecha": "2026-11-17", "hora": None}]
+        upcoming = Sensor._upcoming_fixtures(fixtures, now)
+        self.assertEqual([row["id"] for row in upcoming], ["m1", "m2"])
+        self.assertEqual(upcoming[0]["fecha"], "2026-11-16")
+        self.assertEqual(upcoming[0]["campo"], "Pabellón")
+        self.assertIsNone(upcoming[1]["hora"])
+        published = [
+            {**base, "id": "seconds", "hora": "13:30:00"},
+            {**base, "id": "utc", "hora": None, "fecha_hora_utc": "2026-11-16T14:15:00Z"},
+        ]
+        self.assertEqual([row["hora"] for row in Sensor._upcoming_fixtures(published, now)],
+                         ["13:30", "15:15"])
+        past = Sensor._upcoming_fixtures([
+            {**base, "estado": "finished", "fecha": "2026-11-09",
+             "marcador": {"local": 40, "visitante": 32}}], now, past=True)
+        self.assertEqual(past[0]["marcador"], {"local": 40, "visitante": 32})
+
     def test_round_status_ignores_postponements_and_calendar_gaps(self):
         fixtures = [
             {"jornada": 1, "fecha": "2026-11-01", "estado": "finished"},
@@ -92,15 +115,16 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             identity = {"season_verified": True, "season_id": "season",
                         "phase_id": "phase", "group_id": "group"}
             archive.follow(identity, display={"team_name": "Team", "competition_name": "Alevín Plata"})
+            fixture_day = datetime.now(Sensor.ZoneInfo("Europe/Madrid")).date().isoformat()
             crest = "data:image/png;base64,iVBORw0KGgo="
             archive.record(identity, "standings", {"clasificacion": [
                 {"id": "team1", "equipo": "Team", "posicion": 1,
                  "ganados": 4, "perdidos": 0, "escudo": "PRIVATE_IMAGE"}]})
             archive.record(identity, "fixtures", {"partidos": [
                 {"id": "game1", "local": "Team", "visitante": "Other",
-                 "estado": "finished", "fecha": "2026-11-01",
+                 "estado": "finished", "fecha": fixture_day,
                  "marcador": {"local": 45, "visitante": 38},
-                 "direccion": "PRIVATE_VENUE", "img_local": crest, "img_visitante": "PRIVATE_IMAGE"},
+                 "direccion": "Pabellón municipal", "img_local": crest, "img_visitante": "PRIVATE_IMAGE"},
             ]})
             archive.record(identity, "roster", {"jugadores": [
                 {"id": "player", "nombre": "PRIVATE_CHILD", "foto": "PRIVATE_IMAGE"}]},
@@ -114,12 +138,12 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(crest, str(summary))
             self.assertNotIn("PRIVATE_CHILD", str(summary))
             self.assertNotIn("PRIVATE_IMAGE", str(summary))
-            self.assertNotIn("PRIVATE_VENUE", str(summary))
+            self.assertEqual(summary["groups"][0]["past_fixtures"][0]["direccion"], "Pabellón municipal")
             self.assertEqual(summary["groups"][0]["ranking"], [{
                 "id": "team1", "equipo": "Team", "posicion": 1, "ganados": 4, "perdidos": 0
             }])
             self.assertEqual(summary["groups"][0]["recent_results"], [{
-                "local": "Team", "visitante": "Other", "fecha": "2026-11-01",
+                "local": "Team", "visitante": "Other", "fecha": fixture_day,
                 "marcador": {"local": 45, "visitante": 38},
             }])
 

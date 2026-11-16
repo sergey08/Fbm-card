@@ -19,10 +19,12 @@ from .competition_player_stats import sync_player_stats_batch
 from .competition_refresh_policy import should_poll_group
 
 GROUP_INTERVAL = timedelta(minutes=5)
-PLAYER_INTERVAL = timedelta(minutes=30)
+PLAYER_INTERVAL = timedelta(minutes=10)
 PLAYER_CYCLE_DELAY = timedelta(hours=24)
+PLAYER_PENDING_RECHECK_DELAY = timedelta(hours=6)
 PLAYER_FULL_RECHECK_INTERVAL = timedelta(days=7)
 ROSTER_FULL_RECHECK_INTERVAL = timedelta(days=7)
+GROUP_PARTIAL_RETRY_INTERVAL = timedelta(minutes=30)
 
 
 class CompetitionAutoUpdater:
@@ -196,6 +198,9 @@ class CompetitionAutoUpdater:
         checks = state.get("group_checked_at", {})
         if type(checks) is not dict:
             checks = {}
+        partial_groups = state.get("group_partial_at", {})
+        if type(partial_groups) is not dict:
+            partial_groups = {}
         now_utc = datetime.now(timezone.utc)
         # Skip quiet groups without spending a network turn on them.
         for offset in range(len(groups)):
@@ -207,8 +212,18 @@ class CompetitionAutoUpdater:
                         "season_verified": True}
             snapshot = await self.hass.async_add_executor_job(
                 archive.latest, identity, "fixtures")
-            if should_poll_group((snapshot or {}).get("payload"),
-                                 checks.get(group_id), now_utc):
+            retry_at = partial_groups.get(group_id)
+            if type(retry_at) is str:
+                try:
+                    partial_age = now_utc - datetime.fromisoformat(retry_at)
+                except (ValueError, TypeError):
+                    partial_age = GROUP_PARTIAL_RETRY_INTERVAL
+                if timedelta(0) <= partial_age < GROUP_PARTIAL_RETRY_INTERVAL:
+                    continue
+                index = candidate_index
+                break
+            if (snapshot is None or should_poll_group(
+                    snapshot.get("payload"), checks.get(group_id), now_utc)):
                 index = candidate_index
                 break
         else:
@@ -237,6 +252,7 @@ class CompetitionAutoUpdater:
                 self.client, archive, group["anchor_team_id"],
                 now - timedelta(days=45), now + timedelta(days=60),
                 fetch_rosters=True if full_rosters_due else "on_change",
+                whole_season=True,
                 expected_competition={k: group[k] for k in
                                       ("season_id", "phase_id", "group_id")})
             status = response.get("status") if isinstance(response, dict) else None
@@ -250,9 +266,16 @@ class CompetitionAutoUpdater:
                 checks = {key: val for key, val in checks.items()
                           if key in {item["group_id"] for item in groups}}
                 checks[group_id] = datetime.now(timezone.utc).isoformat()
-                await self._save_state({"group_checked_at": checks})
+                partial_groups = {key: value for key, value in partial_groups.items()
+                                  if key in checks}
+                if status == "partial":
+                    partial_groups[group_id] = checks[group_id]
+                else:
+                    partial_groups.pop(group_id, None)
+                await self._save_state({"group_checked_at": checks,
+                                        "group_partial_at": partial_groups})
                 self.group_checked_at = checks
-            await self._mark("groups", "ok" if status in ("ok", "partial") else "failed")
+            await self._mark("groups", status if status in ("ok", "partial") else "failed")
         except Exception:
             # Never leak service errors, IDs or player details into HA state.
             # The archive retains the last successful snapshot.
@@ -306,6 +329,11 @@ class CompetitionAutoUpdater:
                 best_id, best_missing = group["group_id"], missing
         return best_id
 
+    @staticmethod
+    def _pending_player_snapshots(archive, groups):
+        """True if any followed group has missing or incomplete player snapshots."""
+        return CompetitionAutoUpdater._bootstrap_priority(archive, groups) is not None
+
     async def _run_players_impl(self):
         archive, groups = await self._archive_and_groups()
         if not groups:
@@ -330,8 +358,15 @@ class CompetitionAutoUpdater:
         if type(last) is str:
             try:
                 completed = datetime.fromisoformat(last)
-                if completed.tzinfo and datetime.now(timezone.utc) - completed < PLAYER_CYCLE_DELAY:
-                    return
+                if completed.tzinfo:
+                    # Incomplete official snapshots require another bounded pass.
+                    # Fully covered groups retain the daily quiet period.
+                    coverage = await self.hass.async_add_executor_job(
+                        self._pending_player_snapshots, archive, groups)
+                    delay = (PLAYER_PENDING_RECHECK_DELAY if coverage
+                             else PLAYER_CYCLE_DELAY)
+                    if datetime.now(timezone.utc) - completed < delay:
+                        return
             except ValueError:
                 pass
         priority_id = cursor.get("priority_group_id")
@@ -357,6 +392,12 @@ class CompetitionAutoUpdater:
         team_ids = [row.get("id") for row in rows if type(row) is dict
                     and type(row.get("id")) is str][:20]
         if not team_ids:
+            # Keep other competitions moving even when this group cannot
+            # enumerate its teams yet. Revisit it on the next pass.
+            next_group = (group_index + 1) % len(groups)
+            await self._save_state({"players": {
+                "group_index": next_group, "team_index": 0, "offset": 0,
+                "priority_group_id": priority_id}})
             await self._mark("players", "no_standings")
             return
         team_index = int(cursor.get("team_index", 0)) % len(team_ids)

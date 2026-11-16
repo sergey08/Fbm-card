@@ -4,9 +4,11 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.12.
+**Versión estable:** v0.2.13.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
+
+Al confirmar el seguimiento de una competición, se activa su sincronización automática, incluidas las estadísticas. Si la primera descarga es parcial, las siguientes pasadas continúan en segundo plano.
 
 **Actualización de partidos:** al abrir la pestaña «Partidos» se consultan automáticamente los datos si faltan o necesitan refrescarse; no existe un botón de actualización manual. Se conservan filtros y archivo local. Los marcadores se actualizan en pantalla cuando cambia el archivo local, incluso si la sesión FBM ha caducado. Los grupos con resultados recientes pendientes pueden reconsultarse tras 30 minutos, con un máximo de un grupo por turno de cinco minutos.
 
@@ -21,7 +23,7 @@ FBM Card combina una integración de Home Assistant y tarjetas Lovelace para con
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.12](RELEASE_0.2.12_NOTES.md)
+[Novedades de v0.2.13](RELEASE_0.2.13_NOTES.md)
 
 ## Instalación
 
@@ -151,3 +153,7 @@ FBM Card es un proyecto comunitario **no oficial**, independiente de la Federaci
 ## Privacidad, limitaciones y soporte
 
 Este proyecto usa datos deportivos públicos y una identidad invitada FBM compartida. No publiques tokens, datos de registro del dispositivo, información personal ni fotografías de jugadores en incidencias públicas. La disponibilidad de datos, rutas e imágenes oficiales puede cambiar. Para comunicar errores, abre una [incidencia en GitHub](https://github.com/sergey08/Fbm-card/issues) indicando versión de Home Assistant, versión de FBM Card, registros anonimizados y pasos para reproducir el problema.
+
+Debajo de cada marcador de la agenda se muestran la hora y el pabellón, o la dirección cuando no consta el nombre del recinto.
+
+La tarjeta `custom:fbm-competition-card` incluye **Clasificación** y **Próximos partidos**. Para abrir directamente la segunda pestaña, usa `initial_tab: upcoming` en YAML o elige **Pestaña inicial** en el editor visual. La agenda usa los partidos archivados en `sensor.competiciones` hasta 60 días atrás y 60 días por delante, con un máximo de 60 encuentros por sentido y grupo. Abre en la jornada del siguiente partido de la competición seleccionada y las flechas permiten recorrer las jornadas archivadas.

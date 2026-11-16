@@ -107,6 +107,19 @@ class GroupTests(unittest.TestCase):
         return {"phase_id": "phase1", "group_id": "group1",
                 "phase_name": "Primera fase", "group_name": "Grupo 16"}
 
+    def test_whole_season_queries_both_ends_of_official_season(self):
+        self.select()
+        query = []
+        original = self.client.async_team_schedule
+
+        async def capture(team, start, end):
+            query.append((start, end))
+            return await original(team, start, end)
+
+        self.client.async_team_schedule = capture
+        self.assertEqual(self.run_sync(fetch_rosters=False, whole_season=True)["status"], "ok")
+        self.assertEqual(query, [(date(2026, 7, 1), date(2027, 6, 30))])
+
     def test_refresh_only_fixtures_without_rosters(self):
         self.select()
         result=self.run_sync(fetch_rosters=False)
@@ -123,6 +136,25 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(second["rosters_saved"], 0)
         self.assertEqual(self.client.calls.count("roster"), 2)
         self.assertFalse(second["fixture_results_changed"])
+
+    def test_incremental_rosters_retry_only_missing_teams(self):
+        self.select()
+        self.run_sync(fetch_rosters=False)
+        fetched = []
+        original = self.client.async_team_roster
+
+        async def flaky(team):
+            fetched.append(team)
+            if team == "b" and fetched.count("b") == 1:
+                raise RuntimeError("temporary failure")
+            if team == "b":
+                self.assertIsNotNone(self.archive.latest(identity(), "roster", "a"))
+            return await original(team)
+
+        self.client.async_team_roster = flaky
+        self.assertEqual(self.run_sync(fetch_rosters="on_change")["status"], "partial")
+        self.assertEqual(self.run_sync(fetch_rosters="on_change")["status"], "ok")
+        self.assertEqual(fetched, ["a", "b", "b"])
 
     def test_incremental_rosters_refresh_on_new_completed_result(self):
         self.select()
