@@ -1496,6 +1496,7 @@ class FBMCompetitionCard extends HTMLElement {
       throw new Error("Índice de competición inválido");
     this._competitionTab = this._config.initial_tab === "upcoming" ? "upcoming" : "ranking";
     this._agendaRound = null;
+    this._agendaCrests = null;
     this._upcomingTeam = "";
     this._groupIndex = this._config.group_index;
     this._selectedGroup = null;
@@ -1572,10 +1573,10 @@ class FBMCompetitionCard extends HTMLElement {
   _groupLabel(group) {
     return group.competition_name || group.team_name || group.group_name || "Competición FBM";
   }
-  _teamButton(team) {
+  _teamButton(team, archivedCrest) {
     const button = this._el("button", undefined, "team");
     button.type = "button";
-    const crest = this._verifiedCrest(team.escudo);
+    const crest = this._verifiedCrest(team.escudo) || archivedCrest;
     if (crest) {
       const img = this._el("img");
       img.src = crest; img.alt = ""; img.className = "crest"; img.loading = "lazy";
@@ -1721,8 +1722,30 @@ class FBMCompetitionCard extends HTMLElement {
     }
     this._render();
   }
+  async _loadAgendaCrests(group, teamId, key) {
+    if (!teamId || !this._hass?.callWS || this._agendaCrests?.key === key) return;
+    const state = this._agendaCrests = {key, images: new Map()};
+    try {
+      const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
+      if (this._agendaCrests !== state || entries?.length !== 1) return;
+      const data = await this._hass.callWS({
+        type: "fbm/competition/team_snapshot", entry_id: entries[0], equipo: teamId
+      });
+      if (this._agendaCrests !== state || data?.observed_at?.fixtures !== group.fixtures_at) return;
+      for (const [name, value] of Object.entries(data.fixtures?.escudos || {})) {
+        if (typeof value !== "string") continue;
+        const inline = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(value);
+        const crest = this._verifiedCrest(value) || (inline && value.length <= 90000 ? value : "");
+        if (crest) state.images.set(fbmCrestKey(name), crest);
+      }
+      if (state.images.size && this._competitionTab === "upcoming") this._render();
+    } catch (_) {
+      // Keep the agenda usable when archived crests are unavailable.
+    }
+  }
+
   _renderUpcoming(card, group) {
-    const ranking = new Map((group.ranking || []).map(team => [team.equipo, team]));
+    const ranking = new Map((group.ranking || []).map(team => [fbmCrestKey(team.equipo), team]));
     const matches = new Map();
     for (const match of group.upcoming || []) matches.set(match.id, match);
     for (const match of group.past_fixtures || []) matches.set(match.id, {...match, played: true});
@@ -1781,6 +1804,14 @@ class FBMCompetitionCard extends HTMLElement {
       this._el("strong", round == null ? "Partidos" : "Jornada " + round),
       move(1, "›", "Jornada siguiente"));
     card.append(navigation);
+    const crestKey = JSON.stringify([this._groupKey(group), group.fixtures_at]);
+    const visibleTeams = fixtures.flatMap(match => [match.local, match.visitante]);
+    if (group.fixtures_at && visibleTeams.some(name =>
+      !this._verifiedCrest(ranking.get(fbmCrestKey(name))?.escudo))) {
+      const anchor = [...ranking.values()].find(team => team.id);
+      void this._loadAgendaCrests(group, anchor?.id, crestKey);
+    }
+    const images = this._agendaCrests?.key === crestKey ? this._agendaCrests.images : new Map();
     let currentDay = "";
     for (const match of fixtures) {
       if (match.fecha !== currentDay) {
@@ -1792,12 +1823,9 @@ class FBMCompetitionCard extends HTMLElement {
       const row = this._el("div", undefined, "upcoming-match");
       const sides = this._el("div", undefined, "upcoming-sides");
       for (const side of [match.local, match.visitante]) {
-        const team = ranking.get(side);
-        if (!team?.id) {
-          sides.append(this._el("span", side));
-          continue;
-        }
-        const button = this._teamButton(team);
+        const key = fbmCrestKey(side);
+        const team = ranking.get(key) || {equipo: side};
+        const button = this._teamButton(team, images.get(key));
         button.addEventListener("click", () => {
           this._competitionTab = "ranking";
           this._selectedGroup = this._groupKey(group);
@@ -2031,6 +2059,18 @@ class FBMCompetitionCard extends HTMLElement {
       if (ranking.length) card.append(this._rankingTable(ranking));
       else card.append(this._el("p", "Clasificación pendiente de sincronizar.", "muted"));
       if (group.standings_at) card.append(this._el("p","Clasificación archivada: "+group.standings_at,"muted"));
+      const results = Array.isArray(group.recent_results) ? group.recent_results : [];
+      if (results.length) {
+        card.append(this._el("h4", "Últimos resultados"));
+        for (const match of [...results].reverse()) {
+          const score = match.marcador;
+          if (!Number.isInteger(score?.local) || !Number.isInteger(score?.visitante)) continue;
+          const row = this._el("div", undefined, "upcoming-match");
+          row.append(this._el("strong", score.local + " – " + score.visitante),
+            this._el("div", [match.local, match.visitante, match.fecha].filter(Boolean).join(" · "), "muted"));
+          card.append(row);
+        }
+      }
     }
     this.shadowRoot.replaceChildren(style,card);
   }
