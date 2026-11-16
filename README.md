@@ -1,6 +1,6 @@
 # FBM Card — Baloncesto madrileño en Home Assistant
 
-![Logo de FBM Card](assets/fbm-card-logo.svg)
+![Logo de FBM Card](assets/fbm-card-logo-readme.svg)
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
