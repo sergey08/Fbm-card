@@ -84,18 +84,17 @@ jobs:
             gh release edit "$TAG" --prerelease=false --latest
             echo "Release existente $TAG marcada como disponible para HACS."
           else
-            gh release create "$TAG" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --generate-notes --latest
+            gh release create "$TAG" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --notes-file "RELEASE_${VERSION}_NOTES.md" --latest
             echo "Publicada release $TAG en $VALIDATED_SHA"
           fi
-          # Once a stable release exists, its previous bN candidates must no
-          # longer be advertised as stable by the GitHub Releases API/HACS.
-          # The test beta is preserved for rollback, only its release flag changes.
+          # Retire superseded beta releases for this exact stable version.
+          # Keep their tags and commits for traceability.
           if [[ "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
             version_regex="${TAG//./[.]}";
             while IFS= read -r beta_tag; do
               [[ -n "$beta_tag" ]] || continue
-              gh release edit "$beta_tag" --prerelease
-              echo "Marked superseded beta $beta_tag as prerelease."
+              gh release delete "$beta_tag" --yes
+              echo "Removed superseded beta release $beta_tag; tag preserved."
             done < <(gh api "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' |
                      grep -E "^${version_regex}b[0-9]+$" || true)
           fi
