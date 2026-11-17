@@ -53,9 +53,10 @@ Imágenes reales de FBM Card funcionando en Home Assistant. El aspecto puede var
 
 <img src="assets/screenshots/tarjeta-equipo.webp" alt="Tarjeta del equipo Grupo Egido Pintobasket Negro mostrando su clasificación" width="350">
 
-**Tarjeta de competición**, con la temporada, jornadas y clasificación archivada:
+**Tarjeta de competición**, con clasificación, resultados de la última jornada y próximos partidos:
 
-<img src="assets/screenshots/tarjeta-competicion.webp" alt="Tarjeta de competición FBM con equipos y clasificación" width="350">
+<img src="assets/screenshots/tarjeta-competicion-clasificacion.png" alt="Tarjeta de competición FBM con clasificación y resultados de la última jornada, escudos y marcadores" width="350">
+<img src="assets/screenshots/tarjeta-competicion-proximos.png" alt="Tarjeta de competición FBM con próximos partidos por jornada, escudos, hora y pabellón" width="350">
 
 **Actualizaciones:** conserva la identidad invitada y la configuración existente. No elimines ni vuelvas a añadir la integración, ni registres otra vez el dispositivo, solo por actualizar la tarjeta.
 
