@@ -4,7 +4,7 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.14.
+**Versión estable:** v0.2.15.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
@@ -23,7 +23,7 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.14](RELEASE_0.2.14_NOTES.md)
+[Novedades de v0.2.15](RELEASE_0.2.15_NOTES.md)
 
 ## Instalación
 
@@ -106,6 +106,10 @@ equipo_fijo:
 Es preferible configurar la tarjeta de competición desde el editor visual, seleccionando una competición seguida. Las opciones disponibles dependen de la versión instalada. No inventes identificadores de competición.
 
 ## Sincronización y cobertura
+
+Desde **v0.2.15**, FBM Card descarga las estadísticas iniciales en lotes consecutivos de hasta cinco jugadores, con medio segundo entre jugadores consultados y dos segundos entre lotes. Al añadir una competición, comienza automáticamente cuando sus plantillas están archivadas. Guarda el progreso de cada lote para continuar tras un reinicio. Ante errores, aumenta la pausa desde diez segundos hasta cinco minutos y reintenta cada lote una vez antes de continuar. Los datos pendientes permanecen visibles en la cobertura y se vuelven a revisar en los ciclos posteriores.
+
+La frecuencia programada se aplica al mantenimiento posterior. La duración de la primera descarga depende de las respuestas del servidor de FBM.
 
 FBM Card guarda los últimos datos archivados y permite actualizar estadísticas de jugadores en lotes limitados. Omite registros completos cuando el número de partidos archivados coincide con las apariciones oficiales y existen puntos por partido. Los jugadores sin apariciones no necesitan consultas de estadísticas de partidos.
 

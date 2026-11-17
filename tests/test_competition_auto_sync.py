@@ -72,6 +72,8 @@ class Hass:
         return fn(*args)
     def async_create_task(self,coro):
         return asyncio.create_task(coro)
+    def async_create_background_task(self, coro, name):
+        return asyncio.create_task(coro, name=name)
 
 class FakeClient:
     pass
@@ -90,6 +92,124 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
         self.hass=Hass()
         self.updater=mod.CompetitionAutoUpdater(
             self.hass,"test",FakeClient(),self.path,Archive)
+
+    def bootstrap_rosters(self, size=7):
+        archive = Archive(self.path)
+        for team in ("a", "b"):
+            archive.record(IDENT, "roster", {"jugadores": [
+                {"id": f"{team}-{index}", "partidos_jugados": 1}
+                for index in range(size)]}, subject=team)
+        return archive
+
+    async def test_initial_download_runs_all_teams_without_maintenance_wait(self):
+        archive = self.bootstrap_rosters()
+        self.updater.client.async_player_statistics = AsyncMock(
+            side_effect=lambda player, team: {
+                "jugador": player, "equipo": team,
+                "globales": {"estadisticas": {"puntos_totales": 4}},
+                "partidos": {"partidos": [{"id_partido": "match", "puntos": 4}]}})
+        await self.updater._save_state({"players": {"offset": 3},
+                                        "group_index": 1})
+        real_batch = mod.sync_player_stats_batch
+        with patch.object(mod, "sync_player_stats_batch", wraps=real_batch) as batch:
+            with patch.object(mod.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+                await self.updater.async_start(True, True)
+                await self.updater._bootstrap_task
+        self.assertEqual(self.updater.client.async_player_statistics.await_count, 14)
+        self.assertEqual([call.kwargs["offset"] for call in batch.await_args_list],
+                         [0, 5, 0, 5])
+        self.assertTrue(all(call.kwargs["limit"] == 5 for call in batch.await_args_list))
+        self.assertIn(mod.BOOTSTRAP_BATCH_PAUSE,
+                      [call.args[0] for call in sleep.await_args_list])
+        for team in ("a", "b"):
+            for index in range(7):
+                self.assertIsNotNone(archive.latest(IDENT, "player_stats", f"{team}-{index}"))
+        state = await self.updater._read_state()
+        self.assertEqual(state["players"], {"offset": 3})
+        self.assertEqual(state["group_index"], 1)
+        self.assertEqual(state["bootstrap_completed_groups"], ["group"])
+        await self.updater.async_stop()
+
+    async def test_initial_download_resumes_saved_batch_after_restart(self):
+        self.bootstrap_rosters()
+        await self.updater._save_state({"bootstrap": {
+            "group_id": "group", "team_index": 1, "offset": 5}})
+        restarted = mod.CompetitionAutoUpdater(
+            self.hass, "test", FakeClient(), self.path, Archive)
+        with patch.object(mod, "sync_player_stats_batch", new_callable=AsyncMock) as batch:
+            batch.return_value = {"status": "ok", "next_offset": None}
+            with patch.object(mod.asyncio, "sleep", new_callable=AsyncMock):
+                await restarted._run_bootstrap()
+        self.assertEqual(batch.await_count, 1)
+        self.assertEqual(batch.await_args.args[3], "b")
+        self.assertEqual(batch.await_args.kwargs["offset"], 5)
+
+    async def test_initial_errors_back_off_retry_once_and_allow_next_team(self):
+        self.bootstrap_rosters(size=1)
+        with patch.object(mod, "sync_player_stats_batch", new_callable=AsyncMock) as batch:
+            batch.side_effect = [
+                {"status": "partial", "errors": 1, "next_offset": None},
+                {"status": "partial", "errors": 1, "next_offset": None},
+                {"status": "ok", "errors": 0, "next_offset": None}]
+            with patch.object(mod.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+                await self.updater._run_bootstrap()
+        self.assertEqual([call.args[3] for call in batch.await_args_list], ["a", "a", "b"])
+        self.assertEqual([call.args[0] for call in sleep.await_args_list], [10, 20, 2])
+        # Incomplete source data remain eligible for normal retry cycles,
+        # rather than making the initial worker spin indefinitely.
+        with patch.object(mod, "sync_player_stats_batch", new_callable=AsyncMock) as batch:
+            await self.updater._run_bootstrap()
+            batch.assert_not_awaited()
+
+    async def test_initial_retry_delay_survives_restart(self):
+        from datetime import datetime, timedelta, timezone
+        self.bootstrap_rosters(size=1)
+        await self.updater._save_state({"bootstrap": {
+            "group_id": "group", "team_index": 1, "offset": 0,
+            "retry_attempt": 1, "failures": 1,
+            "retry_at": (datetime.now(timezone.utc) + timedelta(seconds=20)).isoformat()}})
+        with patch.object(mod, "sync_player_stats_batch", new_callable=AsyncMock) as batch:
+            batch.return_value = {"status": "ok", "next_offset": None}
+            with patch.object(mod.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+                await self.updater._run_bootstrap()
+        self.assertGreater(sleep.await_args_list[0].args[0], 15)
+        self.assertEqual(batch.await_args.args[3], "b")
+
+    async def test_unfollow_during_initial_pause_stops_requests(self):
+        archive = self.bootstrap_rosters()
+        async def unfollow(_delay):
+            archive.unfollow(IDENT)
+        with patch.object(mod, "sync_player_stats_batch", new_callable=AsyncMock) as batch:
+            batch.return_value = {"status": "ok", "next_offset": 5}
+            with patch.object(mod.asyncio, "sleep", side_effect=unfollow):
+                await self.updater._run_bootstrap()
+        self.assertEqual(batch.await_count, 1)
+
+    async def test_unload_cancels_initial_download_at_committed_cursor(self):
+        self.bootstrap_rosters()
+        paused = asyncio.Event()
+        async def wait(_delay):
+            paused.set()
+            await asyncio.Event().wait()
+        with patch.object(mod, "sync_player_stats_batch", new_callable=AsyncMock) as batch:
+            batch.return_value = {"status": "ok", "next_offset": 5}
+            with patch.object(mod.asyncio, "sleep", side_effect=wait):
+                await self.updater.async_start(True, True)
+                await asyncio.wait_for(paused.wait(), timeout=2)
+                self.updater.request_bootstrap()
+                self.updater._player_tick(None)
+                self.assertEqual(len(self.updater._tasks), 1)
+                await self.updater.async_stop()
+        cursor = (await self.updater._read_state())["bootstrap"]
+        self.assertEqual(cursor["offset"], 5)
+        self.assertTrue(self.updater._bootstrap_task.cancelled())
+
+    async def test_disabled_initial_download_waits_for_explicit_enable(self):
+        self.bootstrap_rosters()
+        await self.updater.async_start(True, False)
+        self.updater.request_bootstrap()
+        self.assertIsNone(self.updater._bootstrap_task)
+        await self.updater.async_stop()
 
     async def test_missing_fixtures_bootstrap_ignores_stale_check_timestamp(self):
         from datetime import datetime, timezone

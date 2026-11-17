@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.15 — English
+
+- Replace historical decompiled excerpts in the protocol and followed-group documentation with independently written API references, following the HACS review.
+- Download initial competition player statistics in consecutive five-player batches, paced by two-second pauses and the existing per-player delay.
+- Start after following, startup or roster refresh. Persist initial progress separately from maintenance, resume after restart and stop on unload or unfollow.
+- Back off progressively on errors, retry each failed batch once, then continue with other players. Incomplete data remain visible and eligible for subsequent scheduled retries.
+
+## v0.2.15 — Español
+
+- Sustituye extractos descompilados de la documentación de protocolo y grupos seguidos por referencias de API redactadas con palabras propias, siguiendo la revisión de HACS.
+- Descarga inicial de estadísticas de la competición con lotes consecutivos de cinco jugadores, pausas de dos segundos y la espera existente entre jugadores.
+- Inicio al seguir una competición, arrancar la integración o actualizar las plantillas. Progreso persistente independiente del mantenimiento, reanudación tras reinicio y parada al descargar la integración o dejar de seguir el grupo.
+- Espera creciente ante errores y un reintento por lote fallido antes de continuar. Los datos incompletos permanecen visibles y se reintentan en las pasadas programadas posteriores.
+
 ## v0.2.14 · English
 
 - Recent results show the latest matchday with published scores, using the shared scoreboard and official crests.
