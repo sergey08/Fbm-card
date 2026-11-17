@@ -23,7 +23,7 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.15](RELEASE_0.2.15_NOTES.md)
+[Novedades de v0.2.15](RELEASE_0.2.15_NOTES.md) · [Histórico de versiones](docs/releases/)
 
 ## Instalación
 
