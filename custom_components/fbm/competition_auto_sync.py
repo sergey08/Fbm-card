@@ -1,7 +1,8 @@
 """Opt-in, restart-safe scheduled FBM refresh.
 
 Native HA event listeners only; never run unless options opt in.
-Each tick performs at most one followed group or one five-player batch.
+Maintenance ticks perform one group or five-player batch. Initial downloads
+continue between batches with pacing and a separately persisted cursor.
 Only public team data is visible in the regular HA sensor.
 """
 from __future__ import annotations
@@ -25,6 +26,9 @@ PLAYER_PENDING_RECHECK_DELAY = timedelta(hours=6)
 PLAYER_FULL_RECHECK_INTERVAL = timedelta(days=7)
 ROSTER_FULL_RECHECK_INTERVAL = timedelta(days=7)
 GROUP_PARTIAL_RETRY_INTERVAL = timedelta(minutes=30)
+BOOTSTRAP_BATCH_PAUSE = 2
+BOOTSTRAP_ERROR_PAUSE = 10
+BOOTSTRAP_MAX_ERROR_PAUSE = 300
 
 
 class CompetitionAutoUpdater:
@@ -39,6 +43,8 @@ class CompetitionAutoUpdater:
         self._cancel = []
         self._tasks = set()
         self._stopped = False
+        self._players_enabled = False
+        self._bootstrap_task = None
         self._group_lock = asyncio.Lock()
         self._player_lock = asyncio.Lock()
         self._store_lock = asyncio.Lock()
@@ -115,8 +121,10 @@ class CompetitionAutoUpdater:
             self._cancel.append(async_track_time_interval(
                 self.hass, self._group_tick, GROUP_INTERVAL))
         if players:
+            self._players_enabled = True
             self._cancel.append(async_track_time_interval(
                 self.hass, self._player_tick, PLAYER_INTERVAL))
+            self.request_bootstrap()
 
     async def async_stop(self):
         self._stopped = True
@@ -137,6 +145,107 @@ class CompetitionAutoUpdater:
     def _player_tick(self, _now):
         if not self._stopped and not self._player_lock.locked():
             self._spawn(self._run_players())
+            self.request_bootstrap()
+
+    @callback
+    def request_bootstrap(self):
+        """Wake initial downloads after startup, following or roster refresh."""
+        if (self._stopped or not self._players_enabled
+                or (self._bootstrap_task is not None
+                    and not self._bootstrap_task.done())):
+            return
+        self._bootstrap_task = self.hass.async_create_background_task(
+            self._run_bootstrap(), f"fbm_initial_sync_{self.entry_id}")
+        self._tasks.add(self._bootstrap_task)
+        self._bootstrap_task.add_done_callback(self._tasks.discard)
+
+    async def _run_bootstrap(self):
+        # Share the maintenance lock so player requests never overlap.
+        async with self._player_lock:
+            try:
+                await self._run_bootstrap_impl()
+            except Exception:
+                await self._mark("players", "failed")
+
+    async def _run_bootstrap_impl(self):
+        while not self._stopped:
+            archive, groups = await self._archive_and_groups()
+            state = await self._read_state()
+            followed = {g["group_id"] for g in groups}
+            completed = set(state.get("bootstrap_completed_groups", [])) & followed
+            cursor = state.get("bootstrap", {})
+            group_id = cursor.get("group_id")
+            if group_id not in followed or group_id in completed:
+                group_id = await self.hass.async_add_executor_job(
+                    self._bootstrap_priority, archive,
+                    [g for g in groups if g["group_id"] not in completed])
+                cursor = {"group_id": group_id, "team_index": 0, "offset": 0}
+            if group_id is None:
+                return
+            selected = next(g for g in groups if g["group_id"] == group_id)
+            identity = {k: selected[k] for k in
+                        ("season_id", "phase_id", "group_id")}
+            identity["season_verified"] = True
+            standing = await self.hass.async_add_executor_job(
+                archive.latest, identity, "standings")
+            rows = (standing or {}).get("payload", {}).get("clasificacion", [])
+            team_ids = [row["id"] for row in rows[:20]]
+            team_index = int(cursor.get("team_index", 0))
+            if team_index >= len(team_ids):
+                completed.add(group_id)
+                await self._save_state({"bootstrap": {},
+                    "bootstrap_completed_groups": sorted(completed)})
+                continue
+            # Wait for the group download to supply every team's roster.
+            roster = await self.hass.async_add_executor_job(
+                archive.latest, identity, "roster", team_ids[team_index])
+            if roster is None:
+                await self._save_state({"bootstrap": cursor})
+                return
+            retry_at = cursor.get("retry_at")
+            if retry_at:
+                remaining = (datetime.fromisoformat(retry_at)
+                             - datetime.now(timezone.utc)).total_seconds()
+                if remaining > 0:
+                    await asyncio.sleep(min(remaining, BOOTSTRAP_MAX_ERROR_PAUSE))
+                cursor.pop("retry_at", None)
+                await self._save_state({"bootstrap": cursor})
+            if self._stopped:
+                return
+            response = await sync_player_stats_batch(
+                self.client, archive, identity, team_ids[team_index],
+                offset=int(cursor.get("offset", 0)), limit=5)
+            if response.get("status") == "not_followed":
+                continue
+            if response.get("status") not in ("ok", "partial"):
+                await self._mark("players", "failed")
+                return
+            failures = int(cursor.get("failures", 0))
+            retry = response.get("errors", 0) > 0 and not cursor.get("retry_attempt")
+            pause = BOOTSTRAP_BATCH_PAUSE
+            if response.get("errors", 0) > 0:
+                failures = min(failures + 1, 6)
+                pause = min(BOOTSTRAP_ERROR_PAUSE * 2 ** (failures - 1),
+                            BOOTSTRAP_MAX_ERROR_PAUSE)
+            else:
+                failures = 0
+            if retry:
+                cursor = {**cursor, "retry_attempt": 1}
+            else:
+                offset = response.get("next_offset")
+                cursor = {"group_id": group_id,
+                          "team_index": team_index if offset is not None else team_index + 1,
+                          "offset": offset if offset is not None else 0}
+            cursor["failures"] = failures
+            cursor["retry_at"] = (datetime.now(timezone.utc)
+                                  + timedelta(seconds=pause)).isoformat()
+            # Each batch is committed before sleeping. Restart resumes here.
+            await self._save_state({"bootstrap": cursor})
+            await self._mark("players", response["status"], {
+                **response, "retry_pending": int(retry)})
+            await asyncio.sleep(pause)
+            cursor.pop("retry_at", None)
+            await self._save_state({"bootstrap": cursor})
 
     def _spawn(self, coro):
         task = self.hass.async_create_task(coro)
@@ -276,6 +385,8 @@ class CompetitionAutoUpdater:
                                         "group_partial_at": partial_groups})
                 self.group_checked_at = checks
             await self._mark("groups", status if status in ("ok", "partial") else "failed")
+            if status in ("ok", "partial"):
+                self.request_bootstrap()
         except Exception:
             # Never leak service errors, IDs or player details into HA state.
             # The archive retains the last successful snapshot.

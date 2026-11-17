@@ -107,6 +107,10 @@ Es preferible configurar la tarjeta de competición desde el editor visual, sele
 
 ## Sincronización y cobertura
 
+La beta **v0.2.15b1** descarga las estadísticas iniciales en lotes consecutivos de hasta cinco jugadores, con medio segundo entre jugadores consultados y dos segundos entre lotes. Al añadir una competición, comienza automáticamente cuando sus plantillas están archivadas. Guarda el progreso de cada lote para continuar tras un reinicio. Ante errores, aumenta la pausa desde diez segundos hasta cinco minutos y reintenta cada lote una vez antes de continuar. Los datos pendientes permanecen visibles en la cobertura y se vuelven a revisar en los ciclos posteriores.
+
+La frecuencia programada se aplica al mantenimiento posterior. La duración de la primera descarga depende de las respuestas del servidor de FBM. Para probar la beta, activa las versiones preliminares de FBM Card en HACS y selecciona `v0.2.15b1`.
+
 FBM Card guarda los últimos datos archivados y permite actualizar estadísticas de jugadores en lotes limitados. Omite registros completos cuando el número de partidos archivados coincide con las apariciones oficiales y existen puntos por partido. Los jugadores sin apariciones no necesitan consultas de estadísticas de partidos.
 
 La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por grupo y totales (`teams`, `rosters`, `players`, `complete`, `pending`, `missing_rosters`, `coverage_percent`). El porcentaje mide la **cobertura de las apariciones registradas y archivadas hasta ese momento**, no garantiza que FBM haya publicado estadísticas futuras.

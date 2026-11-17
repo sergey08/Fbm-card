@@ -125,6 +125,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             updated_entry.options.get("auto_players") is True)
         if previous != desired:
             await hass.config_entries.async_reload(updated_entry.entry_id)
+        else:
+            updater = hass.data.get(DOMAIN, {}).get(
+                updated_entry.entry_id, {}).get("auto_updater")
+            if updater is not None:
+                updater.request_bootstrap()
 
     entry.async_on_unload(entry.add_update_listener(_options_updated))
     # Forward platforms only once the options and scheduler are initialized.
