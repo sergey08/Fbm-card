@@ -1,1 +1,7 @@
-La tarjeta `fbm-card.js` se empaquetará aquí en la integración. El recurso previsto es `/fbm_static/fbm-card.js`. La integración sirve el archivo pero el registro automático en Lovelace aún está pendiente de implementar y probar. No usar datos externos a FBM.
+# Recursos Lovelace de FBM Card
+
+La integración distribuye `fbm-card.js` y lo sirve desde una ruta que incorpora la versión instalada. En modo de almacenamiento de Lovelace, registra o actualiza el recurso automáticamente.
+
+Para instalar FBM Card desde el catálogo predeterminado de HACS y añadir las tarjetas al panel, consulta la [guía de instalación](../../../README.md#instalación).
+
+El JavaScript empaquetado se mantiene sincronizado con `fbm-card.js` en la raíz del repositorio.
