@@ -24,7 +24,7 @@ PLAYER_INTERVAL = timedelta(minutes=10)
 PLAYER_CYCLE_DELAY = timedelta(hours=24)
 PLAYER_PENDING_RECHECK_DELAY = timedelta(hours=6)
 PLAYER_FULL_RECHECK_INTERVAL = timedelta(days=7)
-ROSTER_FULL_RECHECK_INTERVAL = timedelta(days=7)
+ROSTER_FULL_RECHECK_INTERVAL = timedelta(days=1)
 GROUP_PARTIAL_RETRY_INTERVAL = timedelta(minutes=30)
 BOOTSTRAP_BATCH_PAUSE = 2
 BOOTSTRAP_ERROR_PAUSE = 10
@@ -342,7 +342,7 @@ class CompetitionAutoUpdater:
         await self._save_state({"group_index": (index + 1) % len(groups)})
         if self._stopped:
             return
-        # Refresh all official rosters at least weekly, even if no fixture
+        # Refresh all official rosters daily, even if no fixture
         # result changed. Newly registered players and corrections must not
         # remain hidden just because match scores are unchanged.
         roster_checks = state.get("roster_checked_at", {})
@@ -386,6 +386,15 @@ class CompetitionAutoUpdater:
                 self.group_checked_at = checks
             await self._mark("groups", status if status in ("ok", "partial") else "failed")
             if status in ("ok", "partial"):
+                if self._players_enabled and response.get("roster_records_written", 0):
+                    # Revisit changed rosters promptly. Unchanged player
+                    # snapshots are still skipped by the paced bootstrap.
+                    async with self._player_lock:
+                        current = await self._read_state()
+                        completed = current.get("bootstrap_completed_groups", [])
+                        if group_id in completed:
+                            await self._save_state({"bootstrap_completed_groups": [
+                                value for value in completed if value != group_id]})
                 self.request_bootstrap()
         except Exception:
             # Never leak service errors, IDs or player details into HA state.

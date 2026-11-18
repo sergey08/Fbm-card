@@ -51,11 +51,11 @@ Completar el primer recorrido significa haber procesado sus plantillas. El porce
 
 ## Mantenimiento incremental
 
-El programador consulta como máximo un grupo por turno de cinco minutos y aplica una política de frecuencia según la actividad del calendario. Los calendarios se solicitan para el año deportivo completo. Los grupos con una descarga parcial se vuelven a intentar tras la espera correspondiente.
+El programador consulta como máximo un grupo por turno de cinco minutos y aplica una política de frecuencia según la actividad del calendario. Incluso sin actividad próxima se revisan el calendario y la clasificación cada seis horas. Los calendarios se solicitan para el año deportivo completo. Los grupos con una descarga parcial se vuelven a intentar tras la espera correspondiente.
 
 Después de la descarga inicial, los turnos de estadísticas mantienen su intervalo de diez minutos y sus lotes de cinco jugadores. El recorrido y los reintentos se conservan entre reinicios. Un ciclo completo tiene una espera de 24 horas. Si quedan instantáneas incompletas, la siguiente pasada puede comenzar a las seis horas.
 
-Los registros completos se omiten cuando el número de encuentros únicos cubre las participaciones oficiales y todos sus puntos están presentes. Las plantillas y estadísticas tienen revisiones completas periódicas de siete días para recoger cambios y correcciones tardías.
+Los registros completos se omiten cuando el número de encuentros únicos cubre las participaciones oficiales y todos sus puntos están presentes. Las plantillas se revisan a diario y sus cambios reabren la descarga gradual de estadísticas pendientes. Las estadísticas conservan además su revisión completa de siete días para detectar correcciones tardías.
 
 Los jugadores con cero participaciones conocidas se contabilizan por separado y vuelven a ser elegibles cuando la plantilla registra su primer encuentro.
 

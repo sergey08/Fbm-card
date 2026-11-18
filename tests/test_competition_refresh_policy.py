@@ -36,11 +36,11 @@ class PollPolicyTests(unittest.TestCase):
         last = (NOW - timedelta(hours=5)).isoformat()
         self.assertTrue(m.should_poll_group(self.schedule, last, NOW))
 
-    def test_quiet_week_skips_and_weekly_rechecks(self):
+    def test_quiet_groups_recheck_after_six_hours(self):
         quiet = {"partidos": [{"fecha": "28/11/2026"}]}
-        last = (NOW - timedelta(days=2)).isoformat()
+        last = (NOW - timedelta(hours=5, minutes=59)).isoformat()
         self.assertFalse(m.should_poll_group(quiet, last, NOW))
-        last = (NOW - timedelta(days=8)).isoformat()
+        last = (NOW - timedelta(hours=6)).isoformat()
         self.assertTrue(m.should_poll_group(quiet, last, NOW))
 
     def test_invalid_metadata_never_suppresses_poll(self):
