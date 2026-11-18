@@ -621,7 +621,18 @@ class AutoTests(unittest.IsolatedAsyncioTestCase):
             await self.updater._run_group()
         self.assertEqual(sync.await_args.kwargs["fetch_rosters"],"on_change")
 
-    async def test_weekly_roster_recheck_timestamp_saved_on_success(self):
+    async def test_changed_rosters_reopen_completed_player_download(self):
+        self.updater._players_enabled = True
+        await self.updater._save_state({"bootstrap_completed_groups": ["group"]})
+        with patch.object(mod, "sync_group", new_callable=AsyncMock) as sync, \
+                patch.object(self.updater, "request_bootstrap") as wake:
+            sync.return_value = {"status": "ok", "roster_records_written": 1}
+            await self.updater._run_group()
+        state = await self.updater._read_state()
+        self.assertEqual(state["bootstrap_completed_groups"], [])
+        wake.assert_called_once()
+
+    async def test_daily_roster_recheck_timestamp_saved_on_success(self):
         with patch.object(mod,"sync_group",new_callable=AsyncMock) as sync:
             sync.return_value={"status":"ok"}
             await self.updater._run_group()

@@ -1,7 +1,7 @@
 """Conservative schedule-aware polling for followed FBM groups.
 
 This module is pure and never calls external services. Poll around known game
-dates, once after a restart/initial subscription, or at least once per week to
+dates, once after a restart/initial subscription, or at least once every six hours to
 catch reschedules and unexpected source corrections.
 """
 from __future__ import annotations
@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 
 FBM_TIMEZONE = ZoneInfo("Europe/Madrid")
+QUIET_GROUP_INTERVAL = timedelta(hours=6)
 PENDING_SCORE_INTERVAL = timedelta(minutes=30)
 
 
@@ -27,7 +28,7 @@ def should_poll_group(fixtures: dict | None, last_checked: str | None,
     if previous.tzinfo is None or previous > now:
         return True
     age = now - previous
-    if age >= timedelta(days=7):
+    if age >= QUIET_GROUP_INTERVAL:
         return True
     if age < PENDING_SCORE_INTERVAL:
         return False
