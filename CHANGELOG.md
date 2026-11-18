@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased / Próxima versión
+## v0.2.16 — English / Español
 
 - Recheck quiet group calendars and standings every six hours and refresh rosters daily. Changed rosters reopen paced downloads for missing player statistics.
 - Revisar calendario y clasificación de grupos sin actividad cada seis horas y plantillas a diario. Los cambios de plantilla reactivan la descarga gradual de estadísticas pendientes.
