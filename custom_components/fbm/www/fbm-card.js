@@ -179,16 +179,19 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
       statsButton.type = "button";
       statsButton.disabled = state.busy;
       statsButton.addEventListener("click", () => loadStats(player.id));
-      details.append(statsButton);
       const stats = state.playerStatsTeamId === pinned?.id &&
         state.playerStatsEntryId === state.entry &&
         state.playerStatsPlayerId === player.id ? state.playerStats : null;
+      if (!stats && !state.busy) details.append(statsButton);
       if (stats) {
         const globals = stats.globales?.estadisticas || stats.globales || {};
+        const games = (Array.isArray(stats.partidos) ? stats.partidos : stats.partidos?.partidos || [])
+          .filter(game => game && matchColumns.some(([key]) => numeric(game[key])));
         const available = [
           ["puntos_totales", "Puntos totales"], ["media_puntos", "Media puntos"],
           ["asistencias", "Asistencias"], ["faltas_cometidas", "Faltas"],
           ["faltas_recibidas", "F. recibidas"], ["rebotes", "Rebotes"],
+          ["rebotes_defensivos", "Rebotes defensivos"], ["rebotes_ofensivos", "Rebotes ofensivos"],
           ["recuperaciones", "Recuperaciones"], ["perdidas", "Pérdidas"],
           ["valoracion", "Valoración"]
         ].filter(([key]) => numeric(globals[key]));
@@ -198,9 +201,18 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
           for (const [key, label] of available) globalGrid.append(chip(label, globals[key]));
           details.append(globalGrid);
         }
-        const games = Array.isArray(stats.partidos) ? stats.partidos : stats.partidos?.partidos || [];
-        details.append(view._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
-        if (!games.length) details.append(view._element("p", "No hay partidos con estadísticas disponibles.", "fbm-player-caption"));
+        const averages = view._element("div", "", "fbm-stat-grid");
+        for (const [key, label] of matchColumns) {
+          const values = games.map(game => game[key]).filter(numeric);
+          if (!numeric(globals[key]) && values.length) {
+            const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+            averages.append(chip(label + "/partido (" + values.length + " PJ)", Number(average.toFixed(1))));
+          }
+        }
+        if (averages.childElementCount) {
+          details.append(view._element("h4", "Medias de los partidos disponibles", "fbm-subheading"), averages);
+        }
+        if (games.length) details.append(view._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
         for (const game of games) {
           const match = view._element("article", "", "fbm-match");
           const matchHeader = view._element("div", "", "fbm-match-header");
@@ -747,6 +759,8 @@ class FBMCard extends HTMLElement {
       if (state.entry === entryId && state.selected === teamId)
         state.message = "No se pudo obtener la ficha de este jugador desde FBM.";
     } finally { state.busy = false; this._render(); }
+    if (state.entry === entryId && state.selected === teamId && state.playerDetailPlayerId === playerId)
+      await this._experimentalPlayerStats(playerId);
   }
 
   async _experimentalPlayerStats(playerId) {
@@ -2052,6 +2066,7 @@ class FBMCompetitionCard extends HTMLElement {
             this._playerId = this._playerId === id ? null : id;
             this._playerStats = null;
             this._playerError = "";
+            if (this._playerId) return this._openPlayer(this._roster.find(player => player.id === id));
             this._render();
           }, id => this._openPlayer(this._roster.find(player => player.id === id)));
           if (this._playerError) card.append(this._el("p", this._playerError, "muted"));
