@@ -41,7 +41,7 @@ test("competition card shows standings and loads roster on team click",async()=>
     calls.push(request.type);
     if(request.type==="fbm/client/entries")return {entries:["entry"]};
     if(request.type==="fbm/competition/team_roster")
-      return {jugadores:[{id:"p1",nombre:"Jugador de prueba"}],
+      return {jugadores:[{id:"p1",nombre:"Jugador de prueba",puntos_totales:22,puntos_por_partido:11}],
         partidos:[{local:"Equipo A",visitante:"Equipo B",fecha:"12/11/2026",jornada:3,marcador:{local:44,visitante:39}},
           {local:"Equipo B",visitante:"Equipo A",fecha:"19/04/2027",jornada:4}]};
     if(request.type==="fbm/team/schedule") {
@@ -82,11 +82,13 @@ test("competition card shows standings and loads roster on team click",async()=>
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-roster").length);
   assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-player-photo").length);
+  assert.ok(walk(c.shadowRoot,x=>x.tagName==="strong" && x.textContent==="22").length);
+  assert.equal(walk(c.shadowRoot,x=>x.className==="fbm-player-matches").length,0);
   const playerButton=walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Ver ficha")[0];
   playerButton.listeners.click();
   await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(calls,["fbm/client/entries","fbm/competition/team_roster","fbm/team/schedule","fbm/team/players","fbm/competition/team_player_stats"]);
-  assert.ok(walk(c.shadowRoot,x=>x.tagName==="strong" && x.textContent==="22").length);
+
   assert.ok(walk(c.shadowRoot,x=>x.tagName==="strong" && x.textContent==="12").length);
   const back=walk(c.shadowRoot,x=>x.textContent==="‹ Volver a la competición")[0];
   back.listeners.click();
