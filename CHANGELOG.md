@@ -2,8 +2,8 @@
 
 ## Unreleased — English / Español
 
-- Opening a player profile shows a single summary without duplicate metrics, followed by the games with published statistics.
-- Al abrir la ficha de un jugador se muestra un único resumen sin métricas duplicadas, seguido de los partidos con estadísticas publicadas.
+- Show six season metrics on each player card before opening the profile. Opening the profile reveals individual games with published statistics.
+- Mostrar seis métricas de temporada en cada jugador antes de abrir su ficha. La ficha desplegada muestra los partidos con estadísticas publicadas.
 
 ## v0.2.16 — English / Español
 

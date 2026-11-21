@@ -57,6 +57,30 @@ class BridgeTests(unittest.TestCase):
         self.hass = types.SimpleNamespace(data={'fbm': {'entry': {'cliente_independiente': self.client}}})
         self.connection = types.SimpleNamespace(user=types.SimpleNamespace(is_admin=True), send_result=MagicMock(), send_error=MagicMock())
 
+    def test_roster_summary_uses_published_values_and_omits_partial_totals(self):
+        archive = MagicMock()
+        archive.latest.return_value = {"payload": {
+            "globales": {},
+            "partidos": [{"puntos": 5, "faltas_cometidas": 0, "valoracion": -2},
+                         {"puntos": None, "faltas_cometidas": 2, "valoracion": None}],
+        }}
+        identity = {"season_id": "26/27"}
+        player = {"id": "p1", "partidos_jugados": 2, "minutos_por_partido": 20}
+        [summary] = module._roster_summaries(archive, identity, [player])
+        archive.latest.assert_called_once_with(identity, "player_stats", "p1")
+        self.assertEqual(summary, {**player, "puntos_por_partido": 5,
+                                   "partidos_con_puntos": 1, "faltas_por_partido": 1,
+                                   "partidos_con_faltas": 2, "valoracion_por_partido": -2,
+                                   "partidos_con_valoracion": 1})
+        archive.latest.return_value["payload"]["globales"] = {
+            "puntos_totales": 0, "media_puntos": 0, "faltas_cometidas": 0,
+        }
+        [summary] = module._roster_summaries(archive, identity, [player])
+        self.assertEqual(summary["puntos_totales"], 0)
+        self.assertEqual(summary["puntos_por_partido"], 0)
+        self.assertEqual(summary["faltas_por_partido"], 0)
+        self.assertNotIn("partidos_con_puntos", summary)
+
     def test_non_admin_can_read_fbm_without_changing_integration(self):
         self.connection.user.is_admin = False
         cases = [

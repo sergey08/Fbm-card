@@ -166,15 +166,23 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
     header.append(person, detailButton);
     item.append(header);
     const overview = view._element("div", "", "fbm-stat-grid");
-    const meanPoints = player.puntos_por_partido ?? player.media_puntos;
-    if (numeric(player.partidos_jugados)) overview.append(chip("Partidos", player.partidos_jugados));
-    if (numeric(meanPoints)) overview.append(chip("Puntos/partido", meanPoints, true));
-    if (numeric(player.minutos_por_partido)) overview.append(chip("Min/partido", player.minutos_por_partido));
-    if (numeric(player.puntos_totales)) overview.append(chip("Puntos totales", player.puntos_totales));
+    const summary = [
+      ["Partidos", player.partidos_jugados],
+      ["Puntos totales", player.puntos_totales],
+      ["Min/partido", player.minutos_por_partido],
+      ["Faltas/partido", player.faltas_por_partido, false, player.partidos_con_faltas],
+      ["Puntos/partido", player.puntos_por_partido ?? player.media_puntos, true, player.partidos_con_puntos],
+      ["Valoración", player.valoracion_por_partido, false, player.partidos_con_valoracion]
+    ];
+    for (const [label, value, emphasize, samples] of summary) {
+      if (!numeric(value)) continue;
+      const field = chip(label, value, emphasize);
+      if (numeric(samples)) field.title = "Media de " + samples + " partidos con datos";
+      overview.append(field);
+    }
+    if (overview.children.length) item.append(overview);
     if (opened) {
       const details = view._element("div", "", "fbm-player-detail");
-      const meta = [opened.equipo, opened.temporada, opened.categoria].filter(Boolean);
-      if (meta.length) details.append(view._element("p", meta.join(" · "), "fbm-player-caption"));
       const statsButton = view._element("button", "Consultar estadísticas por partido", "fbm-action fbm-action-primary");
       statsButton.type = "button";
       statsButton.disabled = state.busy;
@@ -184,29 +192,8 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
         state.playerStatsPlayerId === player.id ? state.playerStats : null;
       if (!stats && !state.busy) details.append(statsButton);
       if (stats) {
-        const globals = stats.globales?.estadisticas || stats.globales || {};
         const games = (Array.isArray(stats.partidos) ? stats.partidos : stats.partidos?.partidos || [])
           .filter(game => game && matchColumns.some(([key]) => numeric(game[key])));
-        const available = [
-          ["puntos_totales", "Puntos totales"], ["media_puntos", "Media puntos"],
-          ["asistencias", "Asistencias"], ["faltas_cometidas", "Faltas"],
-          ["faltas_recibidas", "F. recibidas"], ["rebotes", "Rebotes"],
-          ["rebotes_defensivos", "Rebotes defensivos"], ["rebotes_ofensivos", "Rebotes ofensivos"],
-          ["recuperaciones", "Recuperaciones"], ["perdidas", "Pérdidas"],
-          ["valoracion", "Valoración"]
-        ].filter(([key]) => numeric(globals[key]) &&
-          (key !== "media_puntos" || !numeric(meanPoints)) &&
-          (key !== "puntos_totales" || !numeric(player.puntos_totales)));
-        for (const [key, label] of available) overview.append(chip(label, globals[key]));
-        for (const [key, label] of matchColumns) {
-          if (numeric(globals[key])) continue;
-          if (key === "puntos" && (numeric(meanPoints) || numeric(globals.media_puntos))) continue;
-          const values = games.map(game => game[key]).filter(numeric);
-          if (values.length) {
-            const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-            overview.append(chip(label + "/partido (" + values.length + " PJ)", Number(average.toFixed(1))));
-          }
-        }
         const matches = view._element("section", "", "fbm-player-matches");
         if (games.length) matches.append(view._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
         for (const game of games) {
@@ -224,9 +211,8 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
         }
         if (games.length) details.append(matches);
       }
-      if (overview.children.length) item.append(overview);
-      item.append(details);
-    } else if (overview.children.length) item.append(overview);
+      if (details.children.length) item.append(details);
+    }
     collection.append(item);
   }
   card.append(collection);

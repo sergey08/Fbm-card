@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+from sqlite3 import Error as SQLiteError
 from .competition_sync import sync_group, preview_group
 from .competition_analysis import competition_analysis
 from .competition_match_preview import match_preview
@@ -104,6 +105,61 @@ async def _group_identity(client, msg):
         raise ValueError("Equipo no válido")
     # Read-only official lookup. Never follows groups or creates entities.
     return await client.async_team_group_identity(team_id)
+
+
+def _roster_summaries(archive, identity, players):
+    """Add season figures from published, normalized statistics in SQLite."""
+    summarized = []
+    for row in players:
+        player_id = row.get("id")
+        item = archive.latest(identity, "player_stats", player_id) if player_id else None
+        if not item:
+            summarized.append(row)
+            continue
+        player = dict(row)
+        stats = item["payload"]
+        season = stats["globales"]
+        games = stats["partidos"]
+        played = player.get("partidos_jugados")
+        totals = {key: season.get(key) for key in ("puntos_totales", "media_puntos")}
+        for key, total_key, output, count_key in (
+            ("puntos", "puntos_totales", "puntos_por_partido", "partidos_con_puntos"),
+            ("faltas_cometidas", "faltas_cometidas", "faltas_por_partido", "partidos_con_faltas"),
+            ("valoracion", "valoracion", "valoracion_por_partido", "partidos_con_valoracion"),
+        ):
+            published = [game[key] for game in games if game.get(key) is not None]
+            if key == "puntos":
+                if player.get(output) is not None or player.get("media_puntos") is not None:
+                    continue
+                if totals["media_puntos"] is not None:
+                    player[output] = totals["media_puntos"]
+                    continue
+            total = season.get(total_key)
+            if total is not None and played:
+                player[output] = round(total / played, 1)
+            elif published:
+                player[output] = round(sum(published) / len(published), 1)
+                player[count_key] = len(published)
+        if player.get("puntos_totales") is None:
+            points = [game["puntos"] for game in games if game.get("puntos") is not None]
+            if totals["puntos_totales"] is not None:
+                player["puntos_totales"] = totals["puntos_totales"]
+            elif points and len(points) == played:
+                player["puntos_totales"] = sum(points)
+        summarized.append(player)
+    return summarized
+
+
+def _followed_roster_summaries(entry, team_id, players):
+    archive = entry["competitions_archive_factory"](entry["competitions_sqlite_path"])
+    matching = []
+    for group in archive.followed():
+        identity = {**group, "season_verified": True}
+        if archive.latest(identity, "roster", team_id):
+            matching.append(identity)
+    if len(matching) == 1:
+        return _roster_summaries(archive, matching[0], players)
+    return players
 
 
 async def _roster(client, msg):
@@ -258,7 +314,18 @@ async def ws_group_identity(hass, connection, msg):
 @websocket_api.websocket_command({"type": "fbm/team/players", probatio.Required("entry_id"): str, probatio.Required("equipo"): str})
 @websocket_api.async_response
 async def ws_roster(hass, connection, msg):
-    await _dispatch(hass, connection, msg, _roster)
+    async def roster_with_summary(client, request):
+        roster = await _roster(client, request)
+        entry = hass.data[DOMAIN][request["entry_id"]]
+        if "competitions_archive_factory" in entry and roster.get("jugadores"):
+            try:
+                roster = {**roster, "jugadores": await hass.async_add_executor_job(
+                    _followed_roster_summaries, entry, request["equipo"], roster["jugadores"])}
+            except (OSError, SQLiteError, KeyError, ValueError):
+                pass
+        return roster
+
+    await _dispatch(hass, connection, msg, roster_with_summary)
 
 
 @websocket_api.websocket_command({"type": "fbm/player/detail", probatio.Required("entry_id"): str, probatio.Required("jugador"): str})
@@ -490,6 +557,8 @@ async def ws_competition_team_roster(hass, connection, msg):
                            match.get("local") == team_name or
                            match.get("visitante") == team_name)]
         crests = fixtures["payload"].get("escudos", {}) if fixtures else {}
+        players = await hass.async_add_executor_job(
+            _roster_summaries, archive, identity, players)
         result = {"jugadores": players, "partidos": matches[:200],
                   "escudos": crests,
                   "observed_at": item["observed_at"] if item else None,
