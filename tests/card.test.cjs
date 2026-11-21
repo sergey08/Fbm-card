@@ -803,6 +803,7 @@ test("la ficha de un jugador solo se solicita explícitamente y no afecta a otra
   const requests = [];
   const hass = { callWS: async request => {
     requests.push(request);
+    if (request.type === "fbm/player/stats") return {jugador:"p1",equipo:"teamA",globales:{estadisticas:{}},partidos:{partidos:[]}};
     return { jugador: { id: "p1", nombre: "Jugador ficticio", puntos_totales: 8 }, fuente: "FBM" };
   } };
   first._hass = hass; second._hass = hass;
@@ -813,7 +814,10 @@ test("la ficha de un jugador solo se solicita explícitamente y no afecta a otra
   b.players = [{id:"p2", nombre:"Otro jugador"}]; b.playersTeamId = "teamB"; b.playersEntryId = "entry";
   assert.equal(requests.length, 0);
   await first._experimentalPlayerDetail("p1");
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].type, "fbm/player/stats");
+  assert.equal(a.playerStatsPlayerId, "p1");
+  assert.equal(b.playerStats, null);
   assert.equal(requests[0].type, "fbm/player/detail");
   assert.equal(requests[0].entry_id, "entry");
   assert.equal(requests[0].jugador, "p1");

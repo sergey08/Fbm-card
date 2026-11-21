@@ -84,7 +84,6 @@ test("competition card shows standings and loads roster on team click",async()=>
   assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-player-photo").length);
   const playerButton=walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Ver ficha")[0];
   playerButton.listeners.click();
-  walk(c.shadowRoot,x=>x.textContent==="Consultar estadísticas por partido")[0].listeners.click();
   await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(calls,["fbm/client/entries","fbm/competition/team_roster","fbm/team/schedule","fbm/team/players","fbm/competition/team_player_stats"]);
   assert.ok(walk(c.shadowRoot,x=>x.tagName==="strong" && x.textContent==="22").length);
