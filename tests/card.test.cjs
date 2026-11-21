@@ -916,6 +916,11 @@ test("oculta estadísticas no disponibles pero muestra ceros y valoraciones nega
   const statLabels=nodes.filter(n=>n.className==="fbm-stat-label").map(n=>n.textContent);
   const statValues=nodes.filter(n=>n.className==="fbm-stat-value").map(n=>n.textContent);
   assert.ok(statLabels.includes("Puntos"));
+  assert.equal(statLabels.filter(label => label === "Puntos/partido").length, 1);
+  assert.ok(!statLabels.includes("Puntos/partido (1 PJ)"));
+  const summary = nodes.find(n => n.className === "fbm-stat-grid");
+  assert.ok(flatten(summary).some(n => n.textContent === "Faltas/partido (1 PJ)"));
+  assert.ok(nodes.some(n => n.className === "fbm-player-matches" && flatten(n).some(child => child.textContent === "Equipo Rival")));
   assert.ok(statLabels.includes("Faltas"));
   assert.ok(statLabels.includes("Valoración"));
   assert.ok(statValues.includes("0"),"el cero real debe mostrarse");

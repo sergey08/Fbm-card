@@ -166,11 +166,11 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
     header.append(person, detailButton);
     item.append(header);
     const overview = view._element("div", "", "fbm-stat-grid");
+    const meanPoints = player.puntos_por_partido ?? player.media_puntos;
     if (numeric(player.partidos_jugados)) overview.append(chip("Partidos", player.partidos_jugados));
-    if (numeric(player.puntos_por_partido ?? player.media_puntos)) overview.append(chip("Puntos/partido", player.puntos_por_partido ?? player.media_puntos, true));
+    if (numeric(meanPoints)) overview.append(chip("Puntos/partido", meanPoints, true));
     if (numeric(player.minutos_por_partido)) overview.append(chip("Min/partido", player.minutos_por_partido));
     if (numeric(player.puntos_totales)) overview.append(chip("Puntos totales", player.puntos_totales));
-    if ([player.partidos_jugados, player.puntos_por_partido ?? player.media_puntos, player.minutos_por_partido, player.puntos_totales].some(numeric)) item.append(overview);
     if (opened) {
       const details = view._element("div", "", "fbm-player-detail");
       const meta = [opened.equipo, opened.temporada, opened.categoria].filter(Boolean);
@@ -194,25 +194,21 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
           ["rebotes_defensivos", "Rebotes defensivos"], ["rebotes_ofensivos", "Rebotes ofensivos"],
           ["recuperaciones", "Recuperaciones"], ["perdidas", "Pérdidas"],
           ["valoracion", "Valoración"]
-        ].filter(([key]) => numeric(globals[key]));
-        if (available.length) {
-          details.append(view._element("h4", "Estadísticas globales", "fbm-subheading"));
-          const globalGrid = view._element("div", "", "fbm-stat-grid");
-          for (const [key, label] of available) globalGrid.append(chip(label, globals[key]));
-          details.append(globalGrid);
-        }
-        const averages = view._element("div", "", "fbm-stat-grid");
+        ].filter(([key]) => numeric(globals[key]) &&
+          (key !== "media_puntos" || !numeric(meanPoints)) &&
+          (key !== "puntos_totales" || !numeric(player.puntos_totales)));
+        for (const [key, label] of available) overview.append(chip(label, globals[key]));
         for (const [key, label] of matchColumns) {
+          if (numeric(globals[key])) continue;
+          if (key === "puntos" && (numeric(meanPoints) || numeric(globals.media_puntos))) continue;
           const values = games.map(game => game[key]).filter(numeric);
-          if (!numeric(globals[key]) && values.length) {
+          if (values.length) {
             const average = values.reduce((sum, value) => sum + value, 0) / values.length;
-            averages.append(chip(label + "/partido (" + values.length + " PJ)", Number(average.toFixed(1))));
+            overview.append(chip(label + "/partido (" + values.length + " PJ)", Number(average.toFixed(1))));
           }
         }
-        if (averages.childElementCount) {
-          details.append(view._element("h4", "Medias de los partidos disponibles", "fbm-subheading"), averages);
-        }
-        if (games.length) details.append(view._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
+        const matches = view._element("section", "", "fbm-player-matches");
+        if (games.length) matches.append(view._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
         for (const game of games) {
           const match = view._element("article", "", "fbm-match");
           const matchHeader = view._element("div", "", "fbm-match-header");
@@ -223,12 +219,14 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
           for (const [key, label] of matchColumns) {
             if (numeric(game[key])) matchGrid.append(chip(label, game[key], key === "puntos"));
           }
-          if (matchColumns.some(([key]) => numeric(game[key]))) match.append(matchGrid);
-          details.append(match);
+          match.append(matchGrid);
+          matches.append(match);
         }
+        if (games.length) details.append(matches);
       }
+      if (overview.children.length) item.append(overview);
       item.append(details);
-    }
+    } else if (overview.children.length) item.append(overview);
     collection.append(item);
   }
   card.append(collection);
