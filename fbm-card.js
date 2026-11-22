@@ -2537,7 +2537,7 @@ class FBMCardEditor extends HTMLElement {
     this.shadowRoot.replaceChildren(style, form);
   }
 
-  async _savedPlayersOnDashboard(query) {
+  async _playersOnDashboard(query, entry, rosters) {
     const dashboard = window.location?.pathname.split("/")[1];
     const request = {type: "lovelace/config"};
     if (dashboard && dashboard !== "lovelace") request.url_path = dashboard;
@@ -2545,10 +2545,15 @@ class FBMCardEditor extends HTMLElement {
     const terms = fbmNameTokens(query);
     if (!terms.length) return [];
     const matches = [];
+    const teams = new Map();
     const visit = node => {
       if (Array.isArray(node)) {
         node.forEach(visit);
       } else if (node && typeof node === "object") {
+        if (node.type === "custom:fbm-card" && node.tipo_tarjeta === "equipo" &&
+            typeof node.equipo_fijo?.id === "string" && node.equipo_fijo.id) {
+          teams.set(node.equipo_fijo.id, node.equipo_fijo);
+        }
         if (node.type === "custom:fbm-card" && node.tipo_tarjeta === "jugador") {
           const player = node.jugador_fijo, team = node.equipo_fijo;
           if (typeof player?.id === "string" && player.id &&
@@ -2564,6 +2569,16 @@ class FBMCardEditor extends HTMLElement {
       }
     };
     visit(config);
+    const pending = [...teams.values()].filter(team => !rosters.some(roster => roster.team.id === team.id));
+    for (let index = 0; index < pending.length; index += 3) {
+      await Promise.allSettled(pending.slice(index, index + 3).map(async team => {
+        const result = await this._hass.callWS({
+          type: "fbm/team/players", entry_id: entry, equipo: team.id
+        });
+        if (!Array.isArray(result?.jugadores)) return;
+        rosters.push({team, players: result.jugadores});
+      }));
+    }
     return matches;
   }
 
@@ -2582,7 +2597,7 @@ class FBMCardEditor extends HTMLElement {
     submit.textContent = "Buscar jugador";
     submit.disabled = state.busy;
     const hint = document.createElement("p");
-    hint.textContent = "Busca en FBM, las plantillas archivadas o consultadas en este panel y los jugadores guardados.";
+    hint.textContent = "Busca en FBM, las plantillas archivadas, los equipos fijados en este panel y los jugadores guardados.";
     const results = document.createElement("div");
     results.setAttribute("aria-live", "polite");
     results.textContent = state.message;
@@ -2601,21 +2616,21 @@ class FBMCardEditor extends HTMLElement {
         const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
         if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
         state.entry = entries[0];
+        const scope = fbmRosterScope(state.entry);
+        const cached = fbmLoadedRosters.get(this._hass.connection || this._hass);
+        const rosters = [...(cached?.values() || [])].filter(roster => roster.scope === scope);
         const [online, archived, saved] = await Promise.allSettled([
           this._hass.callWS({type: "fbm/player/search", entry_id: state.entry, texto}),
           this._hass.callWS({type: "fbm/player/search_archived", entry_id: state.entry, texto}),
-          this._savedPlayersOnDashboard(texto)
+          this._playersOnDashboard(texto, state.entry, rosters)
         ]);
         const players = result => result.status === "fulfilled" &&
           Array.isArray(result.value?.jugadores) ? result.value.jugadores : [];
         const local = players(archived);
         const keys = new Set(local.map(row => JSON.stringify([row.jugador.id, row.equipo.id])));
         const terms = fbmNameTokens(texto);
-        const scope = fbmRosterScope(state.entry);
-        const rosters = fbmLoadedRosters.get(this._hass.connection || this._hass);
         const nearby = [];
-        for (const roster of rosters?.values() || []) {
-          if (roster.scope !== scope) continue;
+        for (const roster of rosters) {
           const {id, nombre, categoria, temporada} = roster.team;
           for (const player of roster.players) {
             if (typeof player?.id === "string" && player.id &&

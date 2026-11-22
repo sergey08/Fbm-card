@@ -224,3 +224,27 @@ test("name search finds a player loaded by a team card in the same panel", async
   assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "p1");
   assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
 });
+
+test("name search queries a fixed team even before its roster is opened", async () => {
+  const editor = registry.get("fbm-card").getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"jugador"});
+  editor.hass = {callWS: async ({type, equipo}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "lovelace/config") return {views:[{cards:[{
+      type:"custom:fbm-card", tipo_tarjeta:"equipo", equipo_fijo:{id:"team",nombre:"Equipo"}
+    }]}]};
+    if (type === "fbm/team/players") {
+      assert.equal(equipo, "team");
+      return {jugadores:[{id:"p1",nombre:"Pérez Ruiz, Julián"}]};
+    }
+    return {jugadores:[]};
+  }};
+  const nodes = descendants(editor.shadowRoot);
+  const input = nodes.find(node => node.type === "search");
+  input.value = "julian";
+  input.listeners.input();
+  await nodes.find(node => node.textContent === "Buscar jugador").listeners.click();
+  change(editor, "Jugador", "0");
+  assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "p1");
+  assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
+});
