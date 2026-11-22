@@ -944,13 +944,17 @@ class FBMCard extends HTMLElement {
     if (!Array.isArray(roster) || !roster.some(player => player.id === playerId)) return;
     if (state.playerDetailTeamId === teamId && state.playerDetailPlayerId === playerId && state.playerDetail) {
       state.playerDetail = null; state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
-      state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+      if (this._config.tipo_tarjeta !== "jugador") {
+        state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+      }
       this._render();
       return;
     }
     state.busy = true; state.message = ""; state.playerDetail = null;
     state.playerDetailTeamId = ""; state.playerDetailPlayerId = "";
-    state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+    if (this._config.tipo_tarjeta !== "jugador") {
+      state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+    }
     this._render();
     try {
       const data = await this._hass.callWS({
@@ -965,11 +969,12 @@ class FBMCard extends HTMLElement {
       if (state.entry === entryId && state.selected === teamId)
         state.message = "No se pudo obtener la ficha de este jugador desde FBM.";
     } finally { state.busy = false; this._render(); }
-    if (state.entry === entryId && state.selected === teamId && state.playerDetailPlayerId === playerId)
+    if (this._experimental === state && state.entry === entryId && state.selected === teamId &&
+        state.playerDetailPlayerId === playerId && !state.playerStats)
       await this._experimentalPlayerStats(playerId);
   }
 
-  async _experimentalPlayerStats(playerId) {
+  async _experimentalPlayerStats(playerId, {quiet = false} = {}) {
     const state = this._experimentalState();
     if (state.busy || !state.entry || !state.selected || !this._hass?.callWS ||
         typeof playerId !== "string" || !playerId.trim()) return;
@@ -978,7 +983,9 @@ class FBMCard extends HTMLElement {
       ? state.players : null;
     if (!Array.isArray(roster) || !roster.some(player => player.id === playerId)) return;
     state.busy = true; state.message = "";
-    state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+    if (this._config.tipo_tarjeta !== "jugador") {
+      state.playerStats = null; state.playerStatsTeamId = ""; state.playerStatsPlayerId = ""; state.playerStatsEntryId = "";
+    }
     this._render();
     try {
       const data = await this._hass.callWS({
@@ -988,14 +995,14 @@ class FBMCard extends HTMLElement {
           !Array.isArray(data.partidos?.partidos) || !data.globales?.estadisticas) {
         throw new Error("Estadísticas FBM no válidas");
       }
-      if (state.entry !== entryId || state.selected !== teamId ||
+      if (this._experimental !== state || state.entry !== entryId || state.selected !== teamId ||
           state.playersTeamId !== teamId || state.playersEntryId !== entryId) return;
       state.playerStats = data;
       state.playerStatsTeamId = teamId;
       state.playerStatsPlayerId = playerId;
       state.playerStatsEntryId = entryId;
     } catch (_) {
-      if (state.entry === entryId && state.selected === teamId)
+      if (!quiet && state.entry === entryId && state.selected === teamId)
         state.message = "FBM no ha facilitado estadísticas avanzadas válidas para este jugador.";
     } finally { state.busy = false; this._render(); }
   }
@@ -1220,6 +1227,12 @@ class FBMCard extends HTMLElement {
     } finally {
       state.busy = false;
       if (this._experimental === state) this._render();
+    }
+    const member = state.players?.[0];
+    if (this._experimental === state && member &&
+        [member.puntos_totales, member.faltas_por_partido, member.valoracion_por_partido]
+          .some(value => !Number.isFinite(value))) {
+      await this._experimentalPlayerStats(player.id, {quiet: true});
     }
   }
 
