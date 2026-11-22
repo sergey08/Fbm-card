@@ -2498,6 +2498,39 @@ class FBMCardEditor extends HTMLElement {
     this.shadowRoot.replaceChildren(style, form);
   }
 
+  async _savedPlayersOnDashboard(query) {
+    const dashboard = window.location?.pathname.split("/")[1];
+    const request = {type: "lovelace/config"};
+    if (dashboard && dashboard !== "lovelace") request.url_path = dashboard;
+    const config = await this._hass.callWS(request);
+    const tokens = value => value.normalize("NFD").replace(/\p{M}/gu, "")
+      .toLocaleLowerCase("es").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    const terms = tokens(query);
+    if (!terms.length) return [];
+    const matches = [];
+    const visit = node => {
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+      } else if (node && typeof node === "object") {
+        if (node.type === "custom:fbm-card" && node.tipo_tarjeta === "jugador") {
+          const player = node.jugador_fijo, team = node.equipo_fijo;
+          if (typeof player?.id === "string" && player.id &&
+              typeof player.nombre === "string" && typeof team?.id === "string" && team.id) {
+            const name = tokens(player.nombre);
+            if (terms.every(term => name.some(word => word.startsWith(term)))) {
+              const {id, nombre, categoria, temporada} = team;
+              matches.push({jugador: {id: player.id, nombre: player.nombre},
+                equipo: {id, nombre, categoria, temporada}});
+            }
+          }
+        }
+        for (const key of ["views", "sections", "cards", "card", "badges"]) visit(node[key]);
+      }
+    };
+    visit(config);
+    return matches;
+  }
+
   _playerSearch(form) {
     const state = this._search ||= {query: "", players: [], message: "", busy: false};
     const label = document.createElement("label");
@@ -2513,7 +2546,7 @@ class FBMCardEditor extends HTMLElement {
     submit.textContent = "Buscar jugador";
     submit.disabled = state.busy;
     const hint = document.createElement("p");
-    hint.textContent = "Busca por nombre en la FBM.";
+    hint.textContent = "Busca en FBM, las plantillas archivadas y los jugadores guardados en este panel.";
     const results = document.createElement("div");
     results.setAttribute("aria-live", "polite");
     results.textContent = state.message;
@@ -2532,13 +2565,19 @@ class FBMCardEditor extends HTMLElement {
         const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
         if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
         state.entry = entries[0];
-        const [online, archived] = await Promise.allSettled([
+        const [online, archived, saved] = await Promise.allSettled([
           this._hass.callWS({type: "fbm/player/search", entry_id: state.entry, texto}),
-          this._hass.callWS({type: "fbm/player/search_archived", entry_id: state.entry, texto})
+          this._hass.callWS({type: "fbm/player/search_archived", entry_id: state.entry, texto}),
+          this._savedPlayersOnDashboard(texto)
         ]);
         const players = result => result.status === "fulfilled" &&
           Array.isArray(result.value?.jugadores) ? result.value.jugadores : [];
         const local = players(archived);
+        const keys = new Set(local.map(row => JSON.stringify([row.jugador.id, row.equipo.id])));
+        for (const row of saved.status === "fulfilled" ? saved.value : []) {
+          const key = JSON.stringify([row.jugador.id, row.equipo.id]);
+          if (!keys.has(key)) { local.push(row); keys.add(key); }
+        }
         const ids = new Set(local.map(row => row.jugador.id));
         state.players = [...local, ...players(online).filter(row => !ids.has(row.jugador.id))];
         if (state.players.length) {

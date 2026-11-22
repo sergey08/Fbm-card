@@ -174,3 +174,24 @@ test("name search keeps archived players even when FBM returns other results", a
   assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "local");
   assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
 });
+
+test("name search finds a saved player on the dashboard without a federation match", async () => {
+  const editor = registry.get("fbm-card").getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"jugador"});
+  editor.hass = {callWS: async ({type}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "lovelace/config") return {views:[{sections:[{cards:[{
+      type:"custom:fbm-card", tipo_tarjeta:"jugador",
+      jugador_fijo:{id:"player",nombre:"Pérez, Julián"}, equipo_fijo:{id:"team",nombre:"Equipo"}
+    }]}]}]};
+    return {jugadores:[]};
+  }};
+  const nodes = descendants(editor.shadowRoot);
+  const input = nodes.find(node => node.type === "search");
+  input.value = "julian";
+  input.listeners.input();
+  await nodes.find(node => node.textContent === "Buscar jugador").listeners.click();
+  assert.equal(field(editor, "Jugador").children.length, 2);
+  change(editor, "Jugador", "0");
+  assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "player");
+});
