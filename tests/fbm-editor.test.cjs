@@ -86,7 +86,7 @@ test("standard editor exposes only user-facing card types and hides internal set
   editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"equipo",
     id_tarjeta:"keep", logo_equipo:"https://fbm.es/existing.png"});
   const mode = field(editor, "Tipo de tarjeta");
-  assert.deepEqual(Array.from(mode.children, item => item.value), ["busqueda", "equipo"]);
+  assert.deepEqual(Array.from(mode.children, item => item.value), ["busqueda", "equipo", "jugador"]);
   assert.ok(!descendants(editor.shadowRoot).some(node =>
     ["URL del escudo", "Identificador de la tarjeta"].includes(node.textContent)));
   change(editor, "Título", "Mi equipo");
