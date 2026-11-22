@@ -99,6 +99,8 @@ test("following a player saves the official team and player selected in the edit
   const editor = card.constructor.getConfigElement();
   editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"busqueda"});
   change(editor, "Tipo de tarjeta", "jugador");
+  assert.equal(field(editor, "Buscar por").value, "jugador");
+  change(editor, "Buscar por", "equipo");
   const requests = [];
   const hass = {callWS: async request => {
     requests.push(request);

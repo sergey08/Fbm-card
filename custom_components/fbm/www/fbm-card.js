@@ -2459,7 +2459,7 @@ class FBMCardEditor extends HTMLElement {
           current.textContent = config.jugador_fijo.nombre + " · " + config.equipo_fijo.nombre;
           form.append(current);
         }
-        const byPlayer = this._followSearchBy === "jugador";
+        const byPlayer = this._followSearchBy !== "equipo";
         this._field(form, "Buscar por", byPlayer ? "jugador" : "equipo", value => {
           this._followSearchBy = value;
           this._search = null;
@@ -2481,7 +2481,7 @@ class FBMCardEditor extends HTMLElement {
       const summary = document.createElement("summary");
       summary.textContent = "Opciones avanzadas";
       advanced.append(summary);
-      if (mode === "busqueda") edit(advanced, "Mostrar consulta de horarios", "mostrar_horarios", { type: "checkbox" });
+      if (mode === "busqueda") edit(form, "Mostrar consulta manual de horarios", "mostrar_horarios", { type: "checkbox" });
       if (mode === "equipo") {
         edit(advanced, "Mostrar diagnóstico de fotos", "mostrar_diagnostico", { type: "checkbox" });
         if (config.equipo_fijo) {
@@ -2493,7 +2493,7 @@ class FBMCardEditor extends HTMLElement {
           }
         }
       }
-      if (mode === "busqueda" || mode === "equipo") form.append(advanced);
+      if (mode === "equipo") form.append(advanced);
     }
     this.shadowRoot.replaceChildren(style, form);
   }
