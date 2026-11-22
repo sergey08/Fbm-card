@@ -396,16 +396,19 @@ class FBMCard extends HTMLElement {
     const priorTeam = this._config?.equipo_fijo?.id;
     const newTeam = config.equipo_fijo?.id;
     const changed = !!this._config && (this._config.modo_experimental !== config.modo_experimental ||
-      this._config.id_tarjeta !== config.id_tarjeta || this._config.tipo_tarjeta !== config.tipo_tarjeta || priorTeam !== newTeam);
+      this._config.id_tarjeta !== config.id_tarjeta || this._config.tipo_tarjeta !== config.tipo_tarjeta || priorTeam !== newTeam ||
+      this._config.jugador_fijo?.id !== config.jugador_fijo?.id);
     if (changed) { this._experimental = null; this._fixedInit = false; this._searchInit = false; }
-    if (config.tipo_tarjeta && !["busqueda", "equipo"].includes(config.tipo_tarjeta)) throw new Error("Tipo de tarjeta inválido");
+    if (config.tipo_tarjeta && !["busqueda", "equipo", "jugador"].includes(config.tipo_tarjeta)) throw new Error("Tipo de tarjeta inválido");
     if (config.tipo_tarjeta === "equipo" && !config.equipo_fijo && !config.id_tarjeta) {
       throw new Error("Cada tarjeta de equipo necesita un id_tarjeta distinto para guardar su elección.");
     }
     this._config = { ...config };
     this._render();
     if (this._hass && config.modo_experimental === true) {
-      if (config.tipo_tarjeta === "equipo" && (!this._fixedInit || changed))
+      if (config.tipo_tarjeta === "jugador") {
+        Promise.resolve().then(() => this._loadFollowedPlayer());
+      } else if (config.tipo_tarjeta === "equipo" && (!this._fixedInit || changed))
         Promise.resolve().then(() => this._initializeFixed());
       else if (config.tipo_tarjeta !== "equipo" && (!this._searchInit || changed))
         Promise.resolve().then(() => this._initializeSearch());
@@ -417,7 +420,9 @@ class FBMCard extends HTMLElement {
     if (userChanged) this._experimental = null;
     this._hass = hass;
     if (this._config?.modo_experimental === true && (!hadHass || userChanged)) {
-      if (this._config.tipo_tarjeta === "equipo") {
+      if (this._config.tipo_tarjeta === "jugador") {
+        Promise.resolve().then(() => this._loadFollowedPlayer());
+      } else if (this._config.tipo_tarjeta === "equipo") {
         this._fixedInit = false;
         Promise.resolve().then(() => this._initializeFixed());
       } else {
@@ -1127,8 +1132,59 @@ class FBMCard extends HTMLElement {
     });
   }
 
+  async _loadFollowedPlayer() {
+    const {equipo_fijo: team, jugador_fijo: player, tipo_tarjeta: mode} = this._config;
+    if (mode !== "jugador" || !team?.id || !player?.id || !this._hass?.callWS) return;
+    const state = this._experimentalState();
+    if (state.busy || state.players) return;
+    state.busy = true;
+    state.message = "";
+    this._render();
+    try {
+      const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
+      if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
+      const entry = entries[0];
+      const {jugadores} = await this._hass.callWS({type: "fbm/team/players", entry_id: entry, equipo: team.id});
+      const member = Array.isArray(jugadores) && jugadores.find(item => item?.id === player.id);
+      if (!member) {
+        state.message = "El jugador ya no figura en la plantilla de este equipo.";
+        return;
+      }
+      state.entry = entry;
+      state.selected = team.id;
+      state.playersTeamId = team.id;
+      state.playersEntryId = entry;
+      state.players = [member];
+    } catch (_) {
+      state.message = "No se pudo consultar la plantilla de FBM.";
+    } finally {
+      state.busy = false;
+      if (this._experimental === state) this._render();
+    }
+  }
+
   _renderExperimental(card) {
     const state = this._experimentalState();
+    if (this._config.tipo_tarjeta === "jugador") {
+      const {equipo_fijo: team, jugador_fijo: player} = this._config;
+      card.append(this._element("h2", this._config.title || player?.nombre || "Seguir jugador"));
+      if (team?.nombre) card.append(this._element("p", team.nombre, "muted"));
+      if (state.players) {
+        renderFBMRoster(this, card, state.players, team, state,
+          id => this._experimentalPlayerDetail(id), id => this._experimentalPlayerStats(id));
+      } else if (state.busy) {
+        card.append(this._element("p", "Consultando jugador…", "muted"));
+      } else if (!team?.id || !player?.id) {
+        card.append(this._element("p", "Elige un equipo y un jugador en el editor de la tarjeta.", "muted"));
+      } else if (this._hass?.callWS) {
+        const retry = this._element("button", "Reintentar", "fbm-action");
+        retry.type = "button";
+        retry.addEventListener("click", () => this._loadFollowedPlayer());
+        card.append(retry);
+      }
+      if (state.message) card.append(this._element("p", state.message, "muted"));
+      return;
+    }
     card.append(this._element("h2", this._config.title || "🏀 FBM Card"));
     const button = (label, action, enabled = true) => {
       const el = this._element("button", label); el.type = "button"; el.disabled = state.busy || !enabled;
@@ -2377,8 +2433,16 @@ class FBMCardEditor extends HTMLElement {
         }
         this._update(patch, true);
       }, { options: [...(mode === "entidades" ? [["entidades", "Selecciona un tipo"]] : []),
-        ["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"]] });
+        ["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"], ["jugador", "Seguir jugador"]] });
 
+      if (mode === "jugador") {
+        if (config.jugador_fijo?.nombre && config.equipo_fijo?.nombre) {
+          const current = document.createElement("p");
+          current.textContent = config.jugador_fijo.nombre + " · " + config.equipo_fijo.nombre;
+          form.append(current);
+        }
+        this._teamSearch(form, true);
+      }
       if (mode === "equipo") {
         const hint = document.createElement("p");
         hint.textContent = config.equipo_fijo?.nombre
@@ -2409,7 +2473,7 @@ class FBMCardEditor extends HTMLElement {
     this.shadowRoot.replaceChildren(style, form);
   }
 
-  _teamSearch(form) {
+  _teamSearch(form, followPlayer = false) {
     const state = this._search ||= { query: "", teams: [], message: "", busy: false };
     const label = document.createElement("label");
     label.textContent = "Nombre del equipo";
@@ -2438,6 +2502,8 @@ class FBMCardEditor extends HTMLElement {
       state.query = texto;
       state.busy = true;
       state.teams = [];
+      state.roster = null;
+      state.teamIndex = "";
       state.message = "Buscando equipos…";
       this._render();
       try {
@@ -2463,16 +2529,56 @@ class FBMCardEditor extends HTMLElement {
       }
     });
     if (state.teams.length) {
-      this._field(results, "Equipo, categoría y temporada", "", index => {
+      this._field(results, "Equipo, categoría y temporada", state.teamIndex ?? "", async index => {
         const team = index === "" ? null : state.teams[Number(index)];
         if (!team) return;
         const { id, nombre, club, categoria, temporada, escudo } = team;
         const equipo_fijo = { id, nombre, club, categoria, temporada };
         if (typeof escudo === "string") equipo_fijo.escudo = escudo;
+        if (followPlayer) {
+          if (state.busy) return;
+          state.teamIndex = index;
+          state.roster = null;
+          state.busy = true;
+          state.message = "Cargando plantilla…";
+          this._render();
+          try {
+            const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
+            if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
+            const {jugadores} = await this._hass.callWS({
+              type: "fbm/team/players", entry_id: entries[0], equipo: equipo_fijo.id
+            });
+            const players = Array.isArray(jugadores) ? jugadores.filter(player =>
+              typeof player?.id === "string" && player.id &&
+              typeof player.nombre === "string" && player.nombre) : [];
+            players.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+            state.roster = {team: equipo_fijo, players};
+            state.message = players.length ? "" : "FBM no ha publicado la plantilla.";
+          } catch (_) {
+            state.teamIndex = "";
+            state.message = "No se pudo cargar la plantilla.";
+          } finally {
+            state.busy = false;
+            if (this._search === state) this._render();
+          }
+          return;
+        }
         this._search = null;
         this._update({ equipo_fijo }, true);
       }, { options: [["", "Selecciona un equipo"], ...state.teams.map((team, index) =>
         [String(index), [team.nombre, team.categoria, team.temporada].join(" · ")])] });
+    }
+    if (followPlayer && state.roster?.players.length) {
+      const {team, players} = state.roster;
+      this._field(results, "Jugador", "", index => {
+        if (index === "") return;
+        const player = players[Number(index)];
+        if (!player) return;
+        const {id, nombre} = player;
+        this._search = null;
+        this._update({ equipo_fijo: team, jugador_fijo: {id, nombre} }, true);
+      }, {options: [["", "Selecciona un jugador"], ...players.map((player, index) =>
+        [String(index), player.nombre])]});
     }
     form.append(label, search, results);
   }

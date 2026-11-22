@@ -25,6 +25,10 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 
 [Novedades de v0.2.17](RELEASE_0.2.17_NOTES.md) · [Histórico de versiones](docs/releases/)
 
+### Seguir a un jugador
+
+En el editor de **FBM Card**, elige **Seguir jugador**, busca el equipo y selecciona su categoría y temporada. Elige al jugador de la plantilla y guarda la tarjeta. Se muestra su foto si FBM la publica, junto con las métricas de temporada disponibles. **Ver ficha** abre las estadísticas por partido.
+
 ### Mapa de tiro y estadísticas
 
 Abre **Mapa de tiro** desde la ficha de un partido con resultado e identificador oficial. La pista distingue aciertos (●) y fallos (×) por equipo. Puedes filtrar por periodo y seleccionar varios jugadores de ambos equipos. Si FBM no publica el nombre, se muestra el dorsal disponible.

@@ -93,3 +93,43 @@ test("standard editor exposes only user-facing card types and hides internal set
   assert.equal(editor.lastEvent.detail.config.id_tarjeta, "keep");
   assert.equal(editor.lastEvent.detail.config.logo_equipo, "https://fbm.es/existing.png");
 });
+
+test("following a player saves the official team and player selected in the editor", async () => {
+  const card = new (registry.get("fbm-card"))();
+  const editor = card.constructor.getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"busqueda"});
+  change(editor, "Tipo de tarjeta", "jugador");
+  const requests = [];
+  const hass = {callWS: async request => {
+    requests.push(request);
+    if (request.type === "fbm/client/entries") return {entries:["entry"]};
+    if (request.type === "fbm/team/search") return {
+      equipos:[{id:"team",nombre:"Equipo A",club:"Club",categoria:"Alevín",temporada:"26/27"}]
+    };
+    assert.equal(request.type, "fbm/team/players");
+    assert.equal(request.equipo, "team");
+    return {jugadores:[{id:"p2",nombre:"Zoe"},{id:"p1",nombre:"Ana",partidos_jugados:5}]};
+  }};
+  editor.hass = hass;
+  const nodes = descendants(editor.shadowRoot);
+  const input = nodes.find(node => node.type === "search");
+  input.value = "Equipo A";
+  input.listeners.input();
+  await nodes.find(node => node.textContent === "Buscar en FBM").listeners.click();
+  const team = field(editor, "Equipo, categoría y temporada");
+  team.value = "0";
+  team.listeners.change();
+  await new Promise(resolve => setImmediate(resolve));
+  change(editor, "Jugador", "0");
+  const config = editor.lastEvent.detail.config;
+  assert.equal(config.equipo_fijo.id, "team");
+  assert.equal(config.jugador_fijo.id, "p1");
+  assert.equal(config.jugador_fijo.nombre, "Ana");
+  card._hass = hass;
+  card._config = config;
+  card._render = () => {};
+  await card._loadFollowedPlayer();
+  assert.equal(card._experimentalState().players.length, 1);
+  assert.equal(card._experimentalState().players[0].partidos_jugados, 5);
+  assert.equal(requests.filter(request => request.type === "fbm/team/players").length, 2);
+});
