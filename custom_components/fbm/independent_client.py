@@ -151,6 +151,12 @@ class IndependentClient:
             raise ValueError("Busqueda no valida")
         return await self._cached_query(("equipos", text, skip), lambda adapter: adapter.search_teams(text, skip), ttl=300)
 
+    async def async_shot_map(self, match_id: str) -> dict:
+        if type(match_id) is not str or not match_id.strip() or len(match_id) > 512:
+            raise ValueError("Identificador de partido no válido")
+        return await self._cached_query(
+            ("shot_map", match_id), lambda adapter: adapter.shot_map(match_id), ttl=60)
+
     async def async_team_phase_options(self, team_id: str) -> dict:
         self._validate_team_id(team_id)
         return await self._cached_query(("fases", team_id), lambda adapter: adapter.team_phase_options(team_id), ttl=300)

@@ -26,6 +26,7 @@ from .player_statistics_bridge import PlayerStatisticsFetcher
 from .player_context import verified_player_stats_context
 from .player_protocol import player_stats_fields
 from .player_statistics import normalize_global_player_stats, normalize_player_match_list, diagnose_match_rows
+from .shot_map import post_shot_map
 from .device_protocol import open_request
 from .team_phases import phase_options, classification_selection, current_phase_group
 from .season_evidence import inspect_season_evidence
@@ -117,6 +118,11 @@ class AficionFBMAdapter:
     def session_is_usable(self) -> bool:
         """Indica solo si existe clave dentro del plazo local observado."""
         return self._identity is not None and bool(self._identity.key_for_request(datetime.now(timezone.utc)))
+
+    async def shot_map(self, match_id: str) -> dict:
+        """Read the official shot map using the current guest session."""
+        device_id, key = self._team_key()
+        return await asyncio.to_thread(post_shot_map, device_id, key, match_id)
 
     async def team_phase_options(self, team_id: str) -> dict:
         """Consulta opciones sin seleccionar rondas automaticamente."""

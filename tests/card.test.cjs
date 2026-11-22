@@ -803,6 +803,7 @@ test("la ficha de un jugador solo se solicita explícitamente y no afecta a otra
   const requests = [];
   const hass = { callWS: async request => {
     requests.push(request);
+    if (request.type === "fbm/player/stats") return {jugador:"p1",equipo:"teamA",globales:{estadisticas:{}},partidos:{partidos:[]}};
     return { jugador: { id: "p1", nombre: "Jugador ficticio", puntos_totales: 8 }, fuente: "FBM" };
   } };
   first._hass = hass; second._hass = hass;
@@ -813,7 +814,10 @@ test("la ficha de un jugador solo se solicita explícitamente y no afecta a otra
   b.players = [{id:"p2", nombre:"Otro jugador"}]; b.playersTeamId = "teamB"; b.playersEntryId = "entry";
   assert.equal(requests.length, 0);
   await first._experimentalPlayerDetail("p1");
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].type, "fbm/player/stats");
+  assert.equal(a.playerStatsPlayerId, "p1");
+  assert.equal(b.playerStats, null);
   assert.equal(requests[0].type, "fbm/player/detail");
   assert.equal(requests[0].entry_id, "entry");
   assert.equal(requests[0].jugador, "p1");
@@ -893,7 +897,8 @@ test("oculta estadísticas no disponibles pero muestra ceros y valoraciones nega
   state.selected=team.id;state.tab="jugadores";
   state.playersTeamId=team.id;state.playersEntryId="entry";
   state.players=[{id:"j1",nombre:"Jugador Ejemplo",temporada:"26/27",
-    partidos_jugados:4,puntos_por_partido:0,minutos_por_partido:null,puntos_totales:null}];
+    partidos_jugados:4,puntos_por_partido:0,minutos_por_partido:20,puntos_totales:0,
+    faltas_por_partido:2,partidos_con_faltas:1,valoracion_por_partido:-3}];
   state.playerDetailTeamId=team.id;state.playerDetailPlayerId="j1";
   state.playerDetail={id:"j1",nombre:"Jugador Ejemplo",equipo:"Equipo Prueba"};
   state.playerStatsTeamId=team.id;state.playerStatsPlayerId="j1";state.playerStatsEntryId="entry";
@@ -906,17 +911,30 @@ test("oculta estadísticas no disponibles pero muestra ceros y valoraciones nega
       recuperaciones:null,perdidas:null,valoracion:-3}]}
   };
   const output=new Elem("card");
-  card._renderExperimental(output);
   const flatten=node=>[node,...(node.children||[]).flatMap(flatten)];
+  const detail = state.playerDetail;
+  state.playerDetail = null;
+  const collapsed = new Elem("card");
+  card._renderExperimental(collapsed);
+  const labels = root => flatten(root).filter(n => n.className === "fbm-stat-label").map(n => n.textContent);
+  assert.deepEqual(labels(collapsed), ["Partidos", "Puntos totales", "Min/partido", "Faltas/partido", "Puntos/partido", "Valoración"]);
+  assert.ok(!flatten(collapsed).some(n => n.textContent === "Equipo Rival"));
+  state.playerDetail = detail;
+  card._renderExperimental(output);
   const nodes=flatten(output);
   const statLabels=nodes.filter(n=>n.className==="fbm-stat-label").map(n=>n.textContent);
   const statValues=nodes.filter(n=>n.className==="fbm-stat-value").map(n=>n.textContent);
   assert.ok(statLabels.includes("Puntos"));
+  assert.equal(statLabels.filter(label => label === "Puntos/partido").length, 1);
+  assert.ok(!statLabels.includes("Puntos/partido (1 PJ)"));
+  const summary = nodes.find(n => n.className === "fbm-stat-grid");
+  assert.deepEqual(labels(summary), labels(collapsed));
+  assert.ok(nodes.some(n => n.className === "fbm-player-matches" && flatten(n).some(child => child.textContent === "Equipo Rival")));
   assert.ok(statLabels.includes("Faltas"));
   assert.ok(statLabels.includes("Valoración"));
   assert.ok(statValues.includes("0"),"el cero real debe mostrarse");
   assert.ok(statValues.includes("-3"),"la valoración negativa debe mostrarse");
-  for(const absent of ["Asist.","F. recib.","Rebotes","Reb. def.","Reb. of.","Recup.","Pérdidas","Min/partido"]) {
+  for(const absent of ["Asist.","F. recib.","Rebotes","Reb. def.","Reb. of.","Recup.","Pérdidas"]) {
     assert.ok(!statLabels.includes(absent),absent+" no debe aparecer si carece de dato");
   }
   assert.ok(!statValues.includes("—"),"ninguna casilla debe mostrar guiones");

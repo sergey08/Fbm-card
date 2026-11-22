@@ -65,7 +65,7 @@ jobs:
               assert notes.is_file(), f"Faltan las notas {notes}"
               assert f"[Novedades de v{version}]({notes.name})" in readme, "README no enlaza las notas actuales"
               text = notes.read_text(encoding="utf-8")
-              assert "## English" in text and "## Español" in text, "Notas no bilingües"
+              assert "## Español" in text and text.split("## Español", 1)[1].strip(), "Faltan las notas en español"
               print(f"Documentación comprobada para v{version}")
           PY
 

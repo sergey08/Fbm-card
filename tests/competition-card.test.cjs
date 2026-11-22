@@ -7,7 +7,7 @@ const source = fs.readFileSync("fbm-card.js","utf8");
 class E {
   constructor(tag) {
     this.tagName=tag;this.children=[];this.listeners={};this.attributes={};this.textContent="";
-    this.shadowRoot=null;
+    this.shadowRoot=null;this.style={};
   }
   append(...nodes){this.children.push(...nodes);}
   addEventListener(name,cb){this.listeners[name]=cb;}
@@ -41,7 +41,7 @@ test("competition card shows standings and loads roster on team click",async()=>
     calls.push(request.type);
     if(request.type==="fbm/client/entries")return {entries:["entry"]};
     if(request.type==="fbm/competition/team_roster")
-      return {jugadores:[{id:"p1",nombre:"Jugador de prueba"}],
+      return {jugadores:[{id:"p1",nombre:"Jugador de prueba",puntos_totales:22,puntos_por_partido:11}],
         partidos:[{local:"Equipo A",visitante:"Equipo B",fecha:"12/11/2026",jornada:3,marcador:{local:44,visitante:39}},
           {local:"Equipo B",visitante:"Equipo A",fecha:"19/04/2027",jornada:4}]};
     if(request.type==="fbm/team/schedule") {
@@ -82,12 +82,13 @@ test("competition card shows standings and loads roster on team click",async()=>
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-roster").length);
   assert.ok(walk(c.shadowRoot,x=>x.className==="fbm-player-photo").length);
+  assert.ok(walk(c.shadowRoot,x=>x.tagName==="strong" && x.textContent==="22").length);
+  assert.equal(walk(c.shadowRoot,x=>x.className==="fbm-player-matches").length,0);
   const playerButton=walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Ver ficha")[0];
   playerButton.listeners.click();
-  walk(c.shadowRoot,x=>x.textContent==="Consultar estadísticas por partido")[0].listeners.click();
   await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(calls,["fbm/client/entries","fbm/competition/team_roster","fbm/team/schedule","fbm/team/players","fbm/competition/team_player_stats"]);
-  assert.ok(walk(c.shadowRoot,x=>x.tagName==="strong" && x.textContent==="22").length);
+
   assert.ok(walk(c.shadowRoot,x=>x.tagName==="strong" && x.textContent==="12").length);
   const back=walk(c.shadowRoot,x=>x.textContent==="‹ Volver a la competición")[0];
   back.listeners.click();
@@ -180,13 +181,42 @@ test("recent results share the blue scoreboard and archived crests",async()=>{
   c.hass={states:{"sensor.competiciones":{attributes:{groups:[{
     season_id:"26/27",phase_id:"phase",group_id:"group",fixtures_at:"2026-11-16",
     ranking:[{id:"a",equipo:"Equipo A"}],
-    recent_results:[{local:"Equipo A",visitante:"Equipo B",fecha:"14/11/2026",marcador:{local:0,visitante:8}}]
+    recent_results:[{id:"match",local:"Equipo A",visitante:"Equipo B",fecha:"14/11/2026",marcador:{local:0,visitante:8}}]
   }]}}},callWS:async request=>{
     if(request.type==="fbm/client/entries") return {entries:["entry"]};
     if(request.type==="fbm/competition/team_snapshot") return {fixtures:{escudos:{"Equipo A":crest,"Equipo B":"https://fbm.es/equipo-b.png"}}};
+    if(request.type==="fbm/match/shot_map") {
+      assert.equal(request.partido,"match");
+      return {tiros:[
+        {x:15,y:25,periodo:1,local:true,dorsal:"7",nombre:"Jugador de prueba",metido:false},
+        {x:90,y:50,periodo:2,local:false,dorsal:"7",metido:true}
+      ]};
+    }
     throw Error("Unexpected call");
   }};
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(walk(c.shadowRoot,x=>x.className==="fbm-fixture-score")[0].textContent,"0 – 8");
   assert.equal(walk(c.shadowRoot,x=>x.className==="fbm-fixture-logo").length,2);
+  const button=walk(c.shadowRoot,x=>x.tagName==="button" && x.textContent==="Mapa de tiro")[0];
+  const panel=walk(c.shadowRoot,x=>x.className==="fbm-shot-panel")[0];
+  assert.equal(panel.hidden,true);
+  await button.listeners.click();
+  assert.equal(panel.hidden,false);
+  const court=walk(panel,x=>x.className==="fbm-shot-court")[0];
+  assert.deepEqual(court.children.slice(1).map(x=>[x.style.left,x.textContent]),[["15%","×"],["90%","●"]]);
+  assert.ok(walk(panel,x=>x.textContent==="Jugador de prueba").length);
+  const checks=walk(panel,x=>x.type==="checkbox");
+  assert.equal(checks.length,2);
+  checks[0].checked=false;
+  checks[0].listeners.change();
+  assert.deepEqual(court.children.slice(1).map(x=>x.textContent),["●"]);
+  checks[0].checked=true;
+  checks[0].listeners.change();
+  const period=walk(panel,x=>x.attributes["aria-label"]==="Periodo")[0];
+  period.value="2";
+  period.listeners.change();
+  assert.equal(court.children.length,2);
+  assert.equal(court.children[1].style.top,"50%");
+  await button.listeners.click();
+  assert.equal(panel.hidden,true);
 });

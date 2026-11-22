@@ -174,3 +174,44 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShotMapTests(unittest.TestCase):
+    def test_valid_positions_and_outcomes_survive_normalization(self):
+        from fbm_adapter_test_pkg.shot_map import normalize_shot_map
+
+        made = {"posicion_x": "0 %", "posicion_y": " 54,5% ", "numero_periodo": 1,
+                "local": True, "metido": 1, "fallado": 0, "componente_id": "player"}
+        missed = {**made, "posicion_x": 100, "local": False, "metido": 0, "fallado": 1}
+        result = normalize_shot_map({"error": "", "mapadetiro": {"tiros": [
+            made, missed, {**made, "posicion_y": "NaN"}, {**made, "metido": 0},
+        ]}})
+        self.assertEqual(result, {"tiros": [
+            {"x": 0, "y": 54.5, "periodo": 1, "local": True, "metido": True,
+             "componente_id": "player"},
+            {"x": 100, "y": 54.5, "periodo": 1, "local": False, "metido": False,
+             "componente_id": "player"},
+        ], "tiros_descartados": 2})
+
+    def test_provider_error_is_distinct_from_empty_map(self):
+        from fbm_adapter_test_pkg.shot_map import ShotMapError, normalize_shot_map
+
+        with self.assertRaises(ShotMapError):
+            normalize_shot_map({"resultado": "error", "error": "", "mapadetiro": {"tiros": []}})
+        self.assertEqual(normalize_shot_map({"error": "", "mapadetiro": {"tiros": []}}),
+                         {"tiros": [], "tiros_descartados": 0})
+
+    def test_team_shooting_totals_include_attempts_without_coordinates(self):
+        from fbm_adapter_test_pkg.shot_map import normalize_shot_map
+
+        result = normalize_shot_map({"error": "", "mapadetiro": {
+            "tiros": [], "estadiscasequipolocal": {
+                "canasta2p": 7, "tiro2p": 10,
+                "canasta3p": 0, "tiro3p": 0,
+                "canasta1p": 3, "tiro1p": 2,
+            },
+        }})
+        self.assertEqual(result["aciertos_equipos"], {"local": {
+            "2p": {"aciertos": 7, "intentos": 10},
+            "3p": {"aciertos": 0, "intentos": 0},
+        }})
