@@ -800,6 +800,24 @@ async def ws_competition_verify_season(hass, connection, msg):
     connection.send_result(msg["id"], result)
 
 @websocket_api.websocket_command({
+    "type": "fbm/match/shot_map",
+    probatio.Required("entry_id"): str,
+    probatio.Required("partido"): str,
+})
+@websocket_api.async_response
+async def ws_shot_map(hass, connection, msg):
+    async def read(client, request):
+        result = await client.async_shot_map(request["partido"])
+        # The card filters by side and jersey number.
+        return {**result, "tiros": [
+            {key: value for key, value in shot.items() if key != "componente_id"}
+            for shot in result["tiros"]
+        ]}
+
+    await _dispatch(hass, connection, msg, read)
+
+
+@websocket_api.websocket_command({
     "type": "fbm/match/shot_map_probe",
     probatio.Required("entry_id"): str,
     probatio.Required("partido"): str,
@@ -822,7 +840,7 @@ async def ws_shot_map_probe(hass, connection, msg):
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_match_preview, ws_competition_verify_season, ws_competition_player_stats_batch, ws_shot_map_probe):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_match_preview, ws_competition_verify_season, ws_competition_player_stats_batch, ws_shot_map_probe, ws_shot_map):
         websocket_api.async_register_command(hass, command)
 
 

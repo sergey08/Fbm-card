@@ -7,6 +7,17 @@ const FBM_TEAM_CONTENT_STYLES = `
       .fbm-fixture-logo{width:25px;height:25px;flex:0 0 25px;object-fit:contain}
       .fbm-fixture-side span{font-size:.82rem;font-weight:600;overflow-wrap:anywhere}
       .fbm-fixture-side.fbm-fixture-away span{text-align:right}
+      .fbm-fixture > .fbm-action{margin-top:8px}
+      .fbm-shot-panel{margin-top:8px}
+      .fbm-shot-filters{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+      .fbm-shot-filters select{max-width:100%;color:var(--primary-text-color);background:var(--card-background-color);padding:5px}
+      .fbm-shot-court{position:relative;aspect-ratio:640/380;border:1px solid var(--secondary-text-color);background:linear-gradient(90deg,transparent calc(50% - .5px),var(--secondary-text-color) calc(50% - .5px),var(--secondary-text-color) calc(50% + .5px),transparent calc(50% + .5px))}
+      .fbm-shot-court::before,.fbm-shot-court::after{content:"";position:absolute;top:30%;width:19%;height:40%;border:1px solid var(--secondary-text-color)}
+      .fbm-shot-court::before{left:0;border-left:0}
+      .fbm-shot-court::after{right:0;border-right:0}
+      .fbm-shot-mark{position:absolute;transform:translate(-50%,-50%);font-size:1.05rem;font-weight:700;line-height:1;z-index:1}
+      .fbm-shot-local{color:#268bdf}
+      .fbm-shot-away{color:#e98316}
       .fbm-fixture-list{display:grid;gap:9px;margin-top:10px}
       .fbm-fixture{border:1px solid var(--divider-color,#ddd);border-radius:12px;padding:11px;background:var(--card-background-color,#fff)}
       .fbm-fixture-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:9px}
@@ -67,6 +78,90 @@ function fbmAddFixtureCrests(view, crests, matches) {
   }
 }
 
+function renderFBMShotMap(view, container, match) {
+  const button = view._element("button", "Mapa de tiro", "fbm-action");
+  button.type = "button";
+  button.setAttribute("aria-expanded", "false");
+  const panel = view._element("div", "", "fbm-shot-panel");
+  panel.hidden = true;
+  const note = view._element("p", "", "fbm-player-caption");
+  note.setAttribute("role", "status");
+  panel.append(note);
+  let loaded = false;
+  button.addEventListener("click", async () => {
+    panel.hidden = !panel.hidden;
+    button.setAttribute("aria-expanded", String(!panel.hidden));
+    if (panel.hidden || loaded || button.disabled) return;
+    button.disabled = true;
+    note.textContent = "Consultando tiros…";
+    try {
+      const {entries} = await view._hass.callWS({type: "fbm/client/entries"});
+      if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
+      const result = await view._hass.callWS({
+        type: "fbm/match/shot_map", entry_id: entries[0], partido: match.id
+      });
+      const shots = result?.tiros;
+      if (!Array.isArray(shots)) throw Error("Mapa no válido");
+      if (!shots.length) {
+        note.textContent = result.tiros_descartados
+          ? "FBM devolvió tiros, pero sus datos no se pudieron interpretar."
+          : "FBM no ha publicado tiros para este partido.";
+        loaded = true;
+        return;
+      }
+      const period = view._element("select");
+      const player = view._element("select");
+      const filters = view._element("div", "", "fbm-shot-filters");
+      const addOption = (select, value, label) => {
+        const option = view._element("option", label);
+        option.value = value;
+        select.append(option);
+      };
+      period.setAttribute("aria-label", "Periodo");
+      player.setAttribute("aria-label", "Jugador");
+      addOption(period, "", "Todos los periodos");
+      for (const value of [...new Set(shots.map(shot => shot.periodo))].sort((a, b) => a - b)) {
+        addOption(period, String(value), "Periodo " + value);
+      }
+      const playerKey = shot => (shot.local ? "local:" : "visitante:") + shot.dorsal;
+      const players = new Map(shots.filter(shot => shot.dorsal).map(shot => [
+        playerKey(shot), (shot.local ? match.local : match.visitante) + " · #" + shot.dorsal
+      ]));
+      addOption(player, "", "Todos los jugadores");
+      for (const [value, label] of players) addOption(player, value, label);
+      filters.append(period);
+      if (players.size) filters.append(player);
+      const court = view._element("div", "", "fbm-shot-court");
+      court.setAttribute("aria-hidden", "true");
+      const legend = view._element("p", "● Acierto · × Fallo · Azul: local · Naranja: visitante", "fbm-player-caption");
+      const redraw = () => {
+        court.replaceChildren();
+        const visible = shots.filter(shot => (!period.value || String(shot.periodo) === period.value) &&
+          (!player.value || playerKey(shot) === player.value));
+        for (const shot of visible) {
+          const marker = view._element("span", shot.metido ? "●" : "×",
+            "fbm-shot-mark " + (shot.local ? "fbm-shot-local" : "fbm-shot-away"));
+          marker.style.left = shot.x + "%";
+          marker.style.top = shot.y + "%";
+          court.append(marker);
+        }
+        note.textContent = visible.filter(shot => shot.metido).length + " aciertos de " + visible.length +
+          " tiros" + (result.tiros_descartados ? " · " + result.tiros_descartados + " sin datos válidos" : "");
+      };
+      period.addEventListener("change", redraw);
+      player.addEventListener("change", redraw);
+      panel.append(filters, court, legend);
+      redraw();
+      loaded = true;
+    } catch (_) {
+      note.textContent = "No se pudo consultar el mapa de tiro de FBM.";
+    } finally {
+      button.disabled = false;
+    }
+  });
+  container.append(button, panel);
+}
+
 function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = false, recent = false} = {}) {
   const games = view._element("div", "", "fbm-fixture-list");
   const sorted = [...matches].sort((a, b) => recent
@@ -116,6 +211,9 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = f
           .filter(Boolean).join(" · ")
       : match.campo;
     if (details) box.append(view._element("p", details, "fbm-player-caption"));
+    if (score !== "vs" && typeof match.id === "string" && match.id && view._hass?.callWS) {
+      renderFBMShotMap(view, box, match);
+    }
     games.append(box);
   }
   card.append(games);

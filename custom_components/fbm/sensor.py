@@ -142,6 +142,8 @@ def _latest_round_results(matches: list[dict]) -> list[dict]:
         if isinstance(round_number, str) and round_number.isdecimal() and len(round_number) < 5:
             round_number = int(round_number)
         row = {key: match.get(key) for key in ("local", "visitante", "fecha")}
+        if isinstance(match.get("id"), str) and match["id"]:
+            row["id"] = match["id"]
         row["marcador"] = {"local": score["local"], "visitante": score["visitante"]}
         if type(round_number) is int and round_number > 0:
             row["jornada"] = round_number
