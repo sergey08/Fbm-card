@@ -188,7 +188,7 @@ test("recent results share the blue scoreboard and archived crests",async()=>{
     if(request.type==="fbm/match/shot_map") {
       assert.equal(request.partido,"match");
       return {tiros:[
-        {x:15,y:25,periodo:1,local:true,dorsal:"7",metido:false},
+        {x:15,y:25,periodo:1,local:true,dorsal:"7",nombre:"Jugador de prueba",metido:false},
         {x:90,y:50,periodo:2,local:false,dorsal:"7",metido:true}
       ]};
     }
@@ -203,12 +203,20 @@ test("recent results share the blue scoreboard and archived crests",async()=>{
   await button.listeners.click();
   assert.equal(panel.hidden,false);
   const court=walk(panel,x=>x.className==="fbm-shot-court")[0];
-  assert.deepEqual(court.children.map(x=>[x.style.left,x.textContent]),[["15%","×"],["90%","●"]]);
+  assert.deepEqual(court.children.slice(1).map(x=>[x.style.left,x.textContent]),[["15%","×"],["90%","●"]]);
+  assert.ok(walk(panel,x=>x.textContent==="#7 · Jugador de prueba").length);
+  const checks=walk(panel,x=>x.type==="checkbox");
+  assert.equal(checks.length,2);
+  checks[0].checked=false;
+  checks[0].listeners.change();
+  assert.deepEqual(court.children.slice(1).map(x=>x.textContent),["●"]);
+  checks[0].checked=true;
+  checks[0].listeners.change();
   const period=walk(panel,x=>x.attributes["aria-label"]==="Periodo")[0];
   period.value="2";
   period.listeners.change();
-  assert.equal(court.children.length,1);
-  assert.equal(court.children[0].style.top,"50%");
+  assert.equal(court.children.length,2);
+  assert.equal(court.children[1].style.top,"50%");
   await button.listeners.click();
   assert.equal(panel.hidden,true);
 });

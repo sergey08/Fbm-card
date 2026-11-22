@@ -53,6 +53,17 @@ def normalize_shot_map(payload: object) -> dict:
     shot_map = payload.get("mapadetiro")
     if not isinstance(shot_map, dict) or not isinstance(shot_map.get("tiros"), list):
         raise ShotMapError("Estructura del mapa de tiro no válida.")
+    names = {}
+    for local, field in ((True, "jugadoreslocales"), (False, "jugadoresvisitantes")):
+        roster = shot_map.get(field)
+        if not isinstance(roster, list):
+            continue
+        for player in roster:
+            if not isinstance(player, dict):
+                continue
+            dorsal, name = player.get("dorsal"), player.get("nombre")
+            if isinstance(dorsal, str) and dorsal and isinstance(name, str) and name.strip():
+                names.setdefault((local, dorsal), set()).add(name.strip())
     shots = []
     for row in shot_map["tiros"]:
         if not isinstance(row, dict):
@@ -75,5 +86,8 @@ def normalize_shot_map(payload: object) -> dict:
         for field in ("componente_id", "dorsal", "zona"):
             if isinstance(row.get(field), str) and row[field]:
                 shot[field] = row[field]
+        matches = names.get((local, shot.get("dorsal")), set())
+        if len(matches) == 1:
+            shot["nombre"] = next(iter(matches))
         shots.append(shot)
     return {"tiros": shots, "tiros_descartados": len(shot_map["tiros"]) - len(shots)}

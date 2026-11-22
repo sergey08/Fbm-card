@@ -11,10 +11,11 @@ const FBM_TEAM_CONTENT_STYLES = `
       .fbm-shot-panel{margin-top:8px}
       .fbm-shot-filters{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
       .fbm-shot-filters select{max-width:100%;color:var(--primary-text-color);background:var(--card-background-color);padding:5px}
-      .fbm-shot-court{position:relative;aspect-ratio:640/380;border:1px solid var(--secondary-text-color);background:linear-gradient(90deg,transparent calc(50% - .5px),var(--secondary-text-color) calc(50% - .5px),var(--secondary-text-color) calc(50% + .5px),transparent calc(50% + .5px))}
-      .fbm-shot-court::before,.fbm-shot-court::after{content:"";position:absolute;top:30%;width:19%;height:40%;border:1px solid var(--secondary-text-color)}
-      .fbm-shot-court::before{left:0;border-left:0}
-      .fbm-shot-court::after{right:0;border-right:0}
+      .fbm-shot-court{position:relative;aspect-ratio:640/380;color:var(--secondary-text-color,#888)}
+      .fbm-shot-lines{position:absolute;inset:0;width:100%;height:100%}
+      .fbm-shot-players{margin:8px 0}
+      .fbm-shot-players fieldset{margin:6px 0;border:1px solid var(--divider-color,#888);min-width:0}
+      .fbm-shot-players label{display:flex;align-items:center;gap:8px;padding:5px 0;overflow-wrap:anywhere}
       .fbm-shot-mark{position:absolute;transform:translate(-50%,-50%);font-size:1.05rem;font-weight:700;line-height:1;z-index:1}
       .fbm-shot-local{color:#268bdf}
       .fbm-shot-away{color:#e98316}
@@ -110,7 +111,6 @@ function renderFBMShotMap(view, container, match) {
         return;
       }
       const period = view._element("select");
-      const player = view._element("select");
       const filters = view._element("div", "", "fbm-shot-filters");
       const addOption = (select, value, label) => {
         const option = view._element("option", label);
@@ -118,26 +118,25 @@ function renderFBMShotMap(view, container, match) {
         select.append(option);
       };
       period.setAttribute("aria-label", "Periodo");
-      player.setAttribute("aria-label", "Jugador");
       addOption(period, "", "Todos los periodos");
       for (const value of [...new Set(shots.map(shot => shot.periodo))].sort((a, b) => a - b)) {
         addOption(period, String(value), "Periodo " + value);
       }
-      const playerKey = shot => (shot.local ? "local:" : "visitante:") + shot.dorsal;
-      const players = new Map(shots.filter(shot => shot.dorsal).map(shot => [
-        playerKey(shot), (shot.local ? match.local : match.visitante) + " · #" + shot.dorsal
-      ]));
-      addOption(player, "", "Todos los jugadores");
-      for (const [value, label] of players) addOption(player, value, label);
+      const playerKey = shot => (shot.local ? "local:" : "visitante:") + (shot.dorsal || "");
+      const choices = new Map();
+      const players = view._element("details", "", "fbm-shot-players");
+      players.append(view._element("summary", "Filtrar jugadores"));
       filters.append(period);
-      if (players.size) filters.append(player);
       const court = view._element("div", "", "fbm-shot-court");
       court.setAttribute("aria-hidden", "true");
+      const lines = view._element("div", "", "fbm-shot-lines");
+      const endLines = '<path d="M1 129H133V251H1 M133 145A45 45 0 0 1 133 235 M1 45H55A145 145 0 0 1 55 335H1 M31 165V215"/><circle cx="43" cy="190" r="10"/>';
+      lines.innerHTML = '<svg viewBox="0 0 640 380" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="638" height="378"/><path d="M320 1V379"/><circle cx="320" cy="190" r="45"/><g>' + endLines + '</g><g transform="translate(640 0) scale(-1 1)">' + endLines + '</g></svg>';
       const legend = view._element("p", "● Acierto · × Fallo · Azul: local · Naranja: visitante", "fbm-player-caption");
       const redraw = () => {
-        court.replaceChildren();
+        court.replaceChildren(lines);
         const visible = shots.filter(shot => (!period.value || String(shot.periodo) === period.value) &&
-          (!player.value || playerKey(shot) === player.value));
+          choices.get(playerKey(shot))?.checked !== false);
         for (const shot of visible) {
           const marker = view._element("span", shot.metido ? "●" : "×",
             "fbm-shot-mark " + (shot.local ? "fbm-shot-local" : "fbm-shot-away"));
@@ -149,7 +148,43 @@ function renderFBMShotMap(view, container, match) {
           " tiros" + (result.tiros_descartados ? " · " + result.tiros_descartados + " sin datos válidos" : "");
       };
       period.addEventListener("change", redraw);
-      player.addEventListener("change", redraw);
+      for (const local of [true, false]) {
+        const team = new Map();
+        for (const shot of shots.filter(shot => shot.local === local)) {
+          const key = playerKey(shot);
+          if (!team.has(key) || shot.nombre) team.set(key, shot);
+        }
+        if (!team.size) continue;
+        const group = view._element("fieldset");
+        group.append(view._element("legend", local ? match.local : match.visitante));
+        const toggle = view._element("button", "Quitar selección", "fbm-action");
+        toggle.type = "button";
+        group.append(toggle);
+        const refreshToggle = () => {
+          toggle.textContent = [...team.keys()].some(key => choices.get(key).checked)
+            ? "Quitar selección" : "Seleccionar todos";
+        };
+        for (const [key, shot] of [...team].sort(([, a], [, b]) =>
+          (a.dorsal || "").localeCompare(b.dorsal || "", "es", {numeric: true}))) {
+          const label = view._element("label");
+          const input = view._element("input");
+          input.type = "checkbox";
+          input.checked = true;
+          input.addEventListener("change", () => { refreshToggle(); redraw(); });
+          choices.set(key, input);
+          const dorsal = shot.dorsal ? "#" + shot.dorsal : "Sin dorsal";
+          label.append(input, view._element("span", shot.nombre ? dorsal + " · " + shot.nombre : dorsal));
+          group.append(label);
+        }
+        toggle.addEventListener("click", () => {
+          const selectAll = ![...team.keys()].some(key => choices.get(key).checked);
+          for (const key of team.keys()) choices.get(key).checked = selectAll;
+          refreshToggle();
+          redraw();
+        });
+        players.append(group);
+      }
+      filters.append(players);
       panel.append(filters, court, legend);
       redraw();
       loaded = true;
