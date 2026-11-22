@@ -2513,7 +2513,7 @@ class FBMCardEditor extends HTMLElement {
     submit.textContent = "Buscar jugador";
     submit.disabled = state.busy;
     const hint = document.createElement("p");
-    hint.textContent = "Busca en las plantillas archivadas de las competiciones seguidas.";
+    hint.textContent = "Busca por nombre en la FBM.";
     const results = document.createElement("div");
     results.setAttribute("aria-live", "polite");
     results.textContent = state.message;
@@ -2531,9 +2531,16 @@ class FBMCardEditor extends HTMLElement {
       try {
         const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
         if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
-        const data = await this._hass.callWS({type: "fbm/player/search_archived", entry_id: entries[0], texto});
+        state.entry = entries[0];
+        let data;
+        try {
+          data = await this._hass.callWS({type: "fbm/player/search", entry_id: state.entry, texto});
+        } catch (_) {
+          data = await this._hass.callWS({type: "fbm/player/search_archived", entry_id: state.entry, texto});
+          state.message = "Resultados del archivo local.";
+        }
         state.players = data.jugadores || [];
-        state.message = state.players.length ? "" : "Sin coincidencias en las plantillas archivadas.";
+        state.message = state.players.length ? (state.message === "Resultados del archivo local." ? state.message : "") : "No se han encontrado jugadores.";
       } catch (_) {
         state.message = "No se pudo buscar en el archivo FBM.";
       } finally {
@@ -2545,45 +2552,35 @@ class FBMCardEditor extends HTMLElement {
       if (event.key === "Enter") { event.preventDefault(); submit.click(); }
     });
     if (state.players.length) {
-      this._field(results, "Jugador", "", value => {
-        if (value === "") return;
+      this._field(results, "Jugador", "", async value => {
+        if (value === "" || state.busy) return;
         const row = state.players[Number(value)];
         if (!row) return;
+        let selection = row;
+        if (!row.equipo.id) {
+          state.busy = true;
+          state.message = "Comprobando equipo del jugador…";
+          this._render();
+          try {
+            selection = await this._hass.callWS({
+              type: "fbm/player/search_selection", entry_id: state.entry, jugador: row.jugador.id
+            });
+            if (!selection?.equipo?.id || selection.jugador?.id !== row.jugador.id) throw Error("Equipo no disponible");
+          } catch (_) {
+            state.message = "FBM no ha facilitado el equipo de este jugador. Prueba a buscar por equipo.";
+            return;
+          } finally {
+            state.busy = false;
+            if (this._search === state) this._render();
+          }
+        }
+        if (this._search !== state) return;
         this._search = null;
-        this._update({equipo_fijo: row.equipo, jugador_fijo: row.jugador}, true);
+        this._update({equipo_fijo: selection.equipo, jugador_fijo: selection.jugador}, true);
       }, {options: [["", "Selecciona un jugador"], ...state.players.map(({equipo, jugador}, i) =>
         [String(i), [jugador.nombre, equipo.nombre, equipo.categoria, equipo.temporada].filter(Boolean).join(" · ")])]});
     }
-    const probe = document.createElement("button");
-    probe.type = "button";
-    probe.textContent = "Probar búsqueda en toda la FBM";
-    probe.disabled = state.busy;
-    probe.addEventListener("click", async () => {
-      const texto = input.value.trim();
-      if (texto.length < 2) {
-        results.textContent = "Escribe al menos dos caracteres.";
-        return;
-      }
-      probe.disabled = true;
-      results.textContent = "Consultando la búsqueda de FBM…";
-      try {
-        const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
-        if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
-        const data = await this._hass.callWS({type: "fbm/player/search_probe", entry_id: entries[0], texto});
-        results.textContent = data.aceptada
-          ? "FBM aceptó la consulta. Registros devueltos: " + data.registros +
-            (data.campos.length ? " · Campos identificados: " + data.campos.join(", ") : "")
-          : "FBM rechazó la consulta con la sesión de invitado.";
-      } catch (_) {
-        results.textContent = "No se pudo ejecutar la consulta de prueba.";
-      } finally {
-        state.players = [];
-        state.message = results.textContent;
-        probe.disabled = false;
-        if (this._search === state) this._render();
-      }
-    });
-    form.append(hint, label, submit, probe, results);
+    form.append(hint, label, submit, results);
   }
 
   _teamSearch(form, followPlayer = false) {

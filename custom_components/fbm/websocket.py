@@ -900,20 +900,33 @@ async def ws_search_archived_players(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    "type": "fbm/player/search_probe",
+    "type": "fbm/player/search",
     probatio.Required("entry_id"): str,
     probatio.Required("texto"): str,
 })
 @websocket_api.async_response
-async def ws_player_search_probe(hass, connection, msg):
-    async def probe(client, request):
-        return await client.async_probe_player_search(request["texto"])
+async def ws_search_players(hass, connection, msg):
+    async def search(client, request):
+        return await client.async_search_players(request["texto"])
 
-    await _dispatch(hass, connection, msg, probe)
+    await _dispatch(hass, connection, msg, search)
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/player/search_selection",
+    probatio.Required("entry_id"): str,
+    probatio.Required("jugador"): str,
+})
+@websocket_api.async_response
+async def ws_player_search_selection(hass, connection, msg):
+    async def select(client, request):
+        return await client.async_player_search_selection(request["jugador"])
+
+    await _dispatch(hass, connection, msg, select)
 
 
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_match_preview, ws_competition_verify_season, ws_competition_player_stats_batch, ws_shot_map_probe, ws_shot_map, ws_search_archived_players, ws_player_search_probe):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_match_preview, ws_competition_verify_season, ws_competition_player_stats_batch, ws_shot_map_probe, ws_shot_map, ws_search_archived_players, ws_search_players, ws_player_search_selection):
         websocket_api.async_register_command(hass, command)
 
 

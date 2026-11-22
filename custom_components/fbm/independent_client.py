@@ -146,24 +146,35 @@ class IndependentClient:
             self._cache.put(key, result, ttl_seconds=ttl)
             return result
 
-    async def async_probe_player_search(self, text: str) -> dict:
+    async def async_search_players(self, text: str) -> dict:
         if not isinstance(text, str) or not 2 <= len(text.strip()) <= 100:
             raise ValueError("Nombre de jugador no válido")
 
-        async def probe(adapter):
+        async def search(adapter):
             data = await adapter.search("buscarJugador", text.strip(), 0)
-            lists = [value for value in data.values() if isinstance(value, list)]
-            fields = ("equipo", "equipoId", "idEquipo", "nombreEquipo",
-                      "categoria", "categoriaId", "nombreCategoria", "temporada",
-                      "temporadaId", "idTemporada", "nombreTemporada")
-            return {
-                "aceptada": not data.get("error") and data.get("resultado") != "error",
-                "registros": sum(len(items) for items in lists),
-                "campos": [field for field in fields if any(
-                    isinstance(row, dict) and field in row for items in lists for row in items)],
-            }
+            rows = data.get("jugadores")
+            if data.get("error") or data.get("resultado") == "error" or not isinstance(rows, list):
+                raise ValueError("FBM no devolvió una búsqueda de jugadores válida")
+            players = []
+            for row in rows[:50]:
+                if not isinstance(row, dict):
+                    continue
+                ident, name = row.get("Id"), row.get("Nombre")
+                if (type(ident) is not str or not ident.strip() or len(ident) > 512 or
+                        type(name) is not str or not name.strip() or len(name) > 256):
+                    continue
+                team = {target: row[source] for target, source in (
+                    ("nombre", "NombreEquipo"), ("categoria", "Categoria"), ("temporada", "Temporada")
+                ) if isinstance(row.get(source), str) and len(row[source]) <= 256}
+                players.append({"equipo": team, "jugador": {"id": ident, "nombre": name}})
+            return {"jugadores": players}
 
-        return await self._cached_query(("prueba_jugador", text), probe, ttl=60)
+        return await self._cached_query(("buscar_jugador", text.strip()), search, ttl=60)
+
+    async def async_player_search_selection(self, player_id: str) -> dict:
+        self._validate_team_id(player_id)
+        return await self._cached_query(
+            ("seleccion_jugador", player_id), lambda adapter: adapter.player_search_selection(player_id), ttl=300)
 
     async def async_search_teams(self, text: str, skip: int = 0) -> list[dict[str, str]]:
         if not isinstance(text, str) or not text.strip() or len(text) > 100 or type(skip) is not int or not 0 <= skip <= 10000:
