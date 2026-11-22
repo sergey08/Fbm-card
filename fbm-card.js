@@ -2543,10 +2543,14 @@ class FBMCardEditor extends HTMLElement {
         state.players = [...local, ...players(online).filter(row => !ids.has(row.jugador.id))];
         if (state.players.length) {
           state.message = online.status === "rejected" ? "Resultados del archivo local." : "";
-        } else if (online.status === "rejected" && archived.status === "rejected") {
-          state.message = "No se pudo ejecutar la búsqueda.";
+        } else if (online.status === "rejected") {
+          state.message = archived.status === "rejected"
+            ? "No se pudo consultar FBM ni el archivo local."
+            : "FBM no completó la búsqueda. El archivo local no contiene coincidencias.";
+        } else if (online.value?.registros > 0) {
+          state.message = "FBM devolvió " + online.value.registros + " registros sin identificación de jugador utilizable.";
         } else {
-          state.message = "Sin coincidencias. Prueba con un apellido o busca por equipo.";
+          state.message = "Sin coincidencias. Prueba con el nombre acentuado, un apellido o busca por equipo.";
         }
       } catch (_) {
         state.message = "No se pudo buscar en el archivo FBM.";

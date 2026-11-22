@@ -159,15 +159,19 @@ class IndependentClient:
             for row in rows[:50]:
                 if not isinstance(row, dict):
                     continue
-                ident, name = row.get("Id"), row.get("Nombre")
+                ident, name = row.get("Id", row.get("id")), row.get("Nombre", row.get("nombre"))
                 if (type(ident) is not str or not ident.strip() or len(ident) > 512 or
                         type(name) is not str or not name.strip() or len(name) > 256):
                     continue
-                team = {target: row[source] for target, source in (
+                team = {}
+                for target, source in (
                     ("nombre", "NombreEquipo"), ("categoria", "Categoria"), ("temporada", "Temporada")
-                ) if isinstance(row.get(source), str) and len(row[source]) <= 256}
+                ):
+                    value = row.get(source, row.get(source[0].lower() + source[1:]))
+                    if isinstance(value, str) and len(value) <= 256:
+                        team[target] = value
                 players.append({"equipo": team, "jugador": {"id": ident, "nombre": name}})
-            return {"jugadores": players}
+            return {"jugadores": players, "registros": len(rows)}
 
         return await self._cached_query(("buscar_jugador", text.strip()), search, ttl=60)
 
