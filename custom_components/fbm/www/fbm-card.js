@@ -173,7 +173,7 @@ function renderFBMShotMap(view, container, match) {
           input.addEventListener("change", () => { refreshToggle(); redraw(); });
           choices.set(key, input);
           const dorsal = shot.dorsal ? "#" + shot.dorsal : "Sin dorsal";
-          label.append(input, view._element("span", shot.nombre ? dorsal + " · " + shot.nombre : dorsal));
+          label.append(input, view._element("span", shot.nombre || dorsal));
           group.append(label);
         }
         toggle.addEventListener("click", () => {

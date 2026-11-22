@@ -204,7 +204,7 @@ test("recent results share the blue scoreboard and archived crests",async()=>{
   assert.equal(panel.hidden,false);
   const court=walk(panel,x=>x.className==="fbm-shot-court")[0];
   assert.deepEqual(court.children.slice(1).map(x=>[x.style.left,x.textContent]),[["15%","×"],["90%","●"]]);
-  assert.ok(walk(panel,x=>x.textContent==="#7 · Jugador de prueba").length);
+  assert.ok(walk(panel,x=>x.textContent==="Jugador de prueba").length);
   const checks=walk(panel,x=>x.type==="checkbox");
   assert.equal(checks.length,2);
   checks[0].checked=false;
