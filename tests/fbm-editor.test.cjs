@@ -108,7 +108,7 @@ test("following a player saves the official team and player selected in the edit
     };
     assert.equal(request.type, "fbm/team/players");
     assert.equal(request.equipo, "team");
-    return {jugadores:[{id:"p2",nombre:"Zoe"},{id:"p1",nombre:"Ana",partidos_jugados:5}]};
+    return {jugadores:[{id:"p2",nombre:"Zoe"},{id:"p1",nombre:"García, Ana",partidos_jugados:5}]};
   }};
   editor.hass = hass;
   const nodes = descendants(editor.shadowRoot);
@@ -120,11 +120,15 @@ test("following a player saves the official team and player selected in the edit
   team.value = "0";
   team.listeners.change();
   await new Promise(resolve => setImmediate(resolve));
+  const name = descendants(editor.shadowRoot).find(node => node.placeholder === "Buscar en la plantilla");
+  name.value = "ana garcia";
+  name.listeners.input();
+  assert.equal(field(editor, "Jugador").children.length, 2);
   change(editor, "Jugador", "0");
   const config = editor.lastEvent.detail.config;
   assert.equal(config.equipo_fijo.id, "team");
   assert.equal(config.jugador_fijo.id, "p1");
-  assert.equal(config.jugador_fijo.nombre, "Ana");
+  assert.equal(config.jugador_fijo.nombre, "García, Ana");
   card._hass = hass;
   card._config = config;
   card._render = () => {};

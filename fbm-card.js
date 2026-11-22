@@ -2570,15 +2570,42 @@ class FBMCardEditor extends HTMLElement {
     }
     if (followPlayer && state.roster?.players.length) {
       const {team, players} = state.roster;
-      this._field(results, "Jugador", "", index => {
-        if (index === "") return;
-        const player = players[Number(index)];
-        if (!player) return;
-        const {id, nombre} = player;
-        this._search = null;
-        this._update({ equipo_fijo: team, jugador_fijo: {id, nombre} }, true);
-      }, {options: [["", "Selecciona un jugador"], ...players.map((player, index) =>
-        [String(index), player.nombre])]});
+      const nameLabel = document.createElement("label");
+      nameLabel.textContent = "Nombre y apellidos del jugador";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.placeholder = "Buscar en la plantilla";
+      const matches = document.createElement("div");
+      const tokens = value => value.normalize("NFD").replace(/\p{M}/gu, "")
+        .toLocaleLowerCase("es").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      const filter = () => {
+        const query = tokens(nameInput.value || "");
+        const visible = players.map((player, index) => [player, index])
+          .filter(([player]) => {
+            const name = tokens(player.nombre);
+            return query.every(term => name.some(word => word.startsWith(term)));
+          });
+        matches.replaceChildren();
+        if (!visible.length) {
+          const empty = document.createElement("p");
+          empty.textContent = "Ningún jugador de esta plantilla coincide.";
+          matches.append(empty);
+          return;
+        }
+        this._field(matches, "Jugador", "", index => {
+          if (index === "") return;
+          const player = players[Number(index)];
+          if (!player) return;
+          const {id, nombre} = player;
+          this._search = null;
+          this._update({ equipo_fijo: team, jugador_fijo: {id, nombre} }, true);
+        }, {options: [["", "Selecciona un jugador"], ...visible.map(([player, index]) =>
+          [String(index), player.nombre])]});
+      };
+      nameInput.addEventListener("input", filter);
+      nameLabel.append(nameInput);
+      results.append(nameLabel, matches);
+      filter();
     }
     form.append(label, search, results);
   }
