@@ -2747,7 +2747,7 @@ class FBMCardEditor extends HTMLElement {
           type: "fbm/team/search", entry_id: entry.entries[0], texto, skip: 0
         });
         state.teams = Array.isArray(response?.equipos)
-          ? response.equipos.filter(team => FBMCard.prototype._experimentalTeamIsValid(team)) : [];
+          ? response.equipos.filter(team => fbmExperimentalTeamIsValid(team)) : [];
         state.message = state.teams.length ? "" : "No se han encontrado equipos.";
       } catch (_) {
         state.message = "No se pudo buscar. Comprueba que FBM está conectado.";
