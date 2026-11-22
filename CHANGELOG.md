@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased — English / Español
+## v0.2.17 — Español
 
-- Show six season metrics on each player card before opening the profile. Opening the profile reveals individual games with published statistics.
-- Mostrar seis métricas de temporada en cada jugador antes de abrir su ficha. La ficha desplegada muestra los partidos con estadísticas publicadas.
+- Mapa de tiro para partidos con marcador e identificador oficial. Consulta bajo demanda en Afición FBM, con aciertos y fallos en la pista.
+- Filtros por periodo y selección múltiple de jugadores por equipo. Se usa el dorsal cuando falta el nombre.
+- Resumen oficial de aciertos, intentos y porcentaje para tiros de dos, triples y tiros libres por equipo.
+- Seis métricas de temporada disponibles en el resumen del jugador. La ficha desplegada muestra los partidos con estadísticas publicadas. Se conservan los ceros y se ocultan los campos ausentes.
 
 ## v0.2.16 — English / Español
 
