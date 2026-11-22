@@ -4,7 +4,7 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.17.
+**Versión estable:** v0.2.18.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
@@ -23,7 +23,13 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.17](RELEASE_0.2.17_NOTES.md) · [Histórico de versiones](docs/releases/)
+[Novedades de v0.2.18](RELEASE_0.2.18_NOTES.md) · [Histórico de versiones](docs/releases/)
+
+### Seguir a un jugador
+
+Selecciona **Nombre y apellidos** para buscar directamente en las plantillas ya archivadas de tus competiciones seguidas. Para buscar en el catálogo de equipos de FBM, selecciona **Equipo**.
+
+En el editor de **FBM Card**, elige **Seguir jugador** y busca por **Nombre y apellidos** o por **Equipo**. Selecciona al jugador y guarda la tarjeta. Se muestra su foto si FBM la publica y las métricas de temporada disponibles, incluso sin descargar la competición. **Ver ficha** abre las estadísticas por partido.
 
 ### Mapa de tiro y estadísticas
 
@@ -75,8 +81,8 @@ La forma recomendada de utilizar FBM Card es mediante la interfaz gráfica de Ho
 1. Abre el **panel de control** (dashboard) donde quieras mostrar los equipos o las competiciones.
 2. Entra en **Editar panel** y selecciona **Añadir tarjeta**.
 3. Abre la pestaña **Por tarjeta** y escribe `fbm` en el buscador.
-4. En el selector verás las opciones **FBM Card** y **FBM Competition Card**:
-   - **FBM Card**: busca equipos y permite seguir un equipo en una tarjeta independiente, con pestañas **Partidos**, **Clasificación** y **Jugadores**.
+4. Selecciona **FBM Card**. En **Tipo de tarjeta** puedes elegir **Buscar equipos**, **Competición**, **Equipo fijo**, **Próximos partidos** o **Seguir jugador**. Debajo del selector aparece la descripción del tipo elegido. Para cambiar el equipo de una tarjeta **Equipo fijo**, abre su editor de configuración.
+
    - **FBM Competition Card**: muestra la competición seleccionada, sus jornadas, clasificación y datos archivados disponibles.
 5. Selecciona la tarjeta, configura sus opciones con el **editor visual** y guárdala. Puedes añadir tantas tarjetas independientes como necesites.
 

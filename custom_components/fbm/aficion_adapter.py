@@ -275,13 +275,28 @@ class AficionFBMAdapter:
             return {"ok": False, "stage": "normalize", "category": safe_error_category(exc), "shape": shape}
         return {"ok": True, "stage": "complete", "shape": shape, "count": len(result["partidos"])}
 
-    async def player_detail(self, player_id: str) -> dict:
+    async def _player_detail_response(self, player_id: str) -> dict:
         """APK LH5/j;->e on-demand player detail using existing guest access."""
         device_id, key = self._team_key()
-        response = await asyncio.to_thread(
+        return await asyncio.to_thread(
             post_player_detail_form, player_detail_fields(device_id, key, player_id)
         )
-        return normalize_player_detail(response, player_id)
+
+    async def player_detail(self, player_id: str) -> dict:
+        return normalize_player_detail(await self._player_detail_response(player_id), player_id)
+
+    async def player_search_selection(self, player_id: str) -> dict:
+        response = await self._player_detail_response(player_id)
+        player = normalize_player_detail(response, player_id)["jugador"]
+        team = response.get("equipo")
+        if not isinstance(team, dict):
+            raise ValueError("Falta el equipo oficial del jugador")
+        ids = [team[key] for key in ("Id", "id") if key in team]
+        if len(ids) != 1 or type(ids[0]) is not str or not ids[0].strip() or len(ids[0]) > 512:
+            raise ValueError("Falta el identificador oficial del equipo")
+        return {"jugador": {"id": player["id"], "nombre": player["nombre"]},
+                "equipo": {"id": ids[0], "nombre": player["equipo"] or "",
+                           "categoria": player["categoria"] or "", "temporada": player["temporada"] or ""}}
 
     async def player_detail_diagnostic(self, player_id: str) -> dict:
         """Read-only: show response schema and failure stage, never personal values."""

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
+import re
 from time import monotonic
 
 from .aficion_adapter import AficionFBMAdapter, FBMAccessNotValidated
@@ -145,6 +146,74 @@ class IndependentClient:
             result = await operation(self._adapter)
             self._cache.put(key, result, ttl_seconds=ttl)
             return result
+
+    async def async_search_players(self, text: str) -> dict:
+        if not isinstance(text, str) or not 2 <= len(text.strip()) <= 100:
+            raise ValueError("Nombre de jugador no válido")
+
+        query = text.strip()
+        variants = [query]
+        if re.fullmatch(r"[a-z]{3,}[ns]", query, re.IGNORECASE | re.ASCII):
+            vowel = re.search(r"[aeiou](?=[^aeiou]*$)", query, re.IGNORECASE)
+            if vowel:
+                index = vowel.start()
+                variants.append(query[:index] + query[index].translate(
+                    str.maketrans("aeiouAEIOU", "áéíóúÁÉÍÓÚ")) + query[index + 1:])
+
+        async def search(adapter):
+            rows = []
+            completed = False
+            for variant in variants:
+                offset = 0
+                pages = []
+                for _ in range(3):
+                    try:
+                        data = await adapter.search("buscarJugador", variant, offset)
+                    except Exception:
+                        break
+                    matches = data.get("jugadores")
+                    if data.get("error") or data.get("resultado") == "error" or not isinstance(matches, list):
+                        break
+                    completed = True
+                    if not matches or matches in pages:
+                        break
+                    pages.append(matches)
+                    rows.extend(matches[:50 - len(rows)])
+                    if len(rows) >= 50:
+                        break
+                    offset += len(matches)
+                if len(rows) >= 50:
+                    break
+            if not completed:
+                raise ValueError("FBM no devolvió una búsqueda de jugadores válida")
+            players = []
+            seen = set()
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                ident, name = row.get("Id", row.get("id")), row.get("Nombre", row.get("nombre"))
+                if (type(ident) is not str or not ident.strip() or len(ident) > 512 or
+                        type(name) is not str or not name.strip() or len(name) > 256):
+                    continue
+                team = {}
+                for target, source in (
+                    ("nombre", "NombreEquipo"), ("categoria", "Categoria"), ("temporada", "Temporada")
+                ):
+                    value = row.get(source, row.get(source[0].lower() + source[1:]))
+                    if isinstance(value, str) and len(value) <= 256:
+                        team[target] = value
+                key = (ident, team.get("nombre"), team.get("categoria"), team.get("temporada"))
+                if key not in seen:
+                    seen.add(key)
+                    players.append({"equipo": team, "jugador": {"id": ident, "nombre": name}})
+            return {"jugadores": players, "registros": len(rows)}
+
+        return await self._cached_query(("buscar_jugador", text.strip()), search, ttl=60)
+
+    async def async_player_search_selection(self, player_id: str) -> dict:
+        self._validate_team_id(player_id)
+        return await self._cached_query(
+            ("seleccion_jugador", player_id), lambda adapter: adapter.player_search_selection(player_id), ttl=300)
 
     async def async_search_teams(self, text: str, skip: int = 0) -> list[dict[str, str]]:
         if not isinstance(text, str) or not text.strip() or len(text) > 100 or type(skip) is not int or not 0 <= skip <= 10000:

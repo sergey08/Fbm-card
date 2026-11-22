@@ -171,7 +171,7 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.hass.http.async_register_static_paths = AsyncMock()
         from homeassistant.components import websocket_api
         expected = {
-            "ws_shot_map_probe", "ws_shot_map",
+            "ws_shot_map_probe", "ws_shot_map", "ws_search_archived_players", "ws_search_players", "ws_player_search_selection",
             "ws_entries", "ws_status", "ws_create", "ws_register",
             "ws_recover", "ws_connect", "ws_search", "ws_schedule",
             "ws_phases", "ws_schedule_round", "ws_standings", "ws_group_identity", "ws_schedule_probe", "ws_roster", "ws_player_detail", "ws_player_stats", "ws_diagnostic", "ws_player_detail_diagnostic", "ws_player_stats_diagnostic", "ws_competition_sync", "ws_competition_list", "ws_competition_team_snapshot", "ws_competition_team_roster", "ws_competition_team_player_stats", "ws_competition_latest", "ws_competition_preview", "ws_competition_analysis", "ws_competition_match_preview", "ws_competition_verify_season", "ws_competition_player_stats_batch",
