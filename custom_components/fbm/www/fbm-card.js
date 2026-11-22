@@ -2532,15 +2532,22 @@ class FBMCardEditor extends HTMLElement {
         const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
         if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
         state.entry = entries[0];
-        let data;
-        try {
-          data = await this._hass.callWS({type: "fbm/player/search", entry_id: state.entry, texto});
-        } catch (_) {
-          data = await this._hass.callWS({type: "fbm/player/search_archived", entry_id: state.entry, texto});
-          state.message = "Resultados del archivo local.";
+        const [online, archived] = await Promise.allSettled([
+          this._hass.callWS({type: "fbm/player/search", entry_id: state.entry, texto}),
+          this._hass.callWS({type: "fbm/player/search_archived", entry_id: state.entry, texto})
+        ]);
+        const players = result => result.status === "fulfilled" &&
+          Array.isArray(result.value?.jugadores) ? result.value.jugadores : [];
+        const local = players(archived);
+        const ids = new Set(local.map(row => row.jugador.id));
+        state.players = [...local, ...players(online).filter(row => !ids.has(row.jugador.id))];
+        if (state.players.length) {
+          state.message = online.status === "rejected" ? "Resultados del archivo local." : "";
+        } else if (online.status === "rejected" && archived.status === "rejected") {
+          state.message = "No se pudo ejecutar la búsqueda.";
+        } else {
+          state.message = "Sin coincidencias. Prueba con un apellido o busca por equipo.";
         }
-        state.players = data.jugadores || [];
-        state.message = state.players.length ? (state.message === "Resultados del archivo local." ? state.message : "") : "No se han encontrado jugadores.";
       } catch (_) {
         state.message = "No se pudo buscar en el archivo FBM.";
       } finally {

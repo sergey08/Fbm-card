@@ -151,3 +151,26 @@ test("unified editor exposes both competition views and keeps legacy configurati
   assert.equal(card._competitionView._config.initial_tab, "upcoming");
   assert.ok(registry.get("fbm-competition-card"));
 });
+
+test("name search keeps archived players even when FBM returns other results", async () => {
+  const editor = registry.get("fbm-card").getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"jugador"});
+  editor.hass = {callWS: async ({type}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "fbm/player/search") return {jugadores:[
+      {jugador:{id:"other",nombre:"Otro jugador"},equipo:{}},
+      {jugador:{id:"local",nombre:"Jugador local"},equipo:{}}
+    ]};
+    assert.equal(type, "fbm/player/search_archived");
+    return {jugadores:[{jugador:{id:"local",nombre:"Jugador local"},equipo:{id:"team",nombre:"Equipo"}}]};
+  }};
+  const nodes = descendants(editor.shadowRoot);
+  const input = nodes.find(node => node.type === "search");
+  input.value = "jugador";
+  input.listeners.input();
+  await nodes.find(node => node.textContent === "Buscar jugador").listeners.click();
+  assert.equal(field(editor, "Jugador").children.length, 3);
+  change(editor, "Jugador", "0");
+  assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "local");
+  assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
+});
