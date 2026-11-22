@@ -334,14 +334,30 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
     detailButton.addEventListener("click", () => toggleDetail(player.id));
     header.append(person, detailButton);
     item.append(header);
+    const stats = state.playerStatsTeamId === pinned?.id &&
+      state.playerStatsEntryId === state.entry &&
+      state.playerStatsPlayerId === player.id ? state.playerStats : null;
+    const games = (Array.isArray(stats?.partidos) ? stats.partidos : stats?.partidos?.partidos || [])
+      .filter(game => game && matchColumns.some(([key]) => numeric(game[key])));
+    const matchValues = key => games.map(game => game[key]).filter(numeric);
+    const mean = values => values.length
+      ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 10) / 10
+      : undefined;
+    const points = matchValues("puntos");
+    const fouls = matchValues("faltas_cometidas");
+    const ratings = matchValues("valoracion");
+    const totalPoints = points.length && points.length === player.partidos_jugados
+      ? points.reduce((sum, value) => sum + value, 0) : undefined;
     const overview = view._element("div", "", "fbm-stat-grid");
     const summary = [
       ["Partidos", player.partidos_jugados],
-      ["Puntos totales", player.puntos_totales],
+      ["Puntos totales", player.puntos_totales ?? totalPoints],
       ["Min/partido", player.minutos_por_partido],
-      ["Faltas/partido", player.faltas_por_partido, false, player.partidos_con_faltas],
+      ["Faltas/partido", player.faltas_por_partido ?? mean(fouls), false,
+        player.faltas_por_partido != null ? player.partidos_con_faltas : fouls.length],
       ["Puntos/partido", player.puntos_por_partido ?? player.media_puntos, true, player.partidos_con_puntos],
-      ["Valoración", player.valoracion_por_partido, false, player.partidos_con_valoracion]
+      ["Valoración", player.valoracion_por_partido ?? mean(ratings), false,
+        player.valoracion_por_partido != null ? player.partidos_con_valoracion : ratings.length]
     ];
     for (const [label, value, emphasize, samples] of summary) {
       if (!numeric(value)) continue;
@@ -356,13 +372,8 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
       statsButton.type = "button";
       statsButton.disabled = state.busy;
       statsButton.addEventListener("click", () => loadStats(player.id));
-      const stats = state.playerStatsTeamId === pinned?.id &&
-        state.playerStatsEntryId === state.entry &&
-        state.playerStatsPlayerId === player.id ? state.playerStats : null;
       if (!stats && !state.busy) details.append(statsButton);
       if (stats) {
-        const games = (Array.isArray(stats.partidos) ? stats.partidos : stats.partidos?.partidos || [])
-          .filter(game => game && matchColumns.some(([key]) => numeric(game[key])));
         const matches = view._element("section", "", "fbm-player-matches");
         if (games.length) matches.append(view._element("h4", "Partidos con estadísticas (" + games.length + ")", "fbm-subheading"));
         for (const game of games) {
