@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
+import re
 from time import monotonic
 
 from .aficion_adapter import AficionFBMAdapter, FBMAccessNotValidated
@@ -150,13 +151,32 @@ class IndependentClient:
         if not isinstance(text, str) or not 2 <= len(text.strip()) <= 100:
             raise ValueError("Nombre de jugador no válido")
 
+        query = text.strip()
+        variants = [query]
+        if re.fullmatch(r"[a-z]{3,}[ns]", query, re.IGNORECASE | re.ASCII):
+            vowel = re.search(r"[aeiou](?=[^aeiou]*$)", query, re.IGNORECASE)
+            if vowel:
+                index = vowel.start()
+                variants.append(query[:index] + query[index].translate(
+                    str.maketrans("aeiouAEIOU", "áéíóúÁÉÍÓÚ")) + query[index + 1:])
+
         async def search(adapter):
-            data = await adapter.search("buscarJugador", text.strip(), 0)
-            rows = data.get("jugadores")
-            if data.get("error") or data.get("resultado") == "error" or not isinstance(rows, list):
+            rows = []
+            completed = False
+            for variant in variants:
+                try:
+                    data = await adapter.search("buscarJugador", variant, 0)
+                except Exception:
+                    continue
+                matches = data.get("jugadores")
+                if not data.get("error") and data.get("resultado") != "error" and isinstance(matches, list):
+                    rows.extend(matches[:50])
+                    completed = True
+            if not completed:
                 raise ValueError("FBM no devolvió una búsqueda de jugadores válida")
             players = []
-            for row in rows[:50]:
+            seen = set()
+            for row in rows:
                 if not isinstance(row, dict):
                     continue
                 ident, name = row.get("Id", row.get("id")), row.get("Nombre", row.get("nombre"))
@@ -170,7 +190,10 @@ class IndependentClient:
                     value = row.get(source, row.get(source[0].lower() + source[1:]))
                     if isinstance(value, str) and len(value) <= 256:
                         team[target] = value
-                players.append({"equipo": team, "jugador": {"id": ident, "nombre": name}})
+                key = (ident, team.get("nombre"), team.get("categoria"), team.get("temporada"))
+                if key not in seen:
+                    seen.add(key)
+                    players.append({"equipo": team, "jugador": {"id": ident, "nombre": name}})
             return {"jugadores": players, "registros": len(rows)}
 
         return await self._cached_query(("buscar_jugador", text.strip()), search, ttl=60)
