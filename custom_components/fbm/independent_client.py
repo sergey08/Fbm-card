@@ -164,14 +164,26 @@ class IndependentClient:
             rows = []
             completed = False
             for variant in variants:
-                try:
-                    data = await adapter.search("buscarJugador", variant, 0)
-                except Exception:
-                    continue
-                matches = data.get("jugadores")
-                if not data.get("error") and data.get("resultado") != "error" and isinstance(matches, list):
-                    rows.extend(matches[:50])
+                offset = 0
+                pages = []
+                for _ in range(3):
+                    try:
+                        data = await adapter.search("buscarJugador", variant, offset)
+                    except Exception:
+                        break
+                    matches = data.get("jugadores")
+                    if data.get("error") or data.get("resultado") == "error" or not isinstance(matches, list):
+                        break
                     completed = True
+                    if not matches or matches in pages:
+                        break
+                    pages.append(matches)
+                    rows.extend(matches[:50 - len(rows)])
+                    if len(rows) >= 50:
+                        break
+                    offset += len(matches)
+                if len(rows) >= 50:
+                    break
             if not completed:
                 raise ValueError("FBM no devolvió una búsqueda de jugadores válida")
             players = []
