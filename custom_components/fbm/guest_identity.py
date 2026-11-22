@@ -40,7 +40,7 @@ class GuestIdentity:
 
     def search_fields(self, action: str, text: str, skip: int, now: datetime) -> dict[str, str]:
         """Cinco campos observados; no realiza solicitudes ni valida el endpoint."""
-        if action not in {"buscarClub", "buscarCategoria", "buscarEquipo"}:
+        if action not in {"buscarClub", "buscarCategoria", "buscarEquipo", "buscarJugador"}:
             raise ValueError("Acción no verificada")
         if not isinstance(text, str):
             raise ValueError("texto debe ser una cadena")

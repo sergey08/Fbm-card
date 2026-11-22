@@ -2554,7 +2554,36 @@ class FBMCardEditor extends HTMLElement {
       }, {options: [["", "Selecciona un jugador"], ...state.players.map(({equipo, jugador}, i) =>
         [String(i), [jugador.nombre, equipo.nombre, equipo.categoria, equipo.temporada].filter(Boolean).join(" · ")])]});
     }
-    form.append(hint, label, submit, results);
+    const probe = document.createElement("button");
+    probe.type = "button";
+    probe.textContent = "Probar búsqueda en toda la FBM";
+    probe.disabled = state.busy;
+    probe.addEventListener("click", async () => {
+      const texto = input.value.trim();
+      if (texto.length < 2) {
+        results.textContent = "Escribe al menos dos caracteres.";
+        return;
+      }
+      probe.disabled = true;
+      results.textContent = "Consultando la búsqueda de FBM…";
+      try {
+        const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
+        if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
+        const data = await this._hass.callWS({type: "fbm/player/search_probe", entry_id: entries[0], texto});
+        results.textContent = data.aceptada
+          ? "FBM aceptó la consulta. Registros devueltos: " + data.registros +
+            (data.campos.length ? " · Campos identificados: " + data.campos.join(", ") : "")
+          : "FBM rechazó la consulta con la sesión de invitado.";
+      } catch (_) {
+        results.textContent = "No se pudo ejecutar la consulta de prueba.";
+      } finally {
+        state.players = [];
+        state.message = results.textContent;
+        probe.disabled = false;
+        if (this._search === state) this._render();
+      }
+    });
+    form.append(hint, label, submit, probe, results);
   }
 
   _teamSearch(form, followPlayer = false) {

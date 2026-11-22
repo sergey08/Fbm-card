@@ -146,6 +146,25 @@ class IndependentClient:
             self._cache.put(key, result, ttl_seconds=ttl)
             return result
 
+    async def async_probe_player_search(self, text: str) -> dict:
+        if not isinstance(text, str) or not 2 <= len(text.strip()) <= 100:
+            raise ValueError("Nombre de jugador no válido")
+
+        async def probe(adapter):
+            data = await adapter.search("buscarJugador", text.strip(), 0)
+            lists = [value for value in data.values() if isinstance(value, list)]
+            fields = ("equipo", "equipoId", "idEquipo", "nombreEquipo",
+                      "categoria", "categoriaId", "nombreCategoria", "temporada",
+                      "temporadaId", "idTemporada", "nombreTemporada")
+            return {
+                "aceptada": not data.get("error") and data.get("resultado") != "error",
+                "registros": sum(len(items) for items in lists),
+                "campos": [field for field in fields if any(
+                    isinstance(row, dict) and field in row for items in lists for row in items)],
+            }
+
+        return await self._cached_query(("prueba_jugador", text), probe, ttl=60)
+
     async def async_search_teams(self, text: str, skip: int = 0) -> list[dict[str, str]]:
         if not isinstance(text, str) or not text.strip() or len(text) > 100 or type(skip) is not int or not 0 <= skip <= 10000:
             raise ValueError("Busqueda no valida")
