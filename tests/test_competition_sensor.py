@@ -154,6 +154,7 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
                 "id": "team1", "equipo": "Team", "posicion": 1, "ganados": 4, "perdidos": 0
             }])
             self.assertEqual(summary["groups"][0]["recent_results"], [{
+                "id": "game1",
                 "local": "Team", "visitante": "Other", "fecha": fixture_day,
                 "marcador": {"local": 45, "visitante": 38},
             }])
