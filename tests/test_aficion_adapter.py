@@ -200,3 +200,18 @@ class ShotMapTests(unittest.TestCase):
             normalize_shot_map({"resultado": "error", "error": "", "mapadetiro": {"tiros": []}})
         self.assertEqual(normalize_shot_map({"error": "", "mapadetiro": {"tiros": []}}),
                          {"tiros": [], "tiros_descartados": 0})
+
+    def test_team_shooting_totals_include_attempts_without_coordinates(self):
+        from fbm_adapter_test_pkg.shot_map import normalize_shot_map
+
+        result = normalize_shot_map({"error": "", "mapadetiro": {
+            "tiros": [], "estadiscasequipolocal": {
+                "canasta2p": 7, "tiro2p": 10,
+                "canasta3p": 0, "tiro3p": 0,
+                "canasta1p": 3, "tiro1p": 2,
+            },
+        }})
+        self.assertEqual(result["aciertos_equipos"], {"local": {
+            "2p": {"aciertos": 7, "intentos": 10},
+            "3p": {"aciertos": 0, "intentos": 0},
+        }})

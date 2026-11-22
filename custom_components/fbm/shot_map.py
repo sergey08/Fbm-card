@@ -90,4 +90,19 @@ def normalize_shot_map(payload: object) -> dict:
         if len(matches) == 1:
             shot["nombre"] = next(iter(matches))
         shots.append(shot)
-    return {"tiros": shots, "tiros_descartados": len(shot_map["tiros"]) - len(shots)}
+    result = {"tiros": shots, "tiros_descartados": len(shot_map["tiros"]) - len(shots)}
+    statistics = {}
+    for side, field in (("local", "estadiscasequipolocal"), ("visitante", "estadiscasequipovisitante")):
+        team = shot_map.get(field)
+        if not isinstance(team, dict):
+            continue
+        types = {}
+        for kind in ("2p", "3p", "1p"):
+            made, attempts = team.get("canasta" + kind), team.get("tiro" + kind)
+            if type(made) is int and type(attempts) is int and 0 <= made <= attempts:
+                types[kind] = {"aciertos": made, "intentos": attempts}
+        if types:
+            statistics[side] = types
+    if statistics:
+        result["aciertos_equipos"] = statistics
+    return result

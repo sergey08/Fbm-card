@@ -16,6 +16,11 @@ const FBM_TEAM_CONTENT_STYLES = `
       .fbm-shot-players{margin:8px 0}
       .fbm-shot-players fieldset{margin:6px 0;border:1px solid var(--divider-color,#888);min-width:0}
       .fbm-shot-players label{display:flex;align-items:center;gap:8px;padding:5px 0;overflow-wrap:anywhere}
+      .fbm-shot-summary{margin-top:12px}
+      .fbm-shot-summary-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center}
+      .fbm-shot-summary-row > div{display:grid;justify-items:center;gap:5px}
+      .fbm-shot-ring{display:grid;place-items:center;width:min(100%,64px);aspect-ratio:1;border-radius:50%;background:conic-gradient(var(--shot-color) var(--shot-rate),var(--divider-color,#bbb) 0)}
+      .fbm-shot-ring strong{display:grid;place-items:center;width:74%;aspect-ratio:1;border-radius:50%;background:var(--card-background-color,#fff);font-size:.85rem}
       .fbm-shot-mark{position:absolute;transform:translate(-50%,-50%);font-size:1.05rem;font-weight:700;line-height:1;z-index:1}
       .fbm-shot-local{color:#268bdf}
       .fbm-shot-away{color:#e98316}
@@ -79,6 +84,35 @@ function fbmAddFixtureCrests(view, crests, matches) {
   }
 }
 
+function renderFBMShotSummary(view, panel, match, statistics) {
+  if (!statistics) return;
+  const section = view._element("section", "", "fbm-shot-summary");
+  section.append(view._element("h4", "Acierto por equipo · Partido completo", "fbm-subheading"));
+  for (const side of ["local", "visitante"]) {
+    if (!statistics[side]) continue;
+    section.append(view._element("h5", match[side], "fbm-subheading"));
+    const row = view._element("div", "", "fbm-shot-summary-row");
+    for (const [kind, label] of [["2p", "Tiros de 2"], ["3p", "Triples"], ["1p", "Tiros libres"]]) {
+      const stat = statistics[side][kind];
+      const cell = view._element("div");
+      cell.append(view._element("span", label, "fbm-player-caption"));
+      if (!stat) {
+        cell.append(view._element("span", "Sin datos", "fbm-player-caption"));
+      } else {
+        const rate = stat.intentos ? Math.round(100 * stat.aciertos / stat.intentos) : 0;
+        const ring = view._element("div", "", "fbm-shot-ring");
+        ring.setAttribute("style", "--shot-rate:" + rate + "%;--shot-color:" +
+          (side === "local" ? "#268bdf" : "#e98316"));
+        ring.append(view._element("strong", stat.intentos ? rate + "%" : "—"));
+        cell.append(ring, view._element("span", stat.aciertos + "/" + stat.intentos, "fbm-player-caption"));
+      }
+      row.append(cell);
+    }
+    section.append(row);
+  }
+  panel.append(section);
+}
+
 function renderFBMShotMap(view, container, match) {
   const button = view._element("button", "Mapa de tiro", "fbm-action");
   button.type = "button";
@@ -107,6 +141,7 @@ function renderFBMShotMap(view, container, match) {
         note.textContent = result.tiros_descartados
           ? "FBM devolvió tiros, pero sus datos no se pudieron interpretar."
           : "FBM no ha publicado tiros para este partido.";
+        renderFBMShotSummary(view, panel, match, result.aciertos_equipos);
         loaded = true;
         return;
       }
@@ -186,6 +221,7 @@ function renderFBMShotMap(view, container, match) {
       }
       filters.append(players);
       panel.append(filters, court, legend);
+      renderFBMShotSummary(view, panel, match, result.aciertos_equipos);
       redraw();
       loaded = true;
     } catch (_) {
