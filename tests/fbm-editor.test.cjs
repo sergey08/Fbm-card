@@ -13,13 +13,14 @@ class Element {
   setAttribute() {}
 }
 
+const storedTeams = new Map();
 const registry = new Map();
 vm.runInNewContext(fs.readFileSync("fbm-card.js", "utf8"), {
   HTMLElement: Element,
   CustomEvent: class { constructor(type, options) { Object.assign(this, options, { type }); } },
   document: { createElement(tag) { const C = registry.get(tag); return C ? new C() : new Element(tag); } },
   customElements: { get: key => registry.get(key), define: (key, value) => registry.set(key, value) },
-  window: {}
+  window: {localStorage: {getItem: key => storedTeams.get(key) ?? null}}
 });
 
 function descendants(node) {
@@ -232,6 +233,32 @@ test("name search queries a fixed team even before its roster is opened", async 
     if (type === "fbm/client/entries") return {entries:["entry"]};
     if (type === "lovelace/config") return {views:[{cards:[{
       type:"custom:fbm-card", tipo_tarjeta:"equipo", equipo_fijo:{id:"team",nombre:"Equipo"}
+    }]}]};
+    if (type === "fbm/team/players") {
+      assert.equal(equipo, "team");
+      return {jugadores:[{id:"p1",nombre:"Pérez Ruiz, Julián"}]};
+    }
+    return {jugadores:[]};
+  }};
+  const nodes = descendants(editor.shadowRoot);
+  const input = nodes.find(node => node.type === "search");
+  input.value = "julian";
+  input.listeners.input();
+  await nodes.find(node => node.textContent === "Buscar jugador").listeners.click();
+  change(editor, "Jugador", "0");
+  assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "p1");
+  assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
+});
+
+test("name search queries a team pinned locally by a legacy card", async () => {
+  const editor = registry.get("fbm-card").getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"jugador"});
+  storedTeams.set('fbm-card:experimental-equipo:v1:["user","legacy","entry"]',
+    JSON.stringify({id:"team",nombre:"Equipo",club:"Club",categoria:"Alevín",temporada:"26/27"}));
+  editor.hass = {user:{id:"user"},callWS: async ({type, equipo}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "lovelace/config") return {views:[{cards:[{
+      type:"custom:fbm-card", tipo_tarjeta:"equipo", id_tarjeta:"legacy"
     }]}]};
     if (type === "fbm/team/players") {
       assert.equal(equipo, "team");

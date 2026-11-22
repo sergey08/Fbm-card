@@ -415,6 +415,36 @@ function fbmMatchesName(name, terms) {
   return terms.length > 0 && terms.every(term => words.some(word => word.startsWith(term)));
 }
 
+function fbmExperimentalPreferenceKey(hass, config, entryId) {
+  const user = hass?.user?.id;
+  if (typeof user !== "string" || !user || typeof entryId !== "string" || !entryId) return null;
+  const cardId = config?.id_tarjeta;
+  if (config?.tipo_tarjeta === "equipo" && (typeof cardId !== "string" || !cardId.trim())) return null;
+  const key = [user, String(cardId || "predeterminada"), entryId];
+  if (config?.tipo_tarjeta === "equipo" && config.equipo_fijo?.id)
+    key.push(config.equipo_fijo.id);
+  return "fbm-card:experimental-equipo:v1:" + JSON.stringify(key);
+}
+
+function fbmExperimentalTeamIsValid(team) {
+  return !!team && ["id", "nombre", "club", "categoria", "temporada"].every(key =>
+    typeof team[key] === "string" && team[key].trim() && team[key].length <= 512);
+}
+
+function fbmRestoreExperimentalTeam(hass, config, entryId) {
+  const configured = config?.tipo_tarjeta === "equipo" ? config?.equipo_fijo : null;
+  const fallback = fbmExperimentalTeamIsValid(configured) ? configured : null;
+  const key = fbmExperimentalPreferenceKey(hass, config, entryId);
+  if (!key) return fallback;
+  try {
+    const team = JSON.parse(window.localStorage?.getItem(key) || "null");
+    if (!fbmExperimentalTeamIsValid(team)) return fallback;
+    const result = { id: team.id, nombre: team.nombre, club: team.club, categoria: team.categoria, temporada: team.temporada };
+    if (typeof team.escudo === "string" && team.escudo.length <= 1024) result.escudo = team.escudo;
+    return result;
+  } catch (_) { return fallback; }
+}
+
 class FBMCard extends HTMLElement {
   static getConfigElement() { return document.createElement("fbm-card-editor"); }
 
@@ -614,24 +644,16 @@ class FBMCard extends HTMLElement {
   }
 
   _experimentalPreferenceKey(entryId) {
-    const user = this._hass?.user?.id;
-    if (typeof user !== "string" || !user || typeof entryId !== "string" || !entryId) return null;
-    const cardId = this._config?.id_tarjeta;
-    if (this._config?.tipo_tarjeta === "equipo" && (typeof cardId !== "string" || !cardId.trim())) return null;
-    const key = [user, String(cardId || "predeterminada"), entryId];
-    if (this._config?.tipo_tarjeta === "equipo" && this._config.equipo_fijo?.id)
-      key.push(this._config.equipo_fijo.id);
-    return "fbm-card:experimental-equipo:v1:" + JSON.stringify(key);
+    return fbmExperimentalPreferenceKey(this._hass, this._config, entryId);
   }
 
-  _experimentalTeamIsValid(team) {
-    return !!team && ["id", "nombre", "club", "categoria", "temporada"].every(key =>
-      typeof team[key] === "string" && team[key].trim() && team[key].length <= 512);
+  _restoreExperimentalTeam(entryId) {
+    return fbmRestoreExperimentalTeam(this._hass, this._config, entryId);
   }
 
   _saveExperimentalTeam(entryId, team) {
     const key = this._experimentalPreferenceKey(entryId);
-    if (!key || !this._experimentalTeamIsValid(team)) return;
+    if (!key || !fbmExperimentalTeamIsValid(team)) return;
     const data = {};
     for (const field of ["id", "nombre", "club", "categoria", "temporada"]) data[field] = team[field];
     if (typeof team.escudo === "string" && team.escudo.length <= 1024) data.escudo = team.escudo;
@@ -642,20 +664,6 @@ class FBMCard extends HTMLElement {
     const key = this._experimentalPreferenceKey(entryId);
     if (!key) return;
     try { window.localStorage?.removeItem(key); } catch (_) { /* almacenamiento deshabilitado */ }
-  }
-
-  _restoreExperimentalTeam(entryId) {
-    const configured = this._config?.tipo_tarjeta === "equipo" ? this._config?.equipo_fijo : null;
-    const fallback = this._experimentalTeamIsValid(configured) ? configured : null;
-    const key = this._experimentalPreferenceKey(entryId);
-    if (!key) return fallback;
-    try {
-      const team = JSON.parse(window.localStorage?.getItem(key) || "null");
-      if (!this._experimentalTeamIsValid(team)) return fallback;
-      const result = { id: team.id, nombre: team.nombre, club: team.club, categoria: team.categoria, temporada: team.temporada };
-      if (typeof team.escudo === "string" && team.escudo.length <= 1024) result.escudo = team.escudo;
-      return result;
-    } catch (_) { return fallback; }
   }
 
   _experimentalFavoritesKey(entryId) {
@@ -670,7 +678,7 @@ class FBMCard extends HTMLElement {
     try {
       const values = JSON.parse(window.localStorage?.getItem(key) || "[]");
       if (!Array.isArray(values)) return [];
-      return values.filter(team => this._experimentalTeamIsValid(team)).slice(0, 30);
+      return values.filter(team => fbmExperimentalTeamIsValid(team)).slice(0, 30);
     } catch (_) { return []; }
   }
 
@@ -680,7 +688,7 @@ class FBMCard extends HTMLElement {
 
   _toggleExperimentalFavorite(entryId, team) {
     const key = this._experimentalFavoritesKey(entryId);
-    if (!key || !this._experimentalTeamIsValid(team)) return false;
+    if (!key || !fbmExperimentalTeamIsValid(team)) return false;
     const favorites = this._experimentalFavorites(entryId);
     const exists = favorites.some(saved => saved.id === team.id);
     const updated = exists ? favorites.filter(saved => saved.id !== team.id) : [
@@ -699,7 +707,7 @@ class FBMCard extends HTMLElement {
   }
 
   _saveRecentTeam(entryId, team) {
-    if (!this._experimentalTeamIsValid(team)) return;
+    if (!fbmExperimentalTeamIsValid(team)) return;
     const key = this._recentTeamKey(entryId);
     if (!key) return;
     const data = {};
@@ -713,7 +721,7 @@ class FBMCard extends HTMLElement {
     if (!key) return null;
     try {
       const value = JSON.parse(window.localStorage?.getItem(key) || "null");
-      return this._experimentalTeamIsValid(value) ? value : null;
+      return fbmExperimentalTeamIsValid(value) ? value : null;
     } catch (_) { return null; }
   }
 
@@ -853,7 +861,7 @@ class FBMCard extends HTMLElement {
   }
 
   _fixedCardYaml(team) {
-    if (!this._experimentalTeamIsValid(team)) return "";
+    if (!fbmExperimentalTeamIsValid(team)) return "";
     const quote = value => JSON.stringify(value);
     return [
       "type: custom:fbm-card", "title: " + quote(team.nombre),
@@ -2550,9 +2558,9 @@ class FBMCardEditor extends HTMLElement {
       if (Array.isArray(node)) {
         node.forEach(visit);
       } else if (node && typeof node === "object") {
-        if (node.type === "custom:fbm-card" && node.tipo_tarjeta === "equipo" &&
-            typeof node.equipo_fijo?.id === "string" && node.equipo_fijo.id) {
-          teams.set(node.equipo_fijo.id, node.equipo_fijo);
+        if (node.type === "custom:fbm-card" && node.tipo_tarjeta === "equipo") {
+          const team = fbmRestoreExperimentalTeam(this._hass, node, entry) || node.equipo_fijo;
+          if (typeof team?.id === "string" && team.id) teams.set(team.id, team);
         }
         if (node.type === "custom:fbm-card" && node.tipo_tarjeta === "jugador") {
           const player = node.jugador_fijo, team = node.equipo_fijo;
