@@ -195,3 +195,32 @@ test("name search finds a saved player on the dashboard without a federation mat
   change(editor, "Jugador", "0");
   assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "player");
 });
+
+test("name search finds a player loaded by a team card in the same panel", async () => {
+  const Card = registry.get("fbm-card");
+  const card = new Card();
+  const editor = Card.getConfigElement();
+  const connection = {};
+  const callWS = async ({type}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "fbm/team/players") return {jugadores:[{id:"p1",nombre:"Pérez Ruiz, Julián"}]};
+    return {jugadores:[]};
+  };
+  card._hass = {connection, callWS};
+  card._render = () => {};
+  Object.assign(card._experimentalState(), {entry:"entry",selected:"team",
+    teams:[{id:"team",nombre:"Equipo A",temporada:"26/27"}]});
+  await card._experimentalAction("players");
+
+  editor.setConfig({type:"custom:fbm-card",modo_experimental:true,tipo_tarjeta:"jugador"});
+  editor.hass = {connection, callWS};
+  const nodes = descendants(editor.shadowRoot);
+  const input = nodes.find(node => node.type === "search");
+  input.value = "julian";
+  input.listeners.input();
+  await nodes.find(node => node.textContent === "Buscar jugador").listeners.click();
+  assert.equal(field(editor, "Jugador").children.length, 2);
+  change(editor, "Jugador", "0");
+  assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "p1");
+  assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
+});
