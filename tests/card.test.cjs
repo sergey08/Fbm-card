@@ -16,7 +16,7 @@ function loadCard() {
 test("registra la tarjeta Lovelace", () => {
   const { elements, sandbox } = loadCard();
   assert.equal(typeof elements.get("fbm-card"), "function");
-  assert.equal(sandbox.window.customCards.length, 2);
+  assert.deepEqual(Array.from(sandbox.window.customCards, card => card.type), ["fbm-card"]);
   assert.equal(typeof elements.get("fbm-competition-card"), "function");
 });
 test("la configuración inicial está disponible", () => {
