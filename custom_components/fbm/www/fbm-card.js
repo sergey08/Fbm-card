@@ -399,11 +399,20 @@ class FBMCard extends HTMLElement {
       this._config.id_tarjeta !== config.id_tarjeta || this._config.tipo_tarjeta !== config.tipo_tarjeta || priorTeam !== newTeam ||
       this._config.jugador_fijo?.id !== config.jugador_fijo?.id);
     if (changed) { this._experimental = null; this._fixedInit = false; this._searchInit = false; }
-    if (config.tipo_tarjeta && !["busqueda", "equipo", "jugador"].includes(config.tipo_tarjeta)) throw new Error("Tipo de tarjeta inválido");
+    if (config.tipo_tarjeta && !["busqueda", "equipo", "jugador", "competicion", "proximos"].includes(config.tipo_tarjeta)) throw new Error("Tipo de tarjeta inválido");
     if (config.tipo_tarjeta === "equipo" && !config.equipo_fijo && !config.id_tarjeta) {
       throw new Error("Cada tarjeta de equipo necesita un id_tarjeta distinto para guardar su elección.");
     }
     this._config = { ...config };
+    if (["competicion", "proximos"].includes(config.tipo_tarjeta)) {
+      this._competitionView ||= document.createElement("fbm-competition-card");
+      this._competitionView.setConfig({...config, initial_tab: config.tipo_tarjeta === "proximos" ? "upcoming" : "ranking"});
+      if (this._hass) this._competitionView.hass = this._hass;
+      if (!this.shadowRoot) this.attachShadow({mode: "open"});
+      this.shadowRoot.replaceChildren(this._competitionView);
+      return;
+    }
+    this._competitionView = null;
     this._render();
     if (this._hass && config.modo_experimental === true) {
       if (config.tipo_tarjeta === "jugador") {
@@ -419,6 +428,10 @@ class FBMCard extends HTMLElement {
     const userChanged = hadHass && this._hass.user?.id !== hass?.user?.id;
     if (userChanged) this._experimental = null;
     this._hass = hass;
+    if (this._competitionView) {
+      this._competitionView.hass = hass;
+      return;
+    }
     if (this._config?.modo_experimental === true && (!hadHass || userChanged)) {
       if (this._config.tipo_tarjeta === "jugador") {
         Promise.resolve().then(() => this._loadFollowedPlayer());
@@ -1566,7 +1579,7 @@ class FBMCard extends HTMLElement {
   }
 
   _render() {
-    if (!this._config) return;
+    if (!this._config || this._competitionView) return;
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const style = document.createElement("style");
     style.textContent = `
@@ -2318,8 +2331,12 @@ class FBMCardEditor extends HTMLElement {
     if (JSON.stringify(groups) !== this._groupsSignature) this._render();
   }
 
+  get _competitionMode() {
+    return ["competicion", "proximos"].includes(this._config?.tipo_tarjeta);
+  }
+
   _groups() {
-    if (!this._config || !this._competition) return [];
+    if (!this._config || (!this._competition && !this._competitionMode)) return [];
     const groups = this._hass?.states?.[this._config.entity || "sensor.competiciones"]?.attributes?.groups;
     return Array.isArray(groups) ? groups : [];
   }
@@ -2405,11 +2422,25 @@ class FBMCardEditor extends HTMLElement {
     edit(form, "Título", "title");
     const groups = this._groups();
     this._groupsSignature = JSON.stringify(groups);
-    if (this._competition) {
+    const mode = config.modo_experimental === true ? config.tipo_tarjeta || "busqueda" : "entidades";
+    if (!this._competition) {
+      this._field(form, "Tipo de tarjeta", mode, value => {
+        const patch = { modo_experimental: value !== "entidades" };
+        if (value !== "entidades") patch.tipo_tarjeta = value;
+        if (value !== mode) this._search = null;
+        if (value === "equipo" && !config.id_tarjeta && !config.equipo_fijo) {
+          const suffix = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+          patch.id_tarjeta = "fbm-equipo-" + suffix;
+        }
+        this._update(patch, true);
+      }, { options: [...(mode === "entidades" ? [["entidades", "Selecciona un tipo"]] : []),
+        ["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"], ["jugador", "Seguir jugador"], ["competicion", "Competición"], ["proximos", "Próximos partidos"]] });
+    }
+    if (this._competition || this._competitionMode) {
       edit(form, "Sensor de competiciones", "entity", {
         default: "sensor.competiciones", redraw: true, pattern: "sensor\\.[a-z0-9_]+"
       });
-      edit(form, "Pestaña inicial", "initial_tab", {
+      if (this._competition) edit(form, "Pestaña inicial", "initial_tab", {
         default: "ranking", options: [["ranking", "Clasificación"], ["upcoming", "Próximos partidos"]]
       });
       const index = config.group_index ?? 0;
@@ -2422,26 +2453,20 @@ class FBMCardEditor extends HTMLElement {
         value => this._update({ group_index: Number(value) - (options.length ? 0 : 1) }),
         options.length ? { options } : { type: "number", min: 1, max: 50 });
     } else {
-      const mode = config.modo_experimental === true ? config.tipo_tarjeta || "busqueda" : "entidades";
-      this._field(form, "Tipo de tarjeta", mode, value => {
-        const patch = { modo_experimental: value !== "entidades" };
-        if (value !== "entidades") patch.tipo_tarjeta = value;
-        if (value !== mode) this._search = null;
-        if (value === "equipo" && !config.id_tarjeta && !config.equipo_fijo) {
-          const suffix = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
-          patch.id_tarjeta = "fbm-equipo-" + suffix;
-        }
-        this._update(patch, true);
-      }, { options: [...(mode === "entidades" ? [["entidades", "Selecciona un tipo"]] : []),
-        ["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"], ["jugador", "Seguir jugador"]] });
-
       if (mode === "jugador") {
         if (config.jugador_fijo?.nombre && config.equipo_fijo?.nombre) {
           const current = document.createElement("p");
           current.textContent = config.jugador_fijo.nombre + " · " + config.equipo_fijo.nombre;
           form.append(current);
         }
-        this._teamSearch(form, true);
+        const byPlayer = this._followSearchBy === "jugador";
+        this._field(form, "Buscar por", byPlayer ? "jugador" : "equipo", value => {
+          this._followSearchBy = value;
+          this._search = null;
+          this._render();
+        }, {options: [["equipo", "Equipo"], ["jugador", "Nombre y apellidos"]]});
+        if (byPlayer) this._playerSearch(form);
+        else this._teamSearch(form, true);
       }
       if (mode === "equipo") {
         const hint = document.createElement("p");
@@ -2468,9 +2493,68 @@ class FBMCardEditor extends HTMLElement {
           }
         }
       }
-      form.append(advanced);
+      if (mode === "busqueda" || mode === "equipo") form.append(advanced);
     }
     this.shadowRoot.replaceChildren(style, form);
+  }
+
+  _playerSearch(form) {
+    const state = this._search ||= {query: "", players: [], message: "", busy: false};
+    const label = document.createElement("label");
+    label.textContent = "Nombre y apellidos";
+    const input = document.createElement("input");
+    input.type = "search";
+    input.maxLength = 100;
+    input.value = state.query;
+    input.addEventListener("input", () => { state.query = input.value; });
+    label.append(input);
+    const submit = document.createElement("button");
+    submit.type = "button";
+    submit.textContent = "Buscar jugador";
+    submit.disabled = state.busy;
+    const hint = document.createElement("p");
+    hint.textContent = "Busca en las plantillas archivadas de las competiciones seguidas.";
+    const results = document.createElement("div");
+    results.setAttribute("aria-live", "polite");
+    results.textContent = state.message;
+    submit.addEventListener("click", async () => {
+      const texto = input.value.trim();
+      if (state.busy) return;
+      if (texto.length < 2) {
+        results.textContent = "Escribe al menos dos caracteres.";
+        return;
+      }
+      state.players = [];
+      state.busy = true;
+      state.message = "Buscando jugadores…";
+      this._render();
+      try {
+        const {entries} = await this._hass.callWS({type: "fbm/client/entries"});
+        if (entries?.length !== 1) throw Error("Entrada FBM no disponible");
+        const data = await this._hass.callWS({type: "fbm/player/search_archived", entry_id: entries[0], texto});
+        state.players = data.jugadores || [];
+        state.message = state.players.length ? "" : "Sin coincidencias en las plantillas archivadas.";
+      } catch (_) {
+        state.message = "No se pudo buscar en el archivo FBM.";
+      } finally {
+        state.busy = false;
+        if (this._search === state) this._render();
+      }
+    });
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter") { event.preventDefault(); submit.click(); }
+    });
+    if (state.players.length) {
+      this._field(results, "Jugador", "", value => {
+        if (value === "") return;
+        const row = state.players[Number(value)];
+        if (!row) return;
+        this._search = null;
+        this._update({equipo_fijo: row.equipo, jugador_fijo: row.jugador}, true);
+      }, {options: [["", "Selecciona un jugador"], ...state.players.map(({equipo, jugador}, i) =>
+        [String(i), [jugador.nombre, equipo.nombre, equipo.categoria, equipo.temporada].filter(Boolean).join(" · ")])]});
+    }
+    form.append(hint, label, submit, results);
   }
 
   _teamSearch(form, followPlayer = false) {
@@ -2623,11 +2707,7 @@ if (!customElements.get("fbm-competition-card-editor"))
 if (!customElements.get("fbm-competition-card"))
   customElements.define("fbm-competition-card", FBMCompetitionCard);
 window.customCards = window.customCards || [];
-if (!window.customCards.some(card => card.type === "fbm-competition-card"))
-  window.customCards.push({
-    type:"fbm-competition-card",name:"FBM Competition Card",
-    description:"Clasificación y plantillas archivadas de una competición FBM"
-  });
+
 
 if (!customElements.get("fbm-card")) customElements.define("fbm-card", FBMCard);
 window.customCards = window.customCards || [];

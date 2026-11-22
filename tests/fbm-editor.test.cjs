@@ -86,7 +86,7 @@ test("standard editor exposes only user-facing card types and hides internal set
   editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"equipo",
     id_tarjeta:"keep", logo_equipo:"https://fbm.es/existing.png"});
   const mode = field(editor, "Tipo de tarjeta");
-  assert.deepEqual(Array.from(mode.children, item => item.value), ["busqueda", "equipo", "jugador"]);
+  assert.deepEqual(Array.from(mode.children, item => item.value), ["busqueda", "equipo", "jugador", "competicion", "proximos"]);
   assert.ok(!descendants(editor.shadowRoot).some(node =>
     ["URL del escudo", "Identificador de la tarjeta"].includes(node.textContent)));
   change(editor, "Título", "Mi equipo");
@@ -136,4 +136,16 @@ test("following a player saves the official team and player selected in the edit
   assert.equal(card._experimentalState().players.length, 1);
   assert.equal(card._experimentalState().players[0].partidos_jugados, 5);
   assert.equal(requests.filter(request => request.type === "fbm/team/players").length, 2);
+});
+
+test("unified editor exposes both competition views and keeps legacy configuration usable", () => {
+  const editor = registry.get("fbm-card").getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"busqueda"});
+  change(editor, "Tipo de tarjeta", "proximos");
+  assert.equal(editor.lastEvent.detail.config.tipo_tarjeta, "proximos");
+  assert.equal(field(editor, "Sensor de competiciones").value, "sensor.competiciones");
+  const card = new (registry.get("fbm-card"))();
+  card.setConfig(editor.lastEvent.detail.config);
+  assert.equal(card._competitionView._config.initial_tab, "upcoming");
+  assert.ok(registry.get("fbm-competition-card"));
 });

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import date
+import re
+import unicodedata
 from sqlite3 import Error as SQLiteError
 from .competition_sync import sync_group, preview_group
 from .competition_analysis import competition_analysis
@@ -839,8 +841,66 @@ async def ws_shot_map_probe(hass, connection, msg):
     await _dispatch(hass, connection, msg, probe)
 
 
+def _search_archived_players(entry, query):
+    archive = entry["competitions_archive_factory"](entry["competitions_sqlite_path"])
+
+    def tokens(value):
+        normalized = unicodedata.normalize("NFD", value.casefold())
+        plain = "".join(char for char in normalized if not unicodedata.combining(char))
+        return re.findall(r"[^\W_]+", plain)
+
+    terms = tokens(query)
+    if not terms:
+        return []
+    found = {}
+    for group in archive.followed():
+        identity = {**group, "season_verified": True}
+        standings = archive.latest(identity, "standings")
+        if not standings:
+            continue
+        for team in standings["payload"].get("clasificacion", []):
+            team_id, team_name = team.get("id"), team.get("equipo")
+            if not team_id or not team_name:
+                continue
+            roster = archive.latest(identity, "roster", team_id)
+            if not roster:
+                continue
+            for player in roster["payload"].get("jugadores", []):
+                player_id, name = player.get("id"), player.get("nombre")
+                if not player_id or not name:
+                    continue
+                words = tokens(name)
+                if all(any(word.startswith(term) for word in words) for term in terms):
+                    season = group["season_id"]
+                    found[(team_id, player_id, season)] = {
+                        "equipo": {"id": team_id, "nombre": team_name, "temporada": season},
+                        "jugador": {"id": player_id, "nombre": name},
+                    }
+    return sorted(found.values(), key=lambda item: (
+        item["jugador"]["nombre"].casefold(), item["equipo"]["nombre"].casefold(),
+        item["equipo"]["temporada"]))[:50]
+
+
+@websocket_api.websocket_command({
+    "type": "fbm/player/search_archived",
+    probatio.Required("entry_id"): str,
+    probatio.Required("texto"): str,
+})
+@websocket_api.async_response
+async def ws_search_archived_players(hass, connection, msg):
+    async def search(_client, request):
+        query = request["texto"].strip()
+        if not 2 <= len(query) <= 100:
+            raise ValueError("Nombre de jugador no válido")
+        entry = hass.data[DOMAIN][request["entry_id"]]
+        players = await hass.async_add_executor_job(_search_archived_players, entry, query)
+        return {"jugadores": players}
+
+    await _dispatch(hass, connection, msg, search)
+
+
 def async_register_commands(hass):
-    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_match_preview, ws_competition_verify_season, ws_competition_player_stats_batch, ws_shot_map_probe, ws_shot_map):
+    for command in (ws_entries, ws_status, ws_create, ws_register, ws_recover, ws_connect, ws_search, ws_schedule, ws_phases, ws_schedule_round, ws_standings, ws_group_identity, ws_schedule_probe, ws_roster, ws_player_detail, ws_player_stats, ws_diagnostic, ws_player_detail_diagnostic, ws_player_stats_diagnostic, ws_competition_sync, ws_competition_list, ws_competition_team_snapshot, ws_competition_team_roster, ws_competition_team_player_stats, ws_competition_latest, ws_competition_preview, ws_competition_analysis, ws_competition_match_preview, ws_competition_verify_season, ws_competition_player_stats_batch, ws_shot_map_probe, ws_shot_map, ws_search_archived_players):
         websocket_api.async_register_command(hass, command)
 
 

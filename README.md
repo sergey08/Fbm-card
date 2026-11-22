@@ -27,6 +27,8 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 
 ### Seguir a un jugador
 
+Selecciona **Nombre y apellidos** para buscar directamente en las plantillas ya archivadas de tus competiciones seguidas. Para buscar en el catálogo de equipos de FBM, selecciona **Equipo**.
+
 En el editor de **FBM Card**, elige **Seguir jugador**, busca el equipo y selecciona su categoría y temporada. Filtra la plantilla por nombre y apellidos y elige al jugador y guarda la tarjeta. Se muestra su foto si FBM la publica, junto con las métricas de temporada disponibles. **Ver ficha** abre las estadísticas por partido.
 
 ### Mapa de tiro y estadísticas
@@ -79,7 +81,7 @@ La forma recomendada de utilizar FBM Card es mediante la interfaz gráfica de Ho
 1. Abre el **panel de control** (dashboard) donde quieras mostrar los equipos o las competiciones.
 2. Entra en **Editar panel** y selecciona **Añadir tarjeta**.
 3. Abre la pestaña **Por tarjeta** y escribe `fbm` en el buscador.
-4. En el selector verás las opciones **FBM Card** y **FBM Competition Card**:
+4. Selecciona **FBM Card**. En **Tipo de tarjeta** puedes elegir **Buscar equipos**, **Equipo fijo**, **Seguir jugador**, **Competición** o **Próximos partidos**.
    - **FBM Card**: busca equipos y permite seguir un equipo en una tarjeta independiente, con pestañas **Partidos**, **Clasificación** y **Jugadores**.
    - **FBM Competition Card**: muestra la competición seleccionada, sus jornadas, clasificación y datos archivados disponibles.
 5. Selecciona la tarjeta, configura sus opciones con el **editor visual** y guárdala. Puedes añadir tantas tarjetas independientes como necesites.
