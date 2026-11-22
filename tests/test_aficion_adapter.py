@@ -180,7 +180,7 @@ class ShotMapTests(unittest.TestCase):
     def test_valid_positions_and_outcomes_survive_normalization(self):
         from fbm_adapter_test_pkg.shot_map import normalize_shot_map
 
-        made = {"posicion_x": "0", "posicion_y": "54.5", "numero_periodo": 1,
+        made = {"posicion_x": "0 %", "posicion_y": " 54,5% ", "numero_periodo": 1,
                 "local": True, "metido": 1, "fallado": 0, "componente_id": "player"}
         missed = {**made, "posicion_x": 100, "local": False, "metido": 0, "fallado": 1}
         result = normalize_shot_map({"error": "", "mapadetiro": {"tiros": [

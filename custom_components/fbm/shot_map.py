@@ -41,6 +41,12 @@ def post_shot_map(device_id: str, key: str, match_id: str) -> dict:
     return normalize_shot_map(payload)
 
 
+def _coordinate(value: str | int | float) -> float:
+    if isinstance(value, str):
+        value = value.replace("%", "").replace(",", ".").strip()
+    return float(value)
+
+
 def normalize_shot_map(payload: object) -> dict:
     if not isinstance(payload, dict) or payload.get("error") != "" or payload.get("resultado") == "error":
         raise ShotMapError("FBM no ha facilitado el mapa de tiro.")
@@ -55,7 +61,7 @@ def normalize_shot_map(payload: object) -> dict:
         if any(type(value) not in (str, int, float) for value in (raw_x, raw_y)):
             continue
         try:
-            x, y = float(raw_x), float(raw_y)
+            x, y = _coordinate(raw_x), _coordinate(raw_y)
         except (ValueError, OverflowError):
             continue
         period, local = row.get("numero_periodo"), row.get("local")
