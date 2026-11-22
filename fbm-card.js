@@ -1051,7 +1051,6 @@ class FBMCard extends HTMLElement {
           const selected = state.teams.find(team => team.id === state.selected);
           if (!selected) throw new Error("Elige un equipo.");
           this._saveExperimentalTeam(state.entry, selected);
-          state.editFixed = false;
           state.message = "Equipo fijado en esta tarjeta.";
           this._resetTeamData(state);
           if (!await this._loadArchivedFixed() && state.status?.sesion_vigente) {
@@ -1288,7 +1287,7 @@ class FBMCard extends HTMLElement {
       const fixed = this._config.tipo_tarjeta === "equipo";
       const selected = state.teams.find(team => team.id === state.selected);
       const pinned = fixed ? this._restoreExperimentalTeam(state.entry) : selected;
-      const editing = fixed && (!pinned || state.editFixed);
+      const editing = fixed && !pinned;
       const showDetails = fixed ? !!pinned && !editing : !!pinned && state.showTeamDetail;
       const favorites = this._experimentalFavorites(state.entry);
       if (fixed && editing && favorites.length) {
@@ -1624,14 +1623,11 @@ class FBMCard extends HTMLElement {
     }
     if (state.message) card.append(this._element("p", state.message, "muted"));
     const fixed = this._config.tipo_tarjeta === "equipo";
-    const pinned = fixed && this._restoreExperimentalTeam(state.entry);
-    if ((pinned && !state.editFixed && this._config.id_tarjeta) || (!fixed && state.showTeamDetail)) {
-      const back = this._element("button", fixed ? "Cambiar equipo" : "Volver a la búsqueda", "fbm-action");
+    if (!fixed && state.showTeamDetail) {
+      const back = this._element("button", "Volver a la búsqueda", "fbm-action");
       back.type = "button"; back.disabled = state.busy;
       back.addEventListener("click", () => {
-        if (fixed) {
-          state.editFixed = true; state.teams = [pinned]; state.selected = pinned.id;
-        } else state.showTeamDetail = false;
+        state.showTeamDetail = false;
         this._render();
       });
       card.append(back);
@@ -2484,6 +2480,13 @@ class FBMCardEditor extends HTMLElement {
     this._groupsSignature = JSON.stringify(groups);
     const mode = config.modo_experimental === true ? config.tipo_tarjeta || "busqueda" : "entidades";
     if (!this._competition) {
+      const types = [
+        ["busqueda", "Buscar equipos", "Busca un equipo de la FBM desde el panel y consulta sus partidos, clasificación y jugadores."],
+        ["competicion", "Competición", "Muestra la clasificación y los últimos resultados de una competición."],
+        ["equipo", "Equipo fijo", "Muestra los partidos, la clasificación y los jugadores del equipo que elijas en el editor."],
+        ["proximos", "Próximos partidos", "Muestra la agenda por jornadas de una competición y permite filtrar por equipo."],
+        ["jugador", "Seguir jugador", "Muestra la foto y las estadísticas disponibles de un jugador. Abre su ficha para ver el detalle por partido."]
+      ];
       this._field(form, "Tipo de tarjeta", mode, value => {
         const patch = { modo_experimental: value !== "entidades" };
         if (value !== "entidades") patch.tipo_tarjeta = value;
@@ -2494,7 +2497,14 @@ class FBMCardEditor extends HTMLElement {
         }
         this._update(patch, true);
       }, { options: [...(mode === "entidades" ? [["entidades", "Selecciona un tipo"]] : []),
-        ["busqueda", "Buscar equipos"], ["equipo", "Equipo fijo"], ["jugador", "Seguir jugador"], ["competicion", "Competición"], ["proximos", "Próximos partidos"]] });
+        ...types.map(([value, label]) => [value, label])] });
+      const selectedType = types.find(([value]) => value === mode);
+      if (selectedType) {
+        const description = document.createElement("p");
+        description.className = "muted";
+        description.textContent = selectedType[2];
+        form.append(description);
+      }
     }
     if (this._competition || this._competitionMode) {
       edit(form, "Sensor de competiciones", "entity", {
