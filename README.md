@@ -4,7 +4,7 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.18.
+**Versión estable:** v0.2.19.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
@@ -23,13 +23,15 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.18](RELEASE_0.2.18_NOTES.md) · [Histórico de versiones](docs/releases/)
+[Novedades de v0.2.19](RELEASE_0.2.19_NOTES.md) · [Histórico de versiones](docs/releases/)
 
 ### Seguir a un jugador
 
 Selecciona **Nombre y apellidos** para buscar directamente en las plantillas ya archivadas de tus competiciones seguidas. Para buscar en el catálogo de equipos de FBM, selecciona **Equipo**.
 
 En el editor de **FBM Card**, elige **Seguir jugador** y busca por **Nombre y apellidos** o por **Equipo**. Selecciona al jugador y guarda la tarjeta. Se muestra su foto si FBM la publica y las métricas de temporada disponibles, incluso sin descargar la competición. **Ver ficha** abre las estadísticas por partido.
+
+El nombre aparece una sola vez, junto a la foto. La tarjeta recupera el nombre oficial del equipo cuando solo se guardó su identificador y FBM o el archivo tienen el dato. El editor de este tipo de tarjeta oculta el campo Título.
 
 ### Mapa de tiro y estadísticas
 
@@ -133,6 +135,10 @@ La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por gr
 **Validación real (14/11/2026):** cinco grupos seguidos, 30 equipos, 30 plantillas y 321/321 jugadores evaluables completos (100 %) tras una recuperación incremental explícita. Es una fotografía de una instalación concreta, **no un resultado garantizado para todos los usuarios**. La actualización automática tras nuevos partidos sigue pendiente de comprobación.
 
 ## Versiones
+
+- **v0.2.19 (estable):** presentación de Seguir jugador, recuperación del nombre del equipo y guardado inmediato al editar títulos en los demás tipos de tarjeta.
+
+- **v0.2.18 (estable):** selector común de tarjetas y seguimiento de jugadores por nombre o equipo.
 
 - **v0.2.17 (estable):** mapa de tiro, filtros por periodo y jugador, acierto por equipo y fichas de jugadores mejoradas.
 
