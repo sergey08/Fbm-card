@@ -97,7 +97,9 @@ test("standard editor exposes only user-facing card types and hides internal set
   assert.deepEqual(Array.from(mode.children, item => item.value), ["busqueda", "competicion", "equipo", "proximos", "jugador"]);
   assert.ok(!descendants(editor.shadowRoot).some(node =>
     ["URL del escudo", "Identificador de la tarjeta"].includes(node.textContent)));
-  change(editor, "Título", "Mi equipo");
+  const title = field(editor, "Título");
+  title.value = "Mi equipo";
+  title.listeners.input();
   assert.equal(editor.lastEvent.detail.config.id_tarjeta, "keep");
   assert.equal(editor.lastEvent.detail.config.logo_equipo, "https://fbm.es/existing.png");
 });
@@ -289,4 +291,21 @@ test("following a player hides the title field even on cards with a saved title"
     jugador_fijo:{id:"p1", nombre:"PÉREZ RUIZ, JULIÁN"}, title:"Mi jugador"});
   assert.equal(descendants(editor.shadowRoot).some(node =>
     node.tagName === "label" && node.children[0]?.textContent === "Título"), false);
+});
+
+test("following a player resolves a missing team name from the official selection", async () => {
+  const Card = registry.get("fbm-card");
+  const card = new Card();
+  card._config = {tipo_tarjeta:"jugador", equipo_fijo:{id:"team"}, jugador_fijo:{id:"p1", nombre:"Jugador"}};
+  card._render = () => {};
+  card._hass = {callWS: async ({type}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "fbm/team/players") return {jugadores:[{
+      id:"p1", nombre:"Jugador", puntos_totales:5, faltas_por_partido:0, valoracion_por_partido:5
+    }]};
+    assert.equal(type, "fbm/player/search_selection");
+    return {jugador:{id:"p1"}, equipo:{id:"team", nombre:"Equipo oficial"}};
+  }};
+  await card._loadFollowedPlayer();
+  assert.equal(card._experimentalState().followedTeamName, "Equipo oficial");
 });

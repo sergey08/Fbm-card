@@ -1227,6 +1227,20 @@ class FBMCard extends HTMLElement {
       state.busy = false;
       if (this._experimental === state) this._render();
     }
+    if (this._experimental === state && state.players && !team.nombre?.trim()) {
+      try {
+        const result = await this._hass.callWS({
+          type: "fbm/player/search_selection", entry_id: state.entry, jugador: player.id
+        });
+        if (this._experimental === state && result?.jugador?.id === player.id &&
+            result.equipo?.id === team.id && result.equipo.nombre?.trim()) {
+          state.followedTeamName = result.equipo.nombre.trim();
+          this._render();
+        }
+      } catch (_) {
+        // The roster and statistics remain available if the team name cannot be resolved.
+      }
+    }
     const member = state.players?.[0];
     if (this._experimental === state && member &&
         [member.puntos_totales, member.faltas_por_partido, member.valoracion_por_partido]
@@ -1240,7 +1254,8 @@ class FBMCard extends HTMLElement {
     if (this._config.tipo_tarjeta === "jugador") {
       const {equipo_fijo: team, jugador_fijo: player} = this._config;
       card.append(this._element("h2", player?.nombre || "Seguir jugador"));
-      if (team?.nombre) card.append(this._element("p", team.nombre, "muted"));
+      const teamName = team?.nombre?.trim() || state.followedTeamName;
+      if (teamName) card.append(this._element("p", teamName, "muted"));
       if (state.players) {
         renderFBMRoster(this, card, state.players, team, state,
           id => this._experimentalPlayerDetail(id), id => this._experimentalPlayerStats(id), {showCount: false});

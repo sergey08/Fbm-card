@@ -1,7 +1,7 @@
-name: FBM 0.2.19b4
+name: FBM 0.2.19b5
 on:
   push:
-    branches: [release/fbm-0.2.19b4]
+    branches: [release/fbm-0.2.19b5]
 permissions:
   contents: read
 jobs:
@@ -26,4 +26,4 @@ jobs:
           persist-credentials: false
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create v0.2.19b4 --target "$GITHUB_SHA" --prerelease --latest=false --title "FBM Card 0.2.19b4" --notes-file RELEASE_0.2.19b4_NOTES.md
+        run: gh release create v0.2.19b5 --target "$GITHUB_SHA" --prerelease --latest=false --title "FBM Card 0.2.19b5" --notes-file RELEASE_0.2.19b5_NOTES.md
