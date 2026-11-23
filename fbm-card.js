@@ -2409,7 +2409,7 @@ class FBMCardEditor extends HTMLElement {
     }));
   }
 
-  _field(parent, label, value, onChange, { type = "text", options, min, max, placeholder, pattern, required } = {}) {
+  _field(parent, label, value, onChange, { type = "text", options, min, max, placeholder, pattern, required, live = false } = {}) {
     const field = document.createElement("label");
     const caption = document.createElement("span");
     caption.textContent = label;
@@ -2434,7 +2434,7 @@ class FBMCardEditor extends HTMLElement {
       field.className = "toggle";
       control.checked = value === true;
     } else control.value = value ?? "";
-    control.addEventListener("change", () => {
+    control.addEventListener(live ? "input" : "change", () => {
       if ((type === "number" && !control.value) || (control.checkValidity && !control.checkValidity())) {
         control.reportValidity?.();
         return;
@@ -2475,7 +2475,7 @@ class FBMCardEditor extends HTMLElement {
     const edit = (parent, label, key, options = {}) =>
       this._field(parent, label, config[key] ?? options.default, value =>
         this._update({ [key]: value === "" ? undefined : value }, options.redraw), options);
-    edit(form, "Título", "title");
+    edit(form, "Título", "title", { live: true });
     const groups = this._groups();
     this._groupsSignature = JSON.stringify(groups);
     const mode = config.modo_experimental === true ? config.tipo_tarjeta || "busqueda" : "entidades";

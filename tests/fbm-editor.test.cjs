@@ -40,12 +40,19 @@ test("existing search card edits title and retains unknown YAML and its ID", () 
   const editor = registry.get("fbm-card").getConfigElement();
   editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"busqueda",
     title:"Anterior", id_tarjeta:"existente", extra:{custom:true}});
-  change(editor, "Título", "Nuevo");
+  const title = field(editor, "Título");
+  title.value = "Nuevo";
+  title.listeners.input();
+  editor.setConfig(editor.lastEvent.detail.config);
+  assert.equal(field(editor, "Título"), title);
   assert.equal(editor.lastEvent.type, "config-changed");
   assert.equal(editor.lastEvent.detail.config.title, "Nuevo");
   assert.equal(editor.lastEvent.detail.config.id_tarjeta, "existente");
   assert.equal(editor.lastEvent.detail.config.extra.custom, true);
   assert.equal(editor.lastEvent.composed, true);
+  title.value = "";
+  title.listeners.input();
+  assert.equal(Object.hasOwn(editor.lastEvent.detail.config, "title"), false);
 });
 
 test("fixed team can be created visually and selected from official search", async () => {
