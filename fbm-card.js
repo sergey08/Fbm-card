@@ -290,8 +290,8 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = f
   card.append(games);
 }
 
-function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadStats) {
-  card.append(view._element("div", roster.length + " jugadores · Datos oficiales FBM", "fbm-section-subtitle"));
+function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadStats, {showCount = true} = {}) {
+  if (showCount) card.append(view._element("div", roster.length + " jugadores · Datos oficiales FBM", "fbm-section-subtitle"));
   const collection = view._element("div", "", "fbm-roster");
   const numeric = value => typeof value === "number" && Number.isFinite(value);
   const format = value => String(value);
@@ -1243,7 +1243,7 @@ class FBMCard extends HTMLElement {
       if (team?.nombre) card.append(this._element("p", team.nombre, "muted"));
       if (state.players) {
         renderFBMRoster(this, card, state.players, team, state,
-          id => this._experimentalPlayerDetail(id), id => this._experimentalPlayerStats(id));
+          id => this._experimentalPlayerDetail(id), id => this._experimentalPlayerStats(id), {showCount: false});
       } else if (state.busy) {
         card.append(this._element("p", "Consultando jugador…", "muted"));
       } else if (!team?.id || !player?.id) {
