@@ -283,13 +283,10 @@ test("name search queries a team pinned locally by a legacy card", async () => {
   assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
 });
 
-test("following a player uses the player's name as the title placeholder", () => {
+test("following a player hides the title field even on cards with a saved title", () => {
   const editor = registry.get("fbm-card").getConfigElement();
-  const config = {type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"jugador",
-    jugador_fijo:{id:"p1", nombre:"PÉREZ RUIZ, JULIÁN"}, title:"FBM Card"};
-  editor.setConfig(config);
-  assert.equal(field(editor, "Título").value, "");
-  assert.equal(field(editor, "Título").placeholder, config.jugador_fijo.nombre);
-  editor.setConfig({...config, title:"Mi jugador"});
-  assert.equal(field(editor, "Título").value, "Mi jugador");
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"jugador",
+    jugador_fijo:{id:"p1", nombre:"PÉREZ RUIZ, JULIÁN"}, title:"Mi jugador"});
+  assert.equal(descendants(editor.shadowRoot).some(node =>
+    node.tagName === "label" && node.children[0]?.textContent === "Título"), false);
 });

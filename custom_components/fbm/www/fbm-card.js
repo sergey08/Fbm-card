@@ -445,10 +445,6 @@ function fbmRestoreExperimentalTeam(hass, config, entryId) {
   } catch (_) { return fallback; }
 }
 
-function fbmFollowedPlayerTitle(config) {
-  return config.title === "FBM Card" ? undefined : config.title;
-}
-
 class FBMCard extends HTMLElement {
   static getConfigElement() { return document.createElement("fbm-card-editor"); }
 
@@ -1243,7 +1239,7 @@ class FBMCard extends HTMLElement {
     const state = this._experimentalState();
     if (this._config.tipo_tarjeta === "jugador") {
       const {equipo_fijo: team, jugador_fijo: player} = this._config;
-      card.append(this._element("h2", fbmFollowedPlayerTitle(this._config) || player?.nombre || "Seguir jugador"));
+      card.append(this._element("h2", player?.nombre || "Seguir jugador"));
       if (team?.nombre) card.append(this._element("p", team.nombre, "muted"));
       if (state.players) {
         renderFBMRoster(this, card, state.players, team, state,
@@ -2479,13 +2475,9 @@ class FBMCardEditor extends HTMLElement {
     const edit = (parent, label, key, options = {}) =>
       this._field(parent, label, config[key] ?? options.default, value =>
         this._update({ [key]: value === "" ? undefined : value }, options.redraw), options);
-    const followsPlayer = config.modo_experimental === true && config.tipo_tarjeta === "jugador";
-    const title = followsPlayer ? fbmFollowedPlayerTitle(config) : config.title;
-    this._field(form, "Título", title, value =>
-      this._update({ title: value === "" ? undefined : value }), {
-        live: true,
-        placeholder: followsPlayer ? config.jugador_fijo?.nombre : undefined
-      });
+    if (!(config.modo_experimental === true && config.tipo_tarjeta === "jugador")) {
+      edit(form, "Título", "title", { live: true });
+    }
     const groups = this._groups();
     this._groupsSignature = JSON.stringify(groups);
     const mode = config.modo_experimental === true ? config.tipo_tarjeta || "busqueda" : "entidades";
