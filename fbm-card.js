@@ -547,7 +547,7 @@ class FBMCard extends HTMLElement {
   getCardSize() { return 5; }
   static getStubConfig() {
     return {
-      type: "custom:fbm-card", equipos: [],
+      type: "custom:fbm-card", title: "FBM Card", equipos: [],
       modo_experimental: true, tipo_tarjeta: "busqueda"
     };
   }
