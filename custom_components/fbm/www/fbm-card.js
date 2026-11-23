@@ -1221,13 +1221,14 @@ class FBMCard extends HTMLElement {
       state.playersTeamId = team.id;
       state.playersEntryId = entry;
       state.players = [member];
+      state.followedTeamName = member.equipo?.trim();
     } catch (_) {
       state.message = "No se pudo consultar la plantilla de FBM.";
     } finally {
       state.busy = false;
       if (this._experimental === state) this._render();
     }
-    if (this._experimental === state && state.players && !team.nombre?.trim()) {
+    if (this._experimental === state && state.players && !team.nombre?.trim() && !state.followedTeamName) {
       try {
         const result = await this._hass.callWS({
           type: "fbm/player/search_selection", entry_id: state.entry, jugador: player.id
@@ -1239,6 +1240,20 @@ class FBMCard extends HTMLElement {
         }
       } catch (_) {
         // The roster and statistics remain available if the team name cannot be resolved.
+      }
+    }
+    if (this._experimental === state && state.players && !team.nombre?.trim() && !state.followedTeamName) {
+      try {
+        const snapshot = await this._hass.callWS({
+          type: "fbm/competition/team_snapshot", entry_id: state.entry, equipo: team.id
+        });
+        const row = snapshot?.standings?.clasificacion?.find(item => item.id === team.id);
+        if (this._experimental === state && row?.nombre?.trim()) {
+          state.followedTeamName = row.nombre.trim();
+          this._render();
+        }
+      } catch (_) {
+        // The archive is optional for followed players.
       }
     }
     const member = state.players?.[0];
@@ -1253,7 +1268,6 @@ class FBMCard extends HTMLElement {
     const state = this._experimentalState();
     if (this._config.tipo_tarjeta === "jugador") {
       const {equipo_fijo: team, jugador_fijo: player} = this._config;
-      card.append(this._element("h2", player?.nombre || "Seguir jugador"));
       const teamName = team?.nombre?.trim() || state.followedTeamName;
       if (teamName) card.append(this._element("p", teamName, "muted"));
       if (state.players) {

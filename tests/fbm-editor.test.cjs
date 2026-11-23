@@ -309,3 +309,19 @@ test("following a player resolves a missing team name from the official selectio
   await card._loadFollowedPlayer();
   assert.equal(card._experimentalState().followedTeamName, "Equipo oficial");
 });
+
+test("following a player uses the team name included in the verified roster", async () => {
+  const Card = registry.get("fbm-card");
+  const card = new Card();
+  card._config = {tipo_tarjeta:"jugador", equipo_fijo:{id:"team"}, jugador_fijo:{id:"p1", nombre:"Jugador"}};
+  card._render = () => {};
+  card._hass = {callWS: async ({type}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "fbm/team/players") return {jugadores:[{
+      id:"p1", nombre:"Jugador", equipo:"Equipo oficial", puntos_totales:5, faltas_por_partido:0, valoracion_por_partido:5
+    }]};
+    assert.fail("Unexpected request: " + type);
+  }};
+  await card._loadFollowedPlayer();
+  assert.equal(card._experimentalState().followedTeamName, "Equipo oficial");
+});
