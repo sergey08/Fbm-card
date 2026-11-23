@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.19 — Español
+
+- «Seguir jugador» muestra el nombre una sola vez, junto a la foto. Se ocultan el campo Título y el recuento de jugadores.
+- Las tarjetas guardadas solo con el identificador del equipo recuperan su nombre oficial de la plantilla, la ficha del jugador o la clasificación archivada cuando está disponible.
+- En las demás tarjetas, Guardar se activa al escribir o borrar el título, sin salir del campo.
+
 ## v0.2.18 — Español
 
 - Un único selector de FBM Card con cinco tipos ordenados y descritos: Buscar equipos, Competición, Equipo fijo, Próximos partidos y Seguir jugador.

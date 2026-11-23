@@ -40,12 +40,19 @@ test("existing search card edits title and retains unknown YAML and its ID", () 
   const editor = registry.get("fbm-card").getConfigElement();
   editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"busqueda",
     title:"Anterior", id_tarjeta:"existente", extra:{custom:true}});
-  change(editor, "Título", "Nuevo");
+  const title = field(editor, "Título");
+  title.value = "Nuevo";
+  title.listeners.input();
+  editor.setConfig(editor.lastEvent.detail.config);
+  assert.equal(field(editor, "Título"), title);
   assert.equal(editor.lastEvent.type, "config-changed");
   assert.equal(editor.lastEvent.detail.config.title, "Nuevo");
   assert.equal(editor.lastEvent.detail.config.id_tarjeta, "existente");
   assert.equal(editor.lastEvent.detail.config.extra.custom, true);
   assert.equal(editor.lastEvent.composed, true);
+  title.value = "";
+  title.listeners.input();
+  assert.equal(Object.hasOwn(editor.lastEvent.detail.config, "title"), false);
 });
 
 test("fixed team can be created visually and selected from official search", async () => {
@@ -90,7 +97,9 @@ test("standard editor exposes only user-facing card types and hides internal set
   assert.deepEqual(Array.from(mode.children, item => item.value), ["busqueda", "competicion", "equipo", "proximos", "jugador"]);
   assert.ok(!descendants(editor.shadowRoot).some(node =>
     ["URL del escudo", "Identificador de la tarjeta"].includes(node.textContent)));
-  change(editor, "Título", "Mi equipo");
+  const title = field(editor, "Título");
+  title.value = "Mi equipo";
+  title.listeners.input();
   assert.equal(editor.lastEvent.detail.config.id_tarjeta, "keep");
   assert.equal(editor.lastEvent.detail.config.logo_equipo, "https://fbm.es/existing.png");
 });
@@ -274,4 +283,45 @@ test("name search queries a team pinned locally by a legacy card", async () => {
   change(editor, "Jugador", "0");
   assert.equal(editor.lastEvent.detail.config.jugador_fijo.id, "p1");
   assert.equal(editor.lastEvent.detail.config.equipo_fijo.id, "team");
+});
+
+test("following a player hides the title field even on cards with a saved title", () => {
+  const editor = registry.get("fbm-card").getConfigElement();
+  editor.setConfig({type:"custom:fbm-card", modo_experimental:true, tipo_tarjeta:"jugador",
+    jugador_fijo:{id:"p1", nombre:"PÉREZ RUIZ, JULIÁN"}, title:"Mi jugador"});
+  assert.equal(descendants(editor.shadowRoot).some(node =>
+    node.tagName === "label" && node.children[0]?.textContent === "Título"), false);
+});
+
+test("following a player resolves a missing team name from the official selection", async () => {
+  const Card = registry.get("fbm-card");
+  const card = new Card();
+  card._config = {tipo_tarjeta:"jugador", equipo_fijo:{id:"team"}, jugador_fijo:{id:"p1", nombre:"Jugador"}};
+  card._render = () => {};
+  card._hass = {callWS: async ({type}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "fbm/team/players") return {jugadores:[{
+      id:"p1", nombre:"Jugador", puntos_totales:5, faltas_por_partido:0, valoracion_por_partido:5
+    }]};
+    assert.equal(type, "fbm/player/search_selection");
+    return {jugador:{id:"p1"}, equipo:{id:"team", nombre:"Equipo oficial"}};
+  }};
+  await card._loadFollowedPlayer();
+  assert.equal(card._experimentalState().followedTeamName, "Equipo oficial");
+});
+
+test("following a player uses the team name included in the verified roster", async () => {
+  const Card = registry.get("fbm-card");
+  const card = new Card();
+  card._config = {tipo_tarjeta:"jugador", equipo_fijo:{id:"team"}, jugador_fijo:{id:"p1", nombre:"Jugador"}};
+  card._render = () => {};
+  card._hass = {callWS: async ({type}) => {
+    if (type === "fbm/client/entries") return {entries:["entry"]};
+    if (type === "fbm/team/players") return {jugadores:[{
+      id:"p1", nombre:"Jugador", equipo:"Equipo oficial", puntos_totales:5, faltas_por_partido:0, valoracion_por_partido:5
+    }]};
+    assert.fail("Unexpected request: " + type);
+  }};
+  await card._loadFollowedPlayer();
+  assert.equal(card._experimentalState().followedTeamName, "Equipo oficial");
 });
