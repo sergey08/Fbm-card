@@ -325,3 +325,33 @@ test("following a player uses the team name included in the verified roster", as
   await card._loadFollowedPlayer();
   assert.equal(card._experimentalState().followedTeamName, "Equipo oficial");
 });
+
+test("player detail ends with official scoring bars including published zero", () => {
+  const card = new (registry.get("fbm-card"))();
+  const parent = new Element("div");
+  card._config = {tipo_tarjeta:"jugador", equipo_fijo:{id:"t"}, jugador_fijo:{id:"p"}};
+  const state = card._experimentalState();
+  Object.assign(state, {
+    entry:"entry", players:[{id:"p", nombre:"Jugador"}],
+    playerDetailTeamId:"t", playerDetailPlayerId:"p", playerDetail:{},
+    playerStatsTeamId:"t", playerStatsEntryId:"entry", playerStatsPlayerId:"p",
+    playerStats:{partidos:[
+      {rival:"Equipo A", fecha:"01/11/2026", puntos:0},
+      {rival:"Sin puntos publicados", asistencias:2},
+      {rival:"Equipo B", fecha:"08/11/2026", puntos:12}
+    ]}
+  });
+  card._renderExperimental(parent);
+  const detail = descendants(parent).find(node => node.className === "fbm-player-detail");
+  const chart = detail.children.at(-1);
+  assert.equal(chart.className, "fbm-points-chart");
+  const bars = descendants(chart).filter(node => node.className === "fbm-points-game");
+  assert.equal(bars.length, 2);
+  assert.match(bars[0].title, /Equipo A · 0 puntos/);
+  bars[1].listeners.click();
+  assert.equal(chart.children.at(-1).textContent, "08/11/2026 · Equipo B · 12 puntos");
+  state.playerStats.partidos = [{asistencias:2}];
+  parent.replaceChildren();
+  card._renderExperimental(parent);
+  assert.equal(descendants(parent).some(node => node.className === "fbm-points-chart"), false);
+});

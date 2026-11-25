@@ -4,7 +4,7 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.19.
+**Versión estable:** v0.2.20.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
@@ -23,7 +23,7 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.19](RELEASE_0.2.19_NOTES.md) · [Histórico de versiones](docs/releases/)
+[Novedades de v0.2.20](RELEASE_0.2.20_NOTES.md) · [Histórico de versiones](docs/releases/)
 
 ### Seguir a un jugador
 
@@ -39,7 +39,7 @@ Abre **Mapa de tiro** desde la ficha de un partido con resultado e identificador
 
 Debajo de la pista aparecen los porcentajes y **aciertos/intentos** de cada equipo en tiros de dos, triples y tiros libres. El resumen usa los totales oficiales del partido completo. Los filtros cambian los tiros visibles en la pista. Si hay cero intentos se muestra **0/0** sin porcentaje. La disponibilidad depende de los datos que haya registrado y publicado FBM.
 
-En **Jugadores**, el resumen muestra las métricas de temporada disponibles. Pulsa **Ver ficha** para desplegar las estadísticas de los partidos con datos publicados. Un cero publicado se muestra como tal y los campos ausentes se omiten.
+En **Jugadores**, el resumen muestra las métricas de temporada disponibles. Pulsa **Ver ficha** para desplegar las estadísticas de los partidos con datos publicados. Un cero publicado se muestra como tal y los campos ausentes se omiten. Al final de la ficha, el gráfico de puntos por partido muestra una barra por cada encuentro con puntos publicados. Pulsa una barra para ver la fecha, el rival y los puntos.
 
 ## Instalación
 
@@ -135,6 +135,8 @@ La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por gr
 **Validación real (14/11/2026):** cinco grupos seguidos, 30 equipos, 30 plantillas y 321/321 jugadores evaluables completos (100 %) tras una recuperación incremental explícita. Es una fotografía de una instalación concreta, **no un resultado garantizado para todos los usuarios**. La actualización automática tras nuevos partidos sigue pendiente de comprobación.
 
 ## Versiones
+
+- **v0.2.20 (estable):** gráfico interactivo de puntos por partido al final de la ficha de jugador.
 
 - **v0.2.19 (estable):** presentación de Seguir jugador, recuperación del nombre del equipo y guardado inmediato al editar títulos en los demás tipos de tarjeta.
 
