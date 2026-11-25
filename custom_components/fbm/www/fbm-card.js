@@ -8,6 +8,16 @@ const FBM_TEAM_CONTENT_STYLES = `
       .fbm-fixture-side span{font-size:.82rem;font-weight:600;overflow-wrap:anywhere}
       .fbm-fixture-side.fbm-fixture-away span{text-align:right}
       .fbm-fixture > .fbm-action{margin-top:8px}
+      .fbm-points-chart{margin-top:12px}
+      .fbm-points-scroll{overflow-x:auto;padding:4px;border:1px solid var(--divider-color,#888);border-radius:12px}
+      .fbm-points-bars{display:flex;gap:8px;min-width:min-content;padding:6px}
+      .fbm-points-game{flex:1 0 44px;display:grid;grid-template-rows:122px auto;gap:6px;justify-items:center;color:var(--secondary-text-color,#888);background:transparent;border:0;padding:0;font:inherit;cursor:pointer}
+      .fbm-points-game[aria-pressed="true"]{color:var(--primary-text-color);font-weight:700}
+      .fbm-points-track{display:flex;align-items:flex-end;justify-content:center;width:100%;border-bottom:1px solid var(--divider-color,#888);background:repeating-linear-gradient(to top,transparent 0,transparent calc(25% - 1px),var(--divider-color,#888) 25%)}
+      .fbm-points-bar{position:relative;width:52%;height:var(--fbm-points-height);min-height:2px;border-radius:5px 5px 0 0;background:#268bdf}
+      .fbm-points-game[aria-pressed="true"] .fbm-points-bar{background:#e98316}
+      .fbm-points-value{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);color:var(--primary-text-color);font-weight:700}
+      .fbm-points-caption{margin:7px 0 0;color:var(--secondary-text-color);overflow-wrap:anywhere}
       .fbm-shot-panel{margin-top:8px}
       .fbm-shot-filters{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
       .fbm-shot-filters select{max-width:100%;color:var(--primary-text-color);background:var(--card-background-color);padding:5px}
@@ -290,6 +300,46 @@ function renderFBMFixtures(view, card, matches, resolveTeam, crests, {agenda = f
   card.append(games);
 }
 
+function renderFBMPlayerPoints(view, details, games) {
+  const played = games.filter(game => Number.isFinite(game.puntos) && game.puntos >= 0);
+  if (!played.length) return;
+  const chart = view._element("section", "", "fbm-points-chart");
+  chart.append(view._element("h4", "Puntos por partido", "fbm-subheading"));
+  const scroll = view._element("div", "", "fbm-points-scroll");
+  const bars = view._element("div", "", "fbm-points-bars");
+  const caption = view._element("p", "", "fbm-points-caption");
+  caption.setAttribute("aria-live", "polite");
+  const maximum = played.reduce((max, game) => Math.max(max, game.puntos), 1);
+  let selected;
+  played.forEach((game, index) => {
+    const label = [game.fecha, game.rival, game.puntos + (game.puntos === 1 ? " punto" : " puntos")]
+      .filter(Boolean).join(" · ");
+    const button = view._element("button", "", "fbm-points-game");
+    button.type = "button";
+    button.title = label;
+    button.setAttribute("aria-label", "Partido " + (index + 1) + " · " + label);
+    button.setAttribute("aria-pressed", "false");
+    const track = view._element("span", "", "fbm-points-track");
+    const bar = view._element("span", "", "fbm-points-bar");
+    bar.setAttribute("style", "--fbm-points-height:" + (game.puntos / maximum * 80) + "%");
+    bar.append(view._element("span", String(game.puntos), "fbm-points-value"));
+    track.append(bar);
+    button.append(track, view._element("span", String(index + 1)));
+    const select = () => {
+      selected?.setAttribute("aria-pressed", "false");
+      selected = button;
+      button.setAttribute("aria-pressed", "true");
+      caption.textContent = label;
+    };
+    button.addEventListener("click", select);
+    bars.append(button);
+    if (index === 0) select();
+  });
+  scroll.append(bars);
+  chart.append(scroll, caption);
+  details.append(chart);
+}
+
 function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadStats, {showCount = true} = {}) {
   if (showCount) card.append(view._element("div", roster.length + " jugadores · Datos oficiales FBM", "fbm-section-subtitle"));
   const collection = view._element("div", "", "fbm-roster");
@@ -390,6 +440,7 @@ function renderFBMRoster(view, card, roster, pinned, state, toggleDetail, loadSt
           matches.append(match);
         }
         if (games.length) details.append(matches);
+        renderFBMPlayerPoints(view, details, games);
       }
       if (details.children.length) item.append(details);
     }
