@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.20 — Español
+
+- La ficha del jugador incluye al final un gráfico de puntos por partido. Al seleccionar una barra, se muestran la fecha, el rival y los puntos.
+- Se incluyen los ceros publicados por FBM y se omiten los partidos sin dato de puntos.
+
 ## v0.2.19 — Español
 
 - «Seguir jugador» muestra el nombre una sola vez, junto a la foto. Se ocultan el campo Título y el recuento de jugadores.
