@@ -1,5 +1,7 @@
 {
   "name": "FBM para Home Assistant",
   "render_readme": true,
-  "country": "ES"
+  "country": "ES",
+  "zip_release": true,
+  "filename": "fbm.zip"
 }
