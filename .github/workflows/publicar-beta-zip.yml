@@ -1,0 +1,83 @@
+name: Publicar beta ZIP FBM 0.2.21b1
+on:
+  push:
+    branches: ['release/fbm-0.2.21b1']
+    paths: ['.github/workflows/publicar-beta-zip.yml']
+permissions:
+  contents: read
+concurrency:
+  group: fbm-beta-0.2.21b1
+  cancel-in-progress: false
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          node --check fbm-card.js
+          node --test tests/*.test.cjs
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Crear ZIP exacto y verificar
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output="$RUNNER_TEMP/fbm.zip" HEAD:custom_components/fbm
+          python3 - <<'PY'
+          import json, os, subprocess, zipfile
+          from pathlib import Path
+          root = Path("custom_components/fbm")
+          config = json.loads(Path("hacs.json").read_text())
+          assert config["zip_release"] is True and config["filename"] == "fbm.zip"
+          expected = set(subprocess.check_output(["git", "ls-files", "-z", "--", str(root)]).decode().rstrip("\0").split("\0"))
+          with zipfile.ZipFile(Path(os.environ["RUNNER_TEMP"]) / "fbm.zip") as archive:
+              assert archive.testzip() is None
+              files = {item.filename for item in archive.infolist() if not item.is_dir()}
+              assert files == {str(Path(path).relative_to(root)) for path in expected}
+              assert {"manifest.json", "__init__.py", "www/fbm-card.js"} <= files
+              for name in files:
+                  assert archive.read(name) == (root / name).read_bytes(), name
+              assert archive.read("www/fbm-card.js") == Path("fbm-card.js").read_bytes()
+              manifest = json.loads(archive.read("manifest.json"))
+              assert manifest["domain"] == "fbm" and manifest["version"] == "0.2.21b1"
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fbm-beta-zip
+          path: ${{ runner.temp }}/fbm.zip
+          if-no-files-found: error
+  publicar:
+    needs: validar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: fbm-beta-zip
+          path: dist
+      - name: Publicar exclusivamente como prerelease sin alterar estable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TARGET: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GH_REPO/git/ref/heads/release/fbm-0.2.21b1" --jq .object.sha)" = "$TARGET"
+          test "$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)" = "v0.2.20"
+          tag=v0.2.21b1
+          if gh release view "$tag" >/dev/null 2>&1 || git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "La beta o su etiqueta ya existe; no se modifica." >&2
+            exit 1
+          fi
+          gh release create "$tag" dist/fbm.zip --target "$TARGET" --title "FBM Card 0.2.21b1 (beta ZIP)" --notes-file RELEASE_0.2.21b1_NOTES.md --draft --prerelease --latest=false
+          gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fx fbm.zip >/dev/null
+          gh release edit "$tag" --draft=false --prerelease --latest=false
+          gh release view "$tag" --json isDraft,isPrerelease,assets,url
+          test "$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)" = "v0.2.20"
