@@ -4,7 +4,7 @@
 
 > **Proyecto comunitario no oficial.** No está afiliado, respaldado ni mantenido por la Federación de Baloncesto de Madrid (FBM).
 
-**Versión estable:** v0.2.20.
+**Versión estable:** v0.2.21.
 
 FBM Card combina una integración de Home Assistant y tarjetas Lovelace para consultar datos públicos de baloncesto FBM: equipos, competiciones, calendarios, resultados, clasificaciones, plantillas y estadísticas disponibles de jugadores. Está pensada para seguir varias competiciones sin descargar repetidamente datos que no han cambiado.
 
@@ -23,7 +23,7 @@ Al confirmar el seguimiento de una competición, se activa su sincronización au
 - Consultar cobertura por grupo: equipos, plantillas archivadas, jugadores con estadísticas completas, pendientes y porcentaje.
 - No inventar marcadores, estadísticas, fotografías ni datos ausentes. La disponibilidad depende de FBM.
 
-[Novedades de v0.2.20](RELEASE_0.2.20_NOTES.md) · [Histórico de versiones](docs/releases/)
+[Novedades de v0.2.21](RELEASE_0.2.21_NOTES.md) · [Histórico de versiones](docs/releases/)
 
 ### Seguir a un jugador
 
@@ -73,6 +73,8 @@ Imágenes reales de FBM Card funcionando en Home Assistant. El aspecto puede var
 
 <img src="assets/screenshots/tarjeta-competicion-clasificacion.png" alt="Tarjeta de competición FBM con clasificación y resultados de la última jornada, escudos y marcadores" width="350">
 <img src="assets/screenshots/tarjeta-competicion-proximos.png" alt="Tarjeta de competición FBM con próximos partidos por jornada, escudos, hora y pabellón" width="350">
+
+**Descargas:** desde v0.2.21 el paquete `fbm.zip` se adjunta a las publicaciones de GitHub. Su contador registra descargas del archivo, no instalaciones únicas; no se recopilan datos de usuarios.
 
 **Actualizaciones:** conserva la identidad invitada y la configuración existente. No elimines ni vuelvas a añadir la integración, ni registres otra vez el dispositivo, solo por actualizar la tarjeta.
 
@@ -135,6 +137,8 @@ La entidad `sensor.competiciones` ofrece el atributo `coverage` con datos por gr
 **Validación real (14/11/2026):** cinco grupos seguidos, 30 equipos, 30 plantillas y 321/321 jugadores evaluables completos (100 %) tras una recuperación incremental explícita. Es una fotografía de una instalación concreta, **no un resultado garantizado para todos los usuarios**. La actualización automática tras nuevos partidos sigue pendiente de comprobación.
 
 ## Versiones
+
+- **v0.2.21 (estable):** distribución de la integración y sus tarjetas mediante `fbm.zip` en Marketplace, sin telemetría ni cambios funcionales.
 
 - **v0.2.20 (estable):** gráfico interactivo de puntos por partido al final de la ficha de jugador.
 
