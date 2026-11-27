@@ -1,0 +1,48 @@
+name: Validación paquete Marketplace FBM
+on:
+  pull_request:
+    paths:
+      - 'hacs.json'
+      - 'custom_components/fbm/**'
+      - 'fbm-card.js'
+      - '.github/workflows/publicar-version.yml'
+      - '.github/workflows/validar-paquete.yml'
+permissions:
+  contents: read
+jobs:
+  paquete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validar estructura de instalación Marketplace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output="$RUNNER_TEMP/fbm.zip" HEAD:custom_components/fbm
+          python3 - <<'PY'
+          import json, os, subprocess, zipfile
+          from pathlib import Path
+          config = json.loads(Path("hacs.json").read_text(encoding="utf-8"))
+          assert config["zip_release"] is True and config["filename"] == "fbm.zip"
+          root = Path("custom_components/fbm")
+          expected = set(subprocess.check_output(
+              ["git", "ls-files", "-z", "--", str(root)]
+          ).decode().rstrip("\0").split("\0"))
+          with zipfile.ZipFile(Path(os.environ["RUNNER_TEMP"]) / "fbm.zip") as archive:
+              assert archive.testzip() is None
+              files = {item.filename for item in archive.infolist() if not item.is_dir()}
+              assert files == {str(Path(path).relative_to(root)) for path in expected}
+              assert {"manifest.json", "__init__.py", "www/fbm-card.js"} <= files
+              for name in files:
+                  assert archive.read(name) == (root / name).read_bytes(), name
+              assert archive.read("www/fbm-card.js") == Path("fbm-card.js").read_bytes()
+              manifest = json.loads(archive.read("manifest.json"))
+              assert manifest["domain"] == "fbm" and manifest["version"]
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fbm-marketplace-test
+          path: ${{ runner.temp }}/fbm.zip
+          retention-days: 7
