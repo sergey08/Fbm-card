@@ -31,7 +31,9 @@ test("la integración intenta registrar el recurso Lovelace sin duplicados", () 
 test("HACS está configurado como integración y no como tarjeta independiente", () => {
   const hacs = JSON.parse(fs.readFileSync("hacs.json", "utf8"));
   assert.equal(typeof hacs.name, "string");
-  assert.equal("filename" in hacs, false);
+  assert.equal(hacs.zip_release, true);
+  assert.equal(hacs.filename, "fbm.zip");
+  assert.equal(JSON.parse(fs.readFileSync("custom_components/fbm/manifest.json", "utf8")).domain, "fbm");
   assert.equal("content_in_root" in hacs, false);
 });
 test("el flujo de CI valida la nueva estructura de integración", () => {

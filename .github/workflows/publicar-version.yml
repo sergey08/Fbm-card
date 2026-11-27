@@ -69,6 +69,25 @@ jobs:
               print(f"Documentación comprobada para v{version}")
           PY
 
+      - name: Crear y comprobar paquete de instalación FBM
+        if: env.RELEASE_CURRENT == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output="$RUNNER_TEMP/fbm.zip" HEAD:custom_components/fbm
+          python3 - <<'PY'
+          import json, os, zipfile
+          from pathlib import Path
+          config = json.loads(Path("hacs.json").read_text(encoding="utf-8"))
+          assert config["zip_release"] is True and config["filename"] == "fbm.zip"
+          with zipfile.ZipFile(Path(os.environ["RUNNER_TEMP"]) / "fbm.zip") as archive:
+              assert archive.testzip() is None
+              assert {"manifest.json", "__init__.py", "www/fbm-card.js"} <= set(archive.namelist())
+              manifest = json.loads(archive.read("manifest.json"))
+              assert manifest["domain"] == "fbm" and manifest["version"] == os.environ["VERSION"]
+              assert archive.read("www/fbm-card.js") == Path("fbm-card.js").read_bytes()
+          PY
+
       - name: Publicar release con versión legible para HACS
         if: env.RELEASE_CURRENT == 'true'
         env:
@@ -79,12 +98,16 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
+            # Never replace an existing asset: GitHub would reset its download counter.
+            gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fx "fbm.zip" >/dev/null
             # HACS muestra hashes si solo encuentra pre-releases y la opción beta no está activada.
             # Mantener el sufijo bN en el tag, pero hacer visible esta release al canal normal.
-            gh release edit "$TAG" --prerelease=false --latest
+            gh release edit "$TAG" --draft=false --prerelease=false --latest
             echo "Release existente $TAG marcada como disponible para HACS."
           else
-            gh release create "$TAG" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --notes-file "RELEASE_${VERSION}_NOTES.md" --latest
+            gh release create "$TAG" "$RUNNER_TEMP/fbm.zip" --target "$VALIDATED_SHA" --title "FBM Card $VERSION" --notes-file "RELEASE_${VERSION}_NOTES.md" --draft --latest=false
+            gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fx "fbm.zip" >/dev/null
+            gh release edit "$TAG" --draft=false --prerelease=false --latest
             echo "Publicada release $TAG en $VALIDATED_SHA"
           fi
           # Retire superseded beta releases for this exact stable version.
