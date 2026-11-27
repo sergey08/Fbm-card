@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.21 — Español
+
+- Distribución de la integración y tarjeta mediante `fbm.zip` en Marketplace, con contador público de descargas de GitHub y sin telemetría.
+- Validación del contenido íntegro del paquete y protección de los contadores existentes.
+- Sin cambios funcionales ni de formato de los datos archivados.
+
 ## v0.2.20 — Español
 
 - La ficha del jugador incluye al final un gráfico de puntos por partido. Al seleccionar una barra, se muestran la fecha, el rival y los puntos.
